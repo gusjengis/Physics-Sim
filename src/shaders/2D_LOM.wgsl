@@ -13,51 +13,62 @@ struct Forces {
     delRot: f32,
 }
 
+struct Settings {
+    hor_bound: f32,
+    vert_bound: f32,
+    gravity: i32,
+    planet_mode: i32,
+    bonds: i32,
+    collisions: i32,
+    friction: i32,
+    friction_coefficient: f32,
+    rotation: i32,
+    linear_contact_bonds: i32,
+    gravity_acc: f32,
+    stiffness: f32,
+    bonds_tear: i32,
+    bond_force_limit: f32,
+    contact_damping: f32,
+    bond_damping: f32,
+    drag: f32,
+    bond_shear_lim: f32,
+    verlet: i32
+}
+
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
 @group(1) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
-@group(1) @binding(1) var<storage, read_write> velocities_buf: array<vec2<f32>>;
+@group(1) @binding(1) var<storage, read_write> accelerations: array<vec2<f32>>;
 @group(1) @binding(2) var<storage, read_write> rot: array<f32>;
 @group(1) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(1) @binding(4) var<storage, read_write> rot_vel_buf: array<f32>;
+@group(1) @binding(4) var<storage, read_write> rot_acc: array<f32>;
 @group(1) @binding(5) var<storage, read_write> acc: array<vec3<f32>>;
 @group(1) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
+@group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
+@group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
+@group(4) @binding(0) var<uniform> settings: Settings;
 
-const deltaTime: f32 = 0.0000390625;
+
+const dT: f32 = 0.0000391236;
 const PI = 3.141592653589793238;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
 
-    if fixity[id].x_vel == 0 {
-        acc[id] = vec3(vec2((velocities_buf[id] - velocities[id]).x, acc[id].y), acc[id].z);
-        velocities[id] = vec2(velocities_buf[id].x, velocities[id].y);
-    } else {
-        acc[id] = vec3(vec2(0.0, acc[id].y), acc[id].z);
-    }
+    var int_vel = velocities[id] + accelerations[id] * dT * 0.5;
+    var int_rot_vel = rot_vel[id] + rot_acc[id] * dT * 0.5;
+    
+    if fixity[id].x_vel == 1 { int_vel = vec2(velocities[id].x, int_vel.y); }
+    if fixity[id].y_vel == 1 { int_vel = vec2(int_vel.x, velocities[id].y); }
+    if fixity[id].rot_vel == 1 { int_rot_vel = rot_vel[id]; }
+    
+    del_pos[id] = int_vel * dT; 
+    del_rot[id] = int_rot_vel * dT; 
 
-    if fixity[id].y_vel == 0 {
-        acc[id] = vec3(vec2(acc[id].x, (velocities_buf[id] - velocities[id]).y), acc[id].z);
-        velocities[id] = vec2(velocities[id].x, velocities_buf[id].y);
-    } else {
-        acc[id] = vec3(vec2(acc[id].x, 0.0), acc[id].z);
-    }
-
-    velocities[id] += vec2(forces[id].x, forces[id].y)*deltaTime;
-
-    positions[id] = positions[id] + velocities[id] * deltaTime;
-
-    if fixity[id].rot_vel == 0 {
-        acc[id] = vec3(acc[id].xy, rot_vel_buf[id] - rot_vel[id]/deltaTime);
-        rot_vel[id] = rot_vel_buf[id];
-    }
-
-    rot_vel[id] += forces[id].rot*deltaTime;
-    rot_vel_buf[id] = rot_vel[id];
-    rot[id] = (rot[id] + rot_vel[id] * deltaTime)%(2.0*PI);
-
-    forces[id].x += forces[id].delX*deltaTime;
-    forces[id].y += forces[id].delY*deltaTime;
-    forces[id].rot += forces[id].delRot*deltaTime;
+    positions[id] += del_pos[id];
+    rot[id]       += del_rot[id];
+    
+    velocities[id] = int_vel;
+    rot_vel[id] = int_rot_vel;
 }

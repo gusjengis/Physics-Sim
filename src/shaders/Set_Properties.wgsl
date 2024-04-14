@@ -57,9 +57,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         if input.set_x_force == 1 { forces[id].x = input.x_force; } 
         if input.set_y_force == 1 { forces[id].y = input.y_force; } 
         if input.set_rot_force == 1 { forces[id].rot = input.rot_force; } 
-        if input.set_x_fixity == 1 { fixity[id].x_vel = input.x_fixity; } 
-        if input.set_y_fixity == 1 { fixity[id].y_vel = input.y_fixity; } 
-        if input.set_rot_fixity == 1 { fixity[id].rot_vel = input.rot_fixity; } 
+        if input.set_x_fixity == 1 { fixity[id].x_vel = input.x_fixity; velocities[id] = vec2(0.0, velocities[id].y); } 
+        if input.set_y_fixity == 1 { fixity[id].y_vel = input.y_fixity; velocities[id] = vec2(velocities[id].x, 0.0); } 
+        if input.set_rot_fixity == 1 { fixity[id].rot_vel = input.rot_fixity; rot_vel[id] = 0.0; } 
         if input.set_material == 1 { material_pointers[id] = input.material; } 
+ 
     }
 }

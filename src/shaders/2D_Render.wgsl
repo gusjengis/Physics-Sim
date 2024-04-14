@@ -18,6 +18,13 @@ struct Camera {
     focus: mat4x4<f32>,
 };
 
+struct Contact {
+    a: i32,
+    b: i32,
+    tangent_force: f32,
+    bonded: i32
+};
+
 struct Material {
     red: f32,
     green: f32,
@@ -62,8 +69,9 @@ struct Bond {
 @group(2) @binding(0) var<storage, read_write> radii_buf: array<f32>;
 @group(3) @binding(2) var<storage, read_write> rot_buf: array<f32>;
 @group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
+// @group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
+@group(4) @binding(2) var<storage, read_write> contacts: array<Contact>;
+// @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
 @group(4) @binding(4) var<storage, read_write> material_pointers: array<i32>;
 @group(5) @binding(0) var<uniform> settings: Settings;
 @group(6) @binding(0) var<storage, read_write> materials: array<Material>;
@@ -171,17 +179,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // bonds
-    if settings.render_bonds == 1 && bond_info[in.id].x != -1 {
-        for(var i = bond_info[in.id].x; i<bond_info[in.id].x+bond_info[in.id].y; i++){
-            let displacement = ((radii_buf[in.id]+radii_buf[bonds[i].index]) - length(pos_buf[in.id] - pos_buf[abs(bonds[i].index)])) * 255.0;
-            var dir = normalize(pos_buf[abs(bonds[i].index)] - pos_buf[in.id]);
-            if dot(dir, normalize(in.position)) > 0.99 {
-                color = vec4(1.0 - displacement, 1.0 + clamp(displacement*0.8, -0.8, 1.0) + 0.2*clamp(displacement, 0.0, 1.0), 1.0 - abs(displacement), 1.0);
-                if bonds[i].index < 0 {
-                    color = vec4(1.0, 0.0, 0.0, 1.0);
+    if settings.render_bonds == 1 {
+        for(var i = in.id*16u; i<(in.id+1u)*16u; i++){
+            if contacts[i].bonded > 0 {
+                let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
+                var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);
+                if dot(dir, normalize(in.position)) > 0.99 {
+                    color = vec4(1.0 - displacement, 1.0 + clamp(displacement*0.8, -0.8, 1.0) + 0.2*clamp(displacement, 0.0, 1.0), 1.0 - abs(displacement), 1.0);
+                    if contacts[i].b < 0 {
+                        color = vec4(1.0, 0.0, 0.0, 1.0);
+                    }
                 }
             }
         }
+        // for(var i = bond_info[in.id].x; i<bond_info[in.id].x+bond_info[in.id].y; i++){
+        //     let displacement = ((radii_buf[in.id]+radii_buf[bonds[i].index]) - length(pos_buf[in.id] - pos_buf[abs(bonds[i].index)])) * 255.0;
+        //     var dir = normalize(pos_buf[abs(bonds[i].index)] - pos_buf[in.id]);
+        //     if dot(dir, normalize(in.position)) > 0.99 {
+        //         color = vec4(1.0 - displacement, 1.0 + clamp(displacement*0.8, -0.8, 1.0) + 0.2*clamp(displacement, 0.0, 1.0), 1.0 - abs(displacement), 1.0);
+        //         if bonds[i].index < 0 {
+        //             color = vec4(1.0, 0.0, 0.0, 1.0);
+        //         }
+        //     }
+        // }
     }
     
     //done

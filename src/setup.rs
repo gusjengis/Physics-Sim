@@ -3,6 +3,7 @@ use std::f32::consts::PI;
 use rand::Rng;
 
 use crate::settings::{*, self};
+use crate::wgpu_config::*;
 
 pub fn p_count(settings: &mut Settings) -> usize {
     match settings.structure {
@@ -79,22 +80,80 @@ pub fn grid(settings: &mut Settings, pos: &mut Vec<f32>, vel: &mut Vec<f32>, rot
         }
     }
     // Initialize Collision Sections
-    let vert_bound = 2.0;
-    let hor_bound = vert_bound*16.0/11.0;
-    let coll_grid_w = 30;
-    let coll_grid_h = 30;
-    let coll_section_size = 100;
+    // let vert_bound = 2.0;
+    // let hor_bound = vert_bound*16.0/11.0;
+    // let coll_grid_w = 30;
+    // let coll_grid_h = 30;
+    // let coll_section_size = 100;
     // let mut col_sec = vec![-1 as i32; coll_grid_w*coll_grid_h*coll_section_size];
     // Initialize Bonds
     let MAX_BONDS = settings.max_bonds;
     let mut bonds = vec![-1; p_count*MAX_BONDS*3];
     let mut bond_info = vec![-1; p_count*2];
-    let mut found_bonds = false;
+    // let mut found_bonds = false;
+    // for i in 0..p_count {
+    //     let mut col_num = 0;
+    //     for j in 0..p_count {
+    //         if j != i {
+    //             if ((pos[j*2] - pos[i*2]).powf(2.0) + (pos[j*2+1] - pos[i*2+1]).powf(2.0)).powf(0.5) < radii[i] + radii[j] {
+    //                 if col_num < MAX_BONDS && bonds[(i*MAX_BONDS+col_num)*3] == -1 {
+    //                     bonds[(i*MAX_BONDS+col_num)*3] = j as i32;
+    //                     let delta = (pos[j*2] - pos[i*2], pos[j*2+1] - pos[i*2+1]);
+    //                     let magnitude = (delta.0*delta.0 + delta.1*delta.1).powf(0.5);
+    //                     let normalized_delta = (delta.0/magnitude, delta.1/magnitude);
+    //                     let angle = normalized_delta.0.atan2(normalized_delta.1);
+    //                     // println!("({}, {}) vs ({}, {})", normalized_delta.0, normalized_delta.1, angle.sin(), angle.cos());
+    //                     bonds[(i*MAX_BONDS+col_num)*3+1] = (angle).to_bits() as i32;
+    //                     bonds[(i*MAX_BONDS+col_num)*3+2] = (magnitude).to_bits() as i32;
+    //                     // println!("{}, {}, {}", bonds[(i*MAX_BONDS+col_num)*3], angle, magnitude);
+    //                     col_num += 1;
+    //                     found_bonds = true;
+    //                 } else if col_num == MAX_BONDS{
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+    // let mut index = 0;
+    // for i in 0..p_count {
+    //     let start = index;
+    //     let mut length = 0;
+    //     for j in 0..MAX_BONDS {
+    //         if bonds[(i*MAX_BONDS+j)*3] != -1 {
+    //             length += 1;
+    //             index += 1;
+    //         }
+    //     }
+    //     if length > 0 {
+    //         bond_info[i*2] = start as i32;
+    //         bond_info[i*2+1] = length as i32;
+    //     } else {
+    //         bond_info[i*2] = -1;
+    //         bond_info[i*2+1] = -1;
+    //     }
+    // }
+    // if found_bonds {
+    //     bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
+    // }
+
+    for i in 0..radii.len() {
+        radii[i] *= distance/max_rad;// * 1.99;
+    }
+    return (bonds, bond_info);
+}
+
+pub fn build_bonds(config: &mut WGPUConfig, pos: &mut Vec<f32>, radii: &mut Vec<f32>) -> (Vec<i32>, Vec<i32>){ 
+    let mut p_count = p_count(&mut config.prog_settings);
+    let MAX_BONDS = config.prog_settings.max_bonds;
+    let mut bonds = vec![-1; p_count*MAX_BONDS*3];
+    let mut bond_info = vec![-1; p_count*2];
+    let mut found_bonds = true;
     for i in 0..p_count {
         let mut col_num = 0;
         for j in 0..p_count {
             if j != i {
-                if ((pos[j*2] - pos[i*2]).powf(2.0) + (pos[j*2+1] - pos[i*2+1]).powf(2.0)).powf(0.5) < radii[i] + radii[j] {
+                if ((pos[j*2] - pos[i*2]).powf(2.0) + (pos[j*2+1] - pos[i*2+1]).powf(2.0)).powf(0.5) < (radii[i] + radii[j])*1.02 {
                     if col_num < MAX_BONDS && bonds[(i*MAX_BONDS+col_num)*3] == -1 {
                         bonds[(i*MAX_BONDS+col_num)*3] = j as i32;
                         let delta = (pos[j*2] - pos[i*2], pos[j*2+1] - pos[i*2+1]);
@@ -113,28 +172,8 @@ pub fn grid(settings: &mut Settings, pos: &mut Vec<f32>, vel: &mut Vec<f32>, rot
                 }
             }
         }
-        // let sec_id = ((pos[i*2+1] + vert_bound)/(2.0*vert_bound)*coll_grid_h as f32) as usize * coll_grid_w as usize + (((pos[i*2] + hor_bound)/(2.0*hor_bound)) * coll_grid_w as f32) as usize;
-        // for k in coll_section_size*sec_id..coll_section_size*sec_id+coll_section_size {
-        //     if(col_sec[k] == -1) {
-        //         col_sec[k] = i as i32;
-        //         break;
-        //     }
-        // }
     }
-    // let mut point_count = 0;
-    // for i in 0..coll_grid_h*coll_grid_w {
-    //     let x = i%coll_grid_w;
-    //     let y = i/coll_grid_h;
-    //     print!("Section {}({}, {}): ", i, x, y);
-    //     for j in 0..coll_section_size {
-    //         if col_sec[i*coll_section_size+j] != -1 {
-    //             print!("{},", col_sec[i*coll_section_size+j]);
-    //             point_count += 1;
-    //         }
-    //     }
-    //     print!("\n");
-    // }
-    // println!("Total Points: {}", point_count);
+
     let mut index = 0;
     for i in 0..p_count {
         let start = index;
@@ -157,9 +196,6 @@ pub fn grid(settings: &mut Settings, pos: &mut Vec<f32>, vel: &mut Vec<f32>, rot
         bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
     }
 
-    for i in 0..radii.len() {
-        radii[i] *= distance/max_rad;// * 1.99;
-    }
     return (bonds, bond_info);
 }
 

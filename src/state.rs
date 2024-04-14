@@ -41,6 +41,7 @@ pub struct State {
     pub bond_info: Vec<i32>,
     pub material_pointers: Vec<i32>,
     pub selections: Vec<i32>,
+    pub contacts: Vec<f32>,
     pub data: Vec<f32>,
     pub flatbuffer: Vec<u8>
 }
@@ -61,6 +62,7 @@ impl State {
         let mut bond_info = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
         let mut selections = vec![0; p_count];
+        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let mut data = vec![0.0; p_count * 4];
         let flatbuffer = vec![0 as u8; 1];
 
@@ -123,10 +125,12 @@ impl State {
             bond_info,
             material_pointers,
             selections,
+            contacts,
             data,
             flatbuffer,
         };
 
+        state.regen_bonds(config);
         state.save(config);
 
         return state;
@@ -186,23 +190,53 @@ impl State {
         let MAX_BONDS = config.prog_settings.max_bonds;
         let mut bonds = vec![-1; self.p_count*MAX_BONDS*3];
         let mut bond_info = vec![-1; self.p_count*2];
+        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*self.p_count];
         let mut found_bonds = true;
+        let mut bond_index = 0;
         for i in 0..self.p_count {
             let mut col_num = 0;
             for j in 0..self.p_count {
                 if j != i {
-                    if ((self.pos[j*2] - self.pos[i*2]).powf(2.0) + (self.pos[j*2+1] - self.pos[i*2+1]).powf(2.0)).powf(0.5) < (self.radii[i] + self.radii[j])*1.02 {
+                    let distance = ((self.pos[j*2] - self.pos[i*2]).powf(2.0) + (self.pos[j*2+1] - self.pos[i*2+1]).powf(2.0)).sqrt();
+                    let sum_of_radii = (self.radii[i] + self.radii[j]);
+                    if distance < sum_of_radii*1.05 { // bond detected
                         if col_num < MAX_BONDS && bonds[(i*MAX_BONDS+col_num)*3] == -1 {
-                            bonds[(i*MAX_BONDS+col_num)*3] = j as i32;
+                            
+                            // CREATE BOND
+                            bonds[bond_index*3] = 1 as i32;
                             let delta = (self.pos[j*2] - self.pos[i*2], self.pos[j*2+1] - self.pos[i*2+1]);
                             let magnitude = (delta.0*delta.0 + delta.1*delta.1).powf(0.5);
                             let normalized_delta = (delta.0/magnitude, delta.1/magnitude);
                             let angle = normalized_delta.0.atan2(normalized_delta.1);
                             // println!("({}, {}) vs ({}, {})", normalized_delta.0, normalized_delta.1, angle.sin(), angle.cos());
-                            bonds[(i*MAX_BONDS+col_num)*3+1] = (angle).to_bits() as i32;
-                            bonds[(i*MAX_BONDS+col_num)*3+2] = (magnitude).to_bits() as i32;
+                            bonds[bond_index*3+1] = (angle).to_bits() as i32;
+                            bonds[bond_index*3+2] = (magnitude).to_bits() as i32;
                             // println!("{}, {}, {}", bonds[(i*MAX_BONDS+col_num)*3], angle, magnitude);
+
+                            // CREATE CONTACTS
+                            for k in config.prog_settings.max_contacts*i..config.prog_settings.max_contacts*(i+1) {
+                                // println!("{}", bytemuck::cast::<f32, i32>(contacts[4*k]));
+                                if bytemuck::cast::<f32, i32>(contacts[4*k]) == -1 {
+                                    contacts[4*k] = bytemuck::cast(i as i32);
+                                    contacts[4*k+1] = bytemuck::cast(j as i32);
+                                    contacts[4*k+2] = 0.0;
+                                    contacts[4*k+3] = bytemuck::cast(bond_index as i32);
+                                    break;
+                                }
+                            }
+
+                            for k in config.prog_settings.max_contacts*j..config.prog_settings.max_contacts*(j+1) {
+                                if bytemuck::cast::<f32, i32>(contacts[4*k]) == -1 {
+                                    contacts[4*k] = bytemuck::cast(j as i32);
+                                    contacts[4*k+1] = bytemuck::cast(i as i32);
+                                    contacts[4*k+2] = 0.0;
+                                    contacts[4*k+3] = bytemuck::cast(bond_index as i32);
+                                    break;
+                                }
+                            }
+
                             col_num += 1;
+                            bond_index += 1;
                             found_bonds = true;
                         } else if col_num == MAX_BONDS{
                             break;
@@ -233,8 +267,9 @@ impl State {
         if found_bonds {
             bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
         }
-        self.bonds = bonds;
+        self.bonds     = bonds;
         self.bond_info = bond_info;
+        self.contacts  = contacts;
     }
 
     pub fn save(&mut self, config: &mut WGPUConfig) {

@@ -458,7 +458,7 @@ impl WGPUComputeProg {
         let state = State::new(config);
 
         let p_count = setup::p_count(&mut config.prog_settings);
-        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
+        // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let mut contact_pointers = vec![-1; config.prog_settings.max_contacts*p_count];
         let mut cilck_info = vec![0; 4];
 
@@ -473,12 +473,14 @@ impl WGPUComputeProg {
             bytemuck::cast_slice(&state.acc),
             bytemuck::cast_slice(&state.fixity),
             bytemuck::cast_slice(&state.forces),
+            bytemuck::cast_slice(&state.vel),
+            bytemuck::cast_slice(&state.rot_vel),
         ], "Movement Buffer".to_string() );
         let radii_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.radii), "Radii Buffer".to_string(), 0);
         let mut contact_buffers = BufferGroup::new(&config.device, vec![
             bytemuck::cast_slice(&state.bonds),
             bytemuck::cast_slice(&state.bond_info),
-            bytemuck::cast_slice(&contacts),
+            bytemuck::cast_slice(&state.contacts),
             bytemuck::cast_slice(&contact_pointers),
             bytemuck::cast_slice(&state.material_pointers),
             ], "Contact Buffers".to_string() );
@@ -772,7 +774,6 @@ impl WGPUComputeProg {
 
     pub fn restore(&mut self, config: &mut WGPUConfig) {
         self.state.load();
-        println!("{}", self.state.p_count);
         config.prog_settings.set_particles(self.state.p_count);
         self.buffers.pos_buffer.updateUniform(&config.device, self.state.pos.as_bytes());
         self.buffers.radii_buffer.updateUniform(&config.device, self.state.radii.as_bytes());
@@ -787,6 +788,7 @@ impl WGPUComputeProg {
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bonds.as_slice()), 0);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 4);
+        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 2);
     }
 
     // fn save_state(&self , state: &State) {

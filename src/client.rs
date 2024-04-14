@@ -116,6 +116,7 @@ impl Client {
             font_definitions: egui::FontDefinitions::default(),
             style: Default::default(),
         });
+        platform.context().set_pixels_per_point(2.0);
         // platform.context().set_pixels_per_point(platform.context().pixels_per_point()*4.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
         
@@ -157,9 +158,8 @@ impl Client {
             egui_rpass,
             data_length_backup: 1
         };
+        
         client.resize(client.canvas.size);
-        client.platform.context().set_pixels_per_point(2.0);
-
         
         // client.wgpu_prog =  WGPUProg::new(&mut client.wgpu_config, (client.canvas.size.width as u32, client.canvas.size.height as u32));
         event_loop.run(move |event, _, control_flow| {

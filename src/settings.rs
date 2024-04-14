@@ -136,8 +136,11 @@ pub struct Settings {
     pub data: Data,
     pub auto_size_plot: bool,
     pub plotted_prop: Property,
-    pub damping: f32,
-    pub bond_shear_limit: f32
+    pub contact_damping: f32,
+    pub bond_damping: f32,
+    pub drag: f32,
+    pub bond_shear_limit: f32,
+    pub verlet: bool
 }
 
 impl Settings {
@@ -148,11 +151,11 @@ impl Settings {
         let workgroups = (particles as f32/workgroup_size as f32).ceil() as usize;
         //particle settings
         let max_radius = 0.1/3.2;
-        let variable_rad = true;
+        let variable_rad = false;
         let holeyness = 1.7;
         let min_radius = max_radius/holeyness;
         let max_bonds = 6;
-        let max_contacts = 8;
+        let max_contacts = 16;
         let max_h_velocity = 0.0;
         let min_h_velocity = 0.0;
         let max_v_velocity = 0.0;
@@ -169,7 +172,7 @@ impl Settings {
         let bondenum = BondType::Unbonded;
         let bond_tearing = false;
         let bond_force_limit = 0.5;
-        let stiffness = 0.1;
+        let stiffness = 10.0;
         let collisions = true;
         let friction = true;
         let friction_coefficient = 0.5;
@@ -188,9 +191,9 @@ impl Settings {
             1.0,
             1.0,
             1.0,
-            1.0,
-            10.0,
-            0.25
+            0.01,
+            100.0,
+            50.0
         ];
         let material_size = 6;
         let materials_changed = false; 
@@ -280,8 +283,11 @@ impl Settings {
             data: Data::new(),
             auto_size_plot: true,
             plotted_prop: Property::Y_Position,
-            damping: 0.2,
-            bond_shear_limit: 0.5
+            contact_damping: 0.2,
+            bond_damping: 0.2,
+            drag: 1.0,
+            bond_shear_limit: 0.5,
+            verlet: true
         }
     }
 
@@ -488,6 +494,9 @@ impl Settings {
                     if ui.checkbox(&mut self.gravity, "Gravity").changed() {
                         self.changed_collision_settings = true;
                     }
+                    if ui.checkbox(&mut self.verlet, "Verlet Velocity Integration").changed() {
+                        self.changed_collision_settings = true;
+                    }
                     if self.gravity {
                         if ui.checkbox(&mut self.planet_mode, "Planet Mode").changed() {
                             self.changed_collision_settings = true;
@@ -498,10 +507,10 @@ impl Settings {
                             self.changed_collision_settings = true;
                         };
                     }
-                    // if ui.add(egui::Slider::new(&mut self.damping, 0.0..=10.0).
-                    // text("Damping")).changed() {
-                    //     self.changed_collision_settings = true;
-                    // };
+                    if ui.add(egui::Slider::new(&mut self.contact_damping, 0.0..=10.0).
+                    text("contact_damping")).changed() {
+                        self.changed_collision_settings = true;
+                    };
                     let mut changed_bonds = false;
                     egui::ComboBox::from_label("Bonds")
                     .selected_text(format!("{:?}", self.bondenum))
@@ -690,8 +699,11 @@ impl Settings {
             self.stiffness,
             bytemuck::cast(self.bond_tearing as i32),
             self.bond_force_limit,
-            self.damping,
+            self.contact_damping,
+            self.bond_damping,
+            self.drag,
             self.bond_shear_limit,
+            bytemuck::cast(self.verlet as i32)
         ];
     }
 
