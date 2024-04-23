@@ -9,6 +9,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -43,10 +46,21 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         positions[id] = positions[id] + vec2(input.x*input.aspect, input.y);
         velocities[id] = vec2(0.0, 0.0);//vec2(input.x, input.y)/deltaTime;
         velocities_buf[id] = vec2(0.0, 0.0);//vec2(input.x, input.y)/deltaTime;
+        if  !(fixity[id].x_vel   == 1 &&
+              fixity[id].y_vel   == 1 &&
+              fixity[id].rot_vel == 1)
+           {
+            fixity[id].x_vel_2   = fixity[id].x_vel;
+            fixity[id].y_vel_2   = fixity[id].y_vel;
+            fixity[id].rot_vel_2 = fixity[id].rot_vel;
+           }
         fixity[id] = Particle_Settings(
             1,
             1,
             1,
+            fixity[id].x_vel_2,
+            fixity[id].y_vel_2,
+            fixity[id].rot_vel_2,
         );
     }
 }

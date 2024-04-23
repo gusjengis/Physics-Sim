@@ -9,6 +9,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -49,5 +52,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         } else {
             selections[id] = 1;
         }
+        if  fixity[clicked_particle].x_vel   == 1 ||
+            fixity[clicked_particle].y_vel   == 1 ||
+            fixity[clicked_particle].rot_vel == 1 
+            { selections[clicked_particle] = 2; }
+        else 
+            { selections[clicked_particle] = 1; }
     }
 }

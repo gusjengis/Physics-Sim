@@ -13,6 +13,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -42,11 +45,14 @@ const deltaTime: f32 = 0.0000390625;
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
     
-    if selections[id] == 1 {
+    if selections[id] != 0 {
         fixity[id] = Particle_Settings(
-            0,
-            0,
-            0,
+            fixity[id].x_vel_2,
+            fixity[id].y_vel_2,
+            fixity[id].rot_vel_2,
+            fixity[id].x_vel_2,
+            fixity[id].y_vel_2,
+            fixity[id].rot_vel_2
         );
         if click_info[0] == 1 {
             velocities[id] = vec2(input.delX, input.delY)/(deltaTime*f32(input.ticks));

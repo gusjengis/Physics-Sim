@@ -772,8 +772,8 @@ impl WGPUComputeProg {
 
     }
 
-    pub fn restore(&mut self, config: &mut WGPUConfig) {
-        self.state.load();
+    pub fn restore(&mut self, config: &mut WGPUConfig, init: bool) {
+        self.state.load(config, init);
         config.prog_settings.set_particles(self.state.p_count);
         self.buffers.pos_buffer.updateUniform(&config.device, self.state.pos.as_bytes());
         self.buffers.radii_buffer.updateUniform(&config.device, self.state.radii.as_bytes());
@@ -880,7 +880,6 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(2, &self.buffers.pos_buffer.bind_group, &[]);   
             compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(4, &self.buffers.click_buffer.bind_group, &[]);   
-
 
             compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
             

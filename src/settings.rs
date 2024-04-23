@@ -5,7 +5,7 @@ use std::*;
 
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
-use crate::wgpu_structs::Uniform;
+use crate::{state::State, wgpu_structs::Uniform, window_init::Canvas};
 
 pub struct Menu {
     pub render_settings: bool,
@@ -26,6 +26,12 @@ pub struct Properties {
     pub set_x_fixity: bool,
     pub set_y_fixity: bool,
     pub set_rot_fixity: bool,
+    pub set_x_pos: bool,
+    pub set_y_pos: bool,
+    pub set_rot: bool,
+    pub set_x_vel: bool,
+    pub set_y_vel: bool,
+    pub set_rot_vel: bool,
     pub set_radius: bool,
     pub x_force: f32,
     pub y_force: f32,
@@ -34,6 +40,12 @@ pub struct Properties {
     pub x_fixity: bool,
     pub y_fixity: bool,
     pub rot_fixity: bool,
+    pub x_pos: f32,
+    pub y_pos: f32,
+    pub rot: f32,
+    pub x_vel: f32,
+    pub y_vel: f32,
+    pub rot_vel: f32,
     pub radius: f32,
 }
 
@@ -140,11 +152,13 @@ pub struct Settings {
     pub bond_damping: f32,
     pub drag: f32,
     pub bond_shear_limit: f32,
-    pub verlet: bool
+    pub verlet: bool,
+    pub timestep: f32,
+    pub maxGenPerFrame: i32,
 }
 
 impl Settings {
-    pub fn new() -> Self {
+    pub fn new(canvas: &Canvas) -> Self {
         let genPerFrame = 1;
         let particles = 256;
         let workgroup_size = 256;
@@ -269,6 +283,12 @@ impl Settings {
                 set_x_fixity: false,
                 set_y_fixity: false,
                 set_rot_fixity: false,
+                set_x_pos: false,
+                set_y_pos: false,
+                set_rot: false,
+                set_x_vel: false,
+                set_y_vel: false,
+                set_rot_vel: false,
                 set_radius: false,
                 x_force: 0.0,
                 y_force: 0.0,
@@ -278,6 +298,12 @@ impl Settings {
                 y_fixity: false,
                 rot_fixity: false,
                 radius: 0.0,
+                x_pos: 0.0,
+                y_pos: 0.0,
+                rot: 0.0,
+                x_vel: 0.0,
+                y_vel: 0.0,
+                rot_vel: 0.0,
             },
             set_properties: false,
             data: Data::new(),
@@ -287,7 +313,9 @@ impl Settings {
             bond_damping: 0.2,
             drag: 1.0,
             bond_shear_limit: 0.5,
-            verlet: true
+            verlet: true,
+            timestep: 0.0000390625,
+            maxGenPerFrame: 213,
         }
     }
 
@@ -296,7 +324,7 @@ impl Settings {
         self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
     }
 
-    pub fn ui(&mut self, ctx: &Context) -> bool {
+    pub fn ui(&mut self, ctx: &Context, state: &State) -> bool {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
@@ -322,8 +350,8 @@ impl Settings {
                     ui.checkbox(&mut self.render_bonds, "Render Bonds");
                     ui.checkbox(&mut self.colors, "Colors");
                     ui.checkbox(&mut self.random_colors, "Random Colors");
-                    ui.checkbox(&mut self.color_code_rot, "Color Code Rotation");
-                });    
+                    ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
+                });
             }
             if self.menu.properties_menu {
                 egui::Window::new("Properties").collapsible(false).auto_sized().show(ctx, |ui| {
@@ -351,13 +379,56 @@ impl Settings {
                                 });
                                 inner_ui3.label("Rotational Force");
                             });
+                            inner_ui2.label("Position");
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_x_pos, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_x_pos, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_pos).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                });
+                                inner_ui3.label("X Position");
+                            });
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_y_pos, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_y_pos, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_pos).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                });
+                                inner_ui3.label("Y Position");
+                            });
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_rot, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_rot, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot).speed(0.01).clamp_range(0.0..=6.28318530718));
+                                });
+                                inner_ui3.label("Rotation");
+                            });
+                            inner_ui2.label("Velocity");
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_x_vel, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_x_vel, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                });
+                                inner_ui3.label("X Velocity");
+                            });
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_y_vel, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_y_vel, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                });
+                                inner_ui3.label("Y Velocity");
+                            });
+                            inner_ui2.horizontal(|inner_ui3| {
+                                inner_ui3.checkbox(&mut self.properties.set_rot_vel, "");
+                                inner_ui3.add_enabled_ui(self.properties.set_rot_vel, |inner_ui4| {
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_vel).speed(0.001).clamp_range(0.0..=6.28318530718));
+                                });
+                                inner_ui3.label("Rotational Velocity");
+                            });
                             inner_ui2.label("Radius");
                             inner_ui2.horizontal(|inner_ui3| {
                                 inner_ui3.checkbox(&mut self.properties.set_radius, "");
                                 inner_ui3.add_enabled_ui(self.properties.set_radius, |inner_ui4| {
                                     inner_ui4.add(egui::DragValue::new(&mut self.properties.radius).speed(0.001).clamp_range(0.0..=f32::MAX));
                                 });
-                                // inner_ui3.label("X Force");
                             });
                             inner_ui2.label("Fixity");
                             inner_ui2.horizontal(|inner_ui3| {
@@ -390,7 +461,7 @@ impl Settings {
                                 });
                             });
                             if inner_ui2.add_enabled(
-                                self.properties.set_material || self.properties.set_radius || self.properties.set_rot_fixity || self.properties.set_rot_force || self.properties.set_x_fixity || self.properties.set_x_force || self.properties.set_y_fixity || self.properties.set_y_force,
+                                self.properties.set_material || self.properties.set_x_pos || self.properties.set_y_pos || self.properties.set_rot || self.properties.set_x_vel || self.properties.set_y_vel || self.properties.set_rot_vel || self.properties.set_radius || self.properties.set_rot_fixity || self.properties.set_rot_force || self.properties.set_x_fixity || self.properties.set_x_force || self.properties.set_y_fixity || self.properties.set_y_force,
                                 egui::Button::new("Set Properties")).
                                 clicked() 
                             {
@@ -488,9 +559,9 @@ impl Settings {
                         }
                     });
                 }
-                if self.menu.physics_menu {
-                    egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
-                        ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=213).logarithmic(true).text("Gen/Frame"));
+            if self.menu.physics_menu {
+                egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
+                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text("Gen/Frame"));
                     if ui.checkbox(&mut self.gravity, "Gravity").changed() {
                         self.changed_collision_settings = true;
                     }
@@ -730,6 +801,12 @@ impl Settings {
             bytemuck::cast(self.properties.set_x_fixity as i32),
             bytemuck::cast(self.properties.set_y_fixity as i32),
             bytemuck::cast(self.properties.set_rot_fixity as i32),
+            bytemuck::cast(self.properties.set_x_pos as i32),
+            bytemuck::cast(self.properties.set_y_pos as i32),
+            bytemuck::cast(self.properties.set_rot as i32),
+            bytemuck::cast(self.properties.set_x_vel as i32),
+            bytemuck::cast(self.properties.set_y_vel as i32),
+            bytemuck::cast(self.properties.set_rot_vel as i32),
             bytemuck::cast(self.properties.set_radius as i32),
             self.properties.x_force,
             self.properties.y_force,
@@ -738,6 +815,12 @@ impl Settings {
             bytemuck::cast(self.properties.x_fixity as i32),
             bytemuck::cast(self.properties.y_fixity as i32),
             bytemuck::cast(self.properties.rot_fixity as i32),
+            self.properties.x_pos,
+            self.properties.y_pos,
+            self.properties.rot,
+            self.properties.x_vel,
+            self.properties.y_vel,
+            self.properties.rot_vel,
             self.properties.radius,
         ];
     }
@@ -791,6 +874,26 @@ pub enum BondType {
     Normal_Bonds,
     Linear_Contact_Bond,
     Parallel_Linear_Contact_Bond,
+}
+
+impl BondType {
+    pub fn from_i32(num: i32) -> Self {
+        return match num {
+            i32::MIN..=0 => BondType::Unbonded,
+            1            => BondType::Normal_Bonds,
+            2            => BondType::Linear_Contact_Bond,
+            3..          => BondType::Parallel_Linear_Contact_Bond,
+        }
+    }
+    pub fn as_i32(&self) -> i32 {
+        return match *self {
+            BondType::Unbonded                     => 0,
+            BondType::Normal_Bonds                 => 1,
+            BondType::Linear_Contact_Bond          => 2,
+            BondType::Parallel_Linear_Contact_Bond => 3
+        }
+    }
+
 }
 
 #[derive(Debug, PartialEq)]

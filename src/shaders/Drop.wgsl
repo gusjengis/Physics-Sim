@@ -2,6 +2,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -33,9 +36,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if selections[id] == 2 {
         selections[id] = 1; 
         fixity[id] = Particle_Settings(
-            0,
-            0,
-            0,
+            0,0,0,
+            0,0,0
         );
     }
 }

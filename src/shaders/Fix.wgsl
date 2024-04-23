@@ -2,6 +2,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -37,7 +40,19 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             1,
             1,
             1,
+            1,
+            1,
+            1,
         );
         velocities[id] = vec2(0.0, 0.0);
     }
 }
+
+// Todo:
+// Set Rotation and Velocities
+// Change caps on material properties
+// Add offset menu
+// make timestep size a setting put a colored box next to speed that indicates whether sim is reaching said speed, turn red if dropping frames
+// Add bond normal and shear limits, make tearing work properly (consult lorne, want to know exactly how its done in pfc)
+// Experiment with more shader stages, see if it's possible to get better performance by adding a shader stage but simplifying another
+// Attempt broad phase, each section in the grid will have the width of the largest radius, and will have enough memory allocated for (max_radius/min_radius + 1)^2. Exponential memory complexity is bad ):, can remedy with a bitmask indication wchich parts of a section are occupied, it will be cleared and reassigned each tick, this will fixruntime, not memory complexity Might be a problem for large particles.

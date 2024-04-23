@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use bytemuck::{bytes_of, cast_slice};
 use rand::Rng;
 use crate::settings;
+use crate::settings::BondType;
 use crate::settings::Structure;
 use crate::setup;
 // use crate::
@@ -57,7 +58,7 @@ impl State {
         let mut rot_vel = vec![0.0 as f32; p_count];
         let mut forces = vec![0.0 as f32; p_count*6];
         let mut radii = vec![0.0 as f32; p_count];
-        let mut fixity = vec![0; p_count*3];
+        let mut fixity = vec![0; p_count*6];
         let mut bonds = vec![-1; 1];
         let mut bond_info = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
@@ -286,7 +287,36 @@ impl State {
         let bonds = builder.create_vector(&self.bonds);
         let bond_info = builder.create_vector(&self.bond_info);
         let material_pointers = builder.create_vector(&self.material_pointers);
-
+        let materials = builder.create_vector(&config.prog_settings.materials);
+        let wall_settings = schema_generated::Wall_Settings::new(
+            config.prog_settings.maintain_ar,
+            config.prog_settings.hor_bound,
+            config.prog_settings.vert_bound,
+        );
+        let render_settings = schema_generated::Render_Settings::new(
+            config.prog_settings.circular_particles,
+            config.prog_settings.render_rot,
+            config.prog_settings.render_bonds,
+            config.prog_settings.colors,
+            config.prog_settings.random_colors,
+            config.prog_settings.color_code_rot,
+        );
+        let physics_settings = schema_generated::Physics_Settings::new(
+            config.prog_settings.genPerFrame,
+            config.prog_settings.gravity,
+            config.prog_settings.planet_mode,
+            config.prog_settings.gravity_acceleration,
+            config.prog_settings.contact_damping,
+            config.prog_settings.bondenum.as_i32(),
+            config.prog_settings.stiffness,
+            config.prog_settings.collisions,
+            config.prog_settings.friction_coefficient,
+        );
+        let settings = schema_generated::Settings::new(
+            &physics_settings,
+            &render_settings,
+            &wall_settings
+        );
         let state = schema_generated::State::create(&mut builder, &schema_generated::StateArgs{
             particles: self.p_count as i32,
             pos: Some(pos),
@@ -300,6 +330,8 @@ impl State {
             bonds: Some(bonds),
             bond_info: Some(bond_info),
             material_pointers: Some(material_pointers),
+            materials: Some(materials),
+            settings: Some(&settings)
         });
 
         builder.finish(state, None);
@@ -322,9 +354,13 @@ impl State {
         Ok(())
     }
 
-    pub fn load(&mut self) {
+    pub fn load(&mut self, config: &mut WGPUConfig, init: bool) {
         let state = schema_generated::root_as_state(self.flatbuffer.as_slice()).unwrap();
-        self.p_count = state.particles() as usize;
+        let new_p_count = state.particles() as usize;
+        if self.p_count != new_p_count {
+            self.selections  = vec![0; new_p_count];
+        }
+        self.p_count = new_p_count;
         self.pos = State::f32_vec_from_vector(state.pos());
         self.vel = State::f32_vec_from_vector(state.vel());
         self.acc = State::f32_vec_from_vector(state.acc());
@@ -336,6 +372,36 @@ impl State {
         self.bonds = State::i32_vec_from_vector(state.bonds());
         self.bond_info = State::i32_vec_from_vector(state.bond_info());
         self.material_pointers = State::i32_vec_from_vector(state.material_pointers());
+        if init {
+            config.prog_settings.materials = State::f32_vec_from_vector(state.materials());
+            let ws = state.settings().unwrap().wall_settings();
+            let ps = state.settings().unwrap().physics_settings();
+            let rs = state.settings().unwrap().render_settings();
+            // wall settings
+            config.prog_settings.maintain_ar = ws.maintain_ar();
+            config.prog_settings.hor_bound  = ws.width();
+            config.prog_settings.vert_bound = ws.height();
+            // render settings
+            config.prog_settings.circular_particles = rs.circular_particles();
+            config.prog_settings.render_rot         = rs.render_rotation();
+            config.prog_settings.render_bonds       = rs.render_bonds();
+            config.prog_settings.colors             = rs.colors();
+            config.prog_settings.random_colors      = rs.random_colors();
+            config.prog_settings.color_code_rot     = rs.color_code_rotation();
+            // physics settings
+            config.prog_settings.genPerFrame = ps.gen_per_frame();
+            config.prog_settings.gravity = ps.gravity();
+            config.prog_settings.planet_mode = ps.planet_mode();
+            config.prog_settings.gravity_acceleration = ps.g_force();
+            config.prog_settings.contact_damping = ps.contact_damping();
+            config.prog_settings.bondenum = BondType::from_i32(ps.bond());
+            config.prog_settings.stiffness = ps.bond_stiffness();
+            config.prog_settings.collisions = ps.collisions();
+            config.prog_settings.friction_coefficient = ps.friction_coef();
+            // set update flags
+            config.prog_settings.changed_collision_settings = true;
+            config.prog_settings.materials_changed = true;
+        }
     }
 
     pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64;10]> {

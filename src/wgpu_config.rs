@@ -140,7 +140,7 @@ impl WGPUConfig {
         };
         surface.configure(&device, &config);
     
-        let prog_settings = settings::Settings::new();
+        let prog_settings = settings::Settings::new(canvas);
  
 
         

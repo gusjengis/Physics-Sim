@@ -2,6 +2,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -79,7 +82,7 @@ struct Material {
 @group(6) @binding(0) var<storage, read_write> data: array<f32>; 
 
 
-const dT: f32 = 0.0000390625;
+const dT: f32 = 0.000005;//0.0000390625;
 const PI = 3.141592653589793238;
 
 @compute @workgroup_size(256)

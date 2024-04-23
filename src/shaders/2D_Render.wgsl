@@ -34,6 +34,15 @@ struct Material {
     shear_stiffness: f32,
 }
 
+struct Particle_Settings {
+    x_vel: i32,
+    y_vel: i32,
+    rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
+}
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec2<f32>,
@@ -69,6 +78,7 @@ struct Bond {
 @group(2) @binding(0) var<storage, read_write> radii_buf: array<f32>;
 @group(3) @binding(2) var<storage, read_write> rot_buf: array<f32>;
 @group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
+@group(3) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 // @group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
 @group(4) @binding(2) var<storage, read_write> contacts: array<Contact>;
 // @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
@@ -155,10 +165,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if settings.circular_particles == 1 {
         let border_width = 0.08;
         if len > 0.5-border_width && len < 0.5 {
-            if in.selected == 1 {
+            if in.selected != 0 {
                 color = vec4(1.0, 0.8, 0.0, 1.0);
-            } else if in.selected == 2 {
-                color = vec4(0.2, 0.8, 1.0, 1.0);
+                if fixity[in.id].x_vel_2 != 0 || fixity[in.id].y_vel_2 != 0 || fixity[in.id].rot_vel_2 != 0 {
+                    color = vec4(f32(fixity[in.id].x_vel_2), f32(fixity[in.id].y_vel_2), f32(fixity[in.id].rot_vel_2), 1.0);
+                }
             } else {
                 if settings.colors == 0 { 
                     color = vec4(0.05, 0.05, 0.05, 1.0);

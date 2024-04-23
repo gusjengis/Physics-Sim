@@ -15,6 +15,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     window::WindowBuilder, dpi::PhysicalSize,
 };
+use std::cmp::max;
 use std::iter;
 use cgmath::*;
 use winit_fullscreen;
@@ -62,6 +63,8 @@ pub struct Client {
     pub platform: Platform,
     egui_rpass: RenderPass,
     data_length_backup: usize,
+    max_framerate: f32,
+    prev_framerate: f32
 }
 
 impl Client {
@@ -119,7 +122,7 @@ impl Client {
         platform.context().set_pixels_per_point(2.0);
         // platform.context().set_pixels_per_point(platform.context().pixels_per_point()*4.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
-        
+        let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32/1000.0;
         let mut client = Client {
             canvas,
             wgpu_config,
@@ -156,7 +159,9 @@ impl Client {
             init,
             platform,
             egui_rpass,
-            data_length_backup: 1
+            data_length_backup: 1,
+            max_framerate:  max_framerate,
+            prev_framerate: max_framerate
         };
         
         client.resize(client.canvas.size);
@@ -429,7 +434,7 @@ impl Client {
                         if self.shift {
                             self.reset();
                         } else {
-                            self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config);
+                            self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, false);
                             self.wgpu_config.prog_settings.data = Data::new();//(self.wgpu_config.prog_settings.data[0..self.data_length_backup]).to_vec();
 
                         }
@@ -629,6 +634,14 @@ impl Client {
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
 
+        let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32/1000.0;
+        println!("{}", self.max_framerate);
+        println!("{}", self.wgpu_config.prog_settings.timestep);
+        println!("{}", self.wgpu_config.prog_settings.maxGenPerFrame);
+        self.wgpu_config.prog_settings.maxGenPerFrame = ((1.0/self.wgpu_config.prog_settings.timestep)/max_framerate).round() as i32;
+        if max_framerate != self.max_framerate {
+        }
+
         self.cursor_delta = (0, 0);
 
         // Compute
@@ -657,13 +670,14 @@ impl Client {
             if self.wgpu_config.prog_settings.save && self.wgpu_config.prog_settings.current_file.file_name().is_some() {
                 self.wgpu_config.prog_settings.save = false;
                 self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
+                self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config);
                 self.wgpu_prog.shader_prog.state.save_to_file(self.wgpu_config.prog_settings.current_file.clone());
             }
         
             if self.wgpu_config.prog_settings.load && self.wgpu_config.prog_settings.current_file.file_name().is_some() {
                 self.wgpu_config.prog_settings.load = false;
                 self.wgpu_prog.shader_prog.state.load_from_file(self.wgpu_config.prog_settings.current_file.clone());
-                self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config);
+                self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, true);
             }
 
             //Bond Regen
@@ -672,7 +686,7 @@ impl Client {
                 self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
                 self.wgpu_prog.shader_prog.state.regen_bonds(&mut self.wgpu_config);
                 self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config);
-                self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config);
+                self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, false);
             }
 
             //Set Properties
@@ -684,7 +698,7 @@ impl Client {
 
             // Begin to draw the UI frame.
             self.platform.begin_frame();
-            let needs_reset = self.wgpu_config.prog_settings.ui(&self.platform.context());
+            let needs_reset = self.wgpu_config.prog_settings.ui(&self.platform.context(), &self.wgpu_prog.shader_prog.state);
             if needs_reset {
                 self.reset();
             }
@@ -889,7 +903,7 @@ impl Client {
     }
 
     let now = Local::now();
-    let sim_time_passed = 0.0000390625*self.generation as f32;    
+    let sim_time_passed = self.wgpu_config.prog_settings.timestep*self.generation as f32;    
 
     if self.toggle {
         self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
@@ -913,7 +927,7 @@ impl Client {
         let mut time_passed = (Local::now().timestamp_millis() - self.start_time.timestamp_millis()) as f32/1000.0;
         if !self.toggle { time_passed = 0.0; }
         let genPerSec = (self.generation - self.prevGen) as f32/time_since;
-                let sim_speed = 100.0*genPerSec*0.0000390625;
+                let sim_speed = 100.0*genPerSec*self.wgpu_config.prog_settings.timestep;
                 let twsp = 100.0*20.0/sim_speed;
                 println!("Generations/s: {}, Total Generations: {}", genPerSec, self.generation);
                 println!("Elapsed Time: {} seconds", time_passed);

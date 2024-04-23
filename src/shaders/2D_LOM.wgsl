@@ -2,6 +2,9 @@ struct Particle_Settings {
     x_vel: i32,
     y_vel: i32,
     rot_vel: i32,
+    x_vel_2: i32,
+    y_vel_2: i32,
+    rot_vel_2: i32,
 }
 
 struct Forces {
@@ -49,19 +52,19 @@ struct Settings {
 @group(4) @binding(0) var<uniform> settings: Settings;
 
 
-const dT: f32 = 0.0000391236;
+const dT: f32 = 0.000005;//0.0000391236;
 const PI = 3.141592653589793238;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
 
-    var int_vel = velocities[id] + accelerations[id] * dT * 0.5;
-    var int_rot_vel = rot_vel[id] + rot_acc[id] * dT * 0.5;
+    var int_vel = velocities[id];
+    var int_rot_vel = rot_vel[id];
     
-    if fixity[id].x_vel == 1 { int_vel = vec2(velocities[id].x, int_vel.y); }
-    if fixity[id].y_vel == 1 { int_vel = vec2(int_vel.x, velocities[id].y); }
-    if fixity[id].rot_vel == 1 { int_rot_vel = rot_vel[id]; }
+    if fixity[id].x_vel   == 0 { int_vel.x   += accelerations[id].x * dT * 0.5; }
+    if fixity[id].y_vel   == 0 { int_vel.y   += accelerations[id].y * dT * 0.5; }
+    if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc      [id]   * dT * 0.5; }
     
     del_pos[id] = int_vel * dT; 
     del_rot[id] = int_rot_vel * dT; 
