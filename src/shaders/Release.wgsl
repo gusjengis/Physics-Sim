@@ -27,6 +27,29 @@ struct Forces {
     delRot: f32,
 }
 
+struct Settings {
+    hor_bound: f32,
+    vert_bound: f32,
+    gravity: i32,
+    planet_mode: i32,
+    bonds: i32,
+    collisions: i32,
+    friction: i32,
+    friction_coefficient: f32,
+    rotation: i32,
+    linear_contact_bonds: i32,
+    gravity_acc: f32,
+    stiffness: f32,
+    bonds_tear: i32,
+    bond_force_limit: f32,
+    contact_damping: f32,
+    bond_damping: f32,
+    drag: f32,
+    bond_shear_lim: f32,
+    verlet: i32,
+    dT: f32
+}
+
 @group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> selections: array<i32>;
 @group(2) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
@@ -38,8 +61,7 @@ struct Forces {
 @group(2) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 @group(2) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(3) @binding(0) var<storage, read_write> click_info: array<i32>;
-
-const deltaTime: f32 = 0.0000390625;
+@group(4) @binding(0) var<uniform> settings: Settings;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -55,8 +77,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             fixity[id].rot_vel_2
         );
         if click_info[0] == 1 {
-            velocities[id] = vec2(input.delX, input.delY)/(deltaTime*f32(input.ticks));
-            velocities_buf[id] = vec2(input.delX, input.delY)/(deltaTime*f32(input.ticks));
+            velocities[id] = vec2(input.delX, input.delY)/(settings.dT*f32(input.ticks));
+            velocities_buf[id] = vec2(input.delX, input.delY)/(settings.dT*f32(input.ticks));
         }
     }
     click_info[0] = 0;

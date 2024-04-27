@@ -1,4 +1,5 @@
 struct Physics_Settings {
+  timestep: float;
   gen_per_frame: int;
   gravity: bool;
   planet_mode: bool;
@@ -42,7 +43,7 @@ table State {
   radii: [float];
   fixity: [int];
   bonds: [int];
-  bond_info: [int];
+  contacts: [float];
   material_pointers: [int];
   materials: [float];
   settings: Settings;

@@ -155,6 +155,8 @@ pub struct Settings {
     pub verlet: bool,
     pub timestep: f32,
     pub maxGenPerFrame: i32,
+    pub hz: f32,
+    pub fps: f32
 }
 
 impl Settings {
@@ -164,12 +166,12 @@ impl Settings {
         let workgroup_size = 256;
         let workgroups = (particles as f32/workgroup_size as f32).ceil() as usize;
         //particle settings
-        let max_radius = 0.1/3.2;
+        let max_radius = 0.025;
         let variable_rad = false;
         let holeyness = 1.7;
         let min_radius = max_radius/holeyness;
         let max_bonds = 6;
-        let max_contacts = 16;
+        let max_contacts = max_bonds + 8;
         let max_h_velocity = 0.0;
         let min_h_velocity = 0.0;
         let max_v_velocity = 0.0;
@@ -316,6 +318,8 @@ impl Settings {
             verlet: true,
             timestep: 0.0000390625,
             maxGenPerFrame: 213,
+            hz: 120.0,
+            fps: 120.0
         }
     }
 
@@ -330,7 +334,7 @@ impl Settings {
             self.save();
         }
         if self.settings_menu {
-            egui::TopBottomPanel::bottom("Settings Menu").show(ctx, |ui| {
+            egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     // ui.heading("Menu");
                     if ui.selectable_label(self.menu.setup_menu, "Setup").clicked() { self.menu.setup_menu = !self.menu.setup_menu; }
@@ -383,21 +387,21 @@ impl Settings {
                             inner_ui2.horizontal(|inner_ui3| {
                                 inner_ui3.checkbox(&mut self.properties.set_x_pos, "");
                                 inner_ui3.add_enabled_ui(self.properties.set_x_pos, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_pos).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
                                 });
                                 inner_ui3.label("X Position");
                             });
                             inner_ui2.horizontal(|inner_ui3| {
                                 inner_ui3.checkbox(&mut self.properties.set_y_pos, "");
                                 inner_ui3.add_enabled_ui(self.properties.set_y_pos, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_pos).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
                                 });
                                 inner_ui3.label("Y Position");
                             });
                             inner_ui2.horizontal(|inner_ui3| {
                                 inner_ui3.checkbox(&mut self.properties.set_rot, "");
                                 inner_ui3.add_enabled_ui(self.properties.set_rot, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot).speed(0.01).clamp_range(0.0..=6.28318530718));
+                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot).speed(0.0000001).clamp_range(0.0..=6.28318530718));
                                 });
                                 inner_ui3.label("Rotation");
                             });
@@ -477,6 +481,7 @@ impl Settings {
                         text("Particles").
                         step_by(1.0)).changed() {
                             self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
+                            self.grid_width = self.grid_width.min(self.particles as f32);
                             reset = true;
                         };}
 
@@ -561,7 +566,12 @@ impl Settings {
                 }
             if self.menu.physics_menu {
                 egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
-                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text("Gen/Frame"));
+                    if ui.add(egui::Slider::new(&mut self.timestep, 0.0..=1.0/self.hz).logarithmic(true).text("Sec/Tick")).changed() {
+                        self.changed_collision_settings = true;
+                    }
+                    let fps_perc = 100.0*self.fps/self.hz; 
+                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text(format!("Ticks/Frame ({:.0}/{:.0})", self.fps, self.hz)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
+
                     if ui.checkbox(&mut self.gravity, "Gravity").changed() {
                         self.changed_collision_settings = true;
                     }
@@ -593,18 +603,13 @@ impl Settings {
                     });
                     if changed_bonds { 
                         self.changed_collision_settings = true;
-                        self.bonds = match self.bondenum {
-                            BondType::Unbonded => { 0 },
-                            BondType::Normal_Bonds => { 1 },
-                            BondType::Linear_Contact_Bond => { 2 },
-                            BondType::Parallel_Linear_Contact_Bond => { 3 },
-                        }
+                        self.updateBonds();
                     }
                     // if ui.checkbox(&mut self.bonds, "Bonds").changed() {
                         //     self.changed_collision_settings = true;
                         // }
                     if self.bonds != 0 {
-                        if ui.add(egui::Slider::new(&mut self.stiffness, 0.01..=100.0).step_by(0.01).
+                        if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=1000000.0).step_by(0.001).
                         text("Stiffness")).changed() {
                             self.changed_collision_settings = true;
                         };
@@ -662,9 +667,9 @@ impl Settings {
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.01..=100.0).text("Density")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.01..=100.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.01..=100.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=1000000.0).text("Density")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=1000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=1000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
                     });
                 }
             });}
@@ -677,9 +682,9 @@ impl Settings {
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut self.plotted_prop, Property::X_Position, "X Position");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Y_Position, "Y Position");
+                                ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
                                 ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Data_1, "Data 1");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Data_2, "Data 2");
@@ -691,9 +696,9 @@ impl Settings {
                         match self.plotted_prop {
                             Property::X_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_pos_data.to_owned())));},
                             Property::Y_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_pos_data.to_owned())));},
+                            Property::Rotation => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_data.to_owned())));},
                             Property::X_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_vel_data.to_owned())));},
                             Property::Y_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_vel_data.to_owned())));},
-                            Property::Rotation => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_data.to_owned())));},
                             Property::Rotational_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_vel_data.to_owned())));},
                             Property::Data_1 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));},
                             Property::Data_2 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
@@ -713,6 +718,15 @@ impl Settings {
         return reset;   
     }
 
+    pub fn updateBonds(&mut self) {
+        self.bonds = match self.bondenum {
+            BondType::Unbonded => { 0 },
+            BondType::Normal_Bonds => { 1 },
+            BondType::Linear_Contact_Bond => { 2 },
+            BondType::Parallel_Linear_Contact_Bond => { 3 },
+        }
+    }
+
     pub fn load(&mut self) {
         let path = FileDialog::new()
             .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
@@ -727,7 +741,7 @@ impl Settings {
             },
             None => {},
         };
-
+        
         // if !self.current_file.exists() {
         //     self.load = false;
         // }
@@ -774,7 +788,8 @@ impl Settings {
             self.bond_damping,
             self.drag,
             self.bond_shear_limit,
-            bytemuck::cast(self.verlet as i32)
+            bytemuck::cast(self.verlet as i32),
+            self.timestep
         ];
     }
 
@@ -823,35 +838,6 @@ impl Settings {
             self.properties.rot_vel,
             self.properties.radius,
         ];
-    }
-
-    fn reset(&mut self){
-        self.genPerFrame = 1;
-        self.workgroups = 4;
-        self.workgroup_size = 256;
-        self.max_radius = 0.1/3.2;
-        self.variable_rad = true;
-        self.holeyness = 1.7;
-        self.min_radius = self.max_radius/self.holeyness;
-        self.max_bonds = 4;
-        self.max_h_velocity = 0.0;
-        self.min_h_velocity = 0.0;
-        self.max_v_velocity = 0.0;
-        self.min_v_velocity = 0.0;
-        self.particles = self.workgroup_size*self.workgroups;
-        self.structure = Structure::Exp2;
-        self.grid_width = 32.0;
-        self.settings_menu = true;
-        self.maintain_ar = true;
-        self.hor_bound = 3.0;
-        self.vert_bound = 2.0;
-        self.gravity = true;
-        // self.bonds = true;
-        self.collisions = true;
-        self.friction = true;
-        self.rotation = true;
-        self.linear_contact_bonds = true;
-        self.changed_collision_settings = false;
     }
 }
 

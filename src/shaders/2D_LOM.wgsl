@@ -35,7 +35,8 @@ struct Settings {
     bond_damping: f32,
     drag: f32,
     bond_shear_lim: f32,
-    verlet: i32
+    verlet: i32,
+    dT: f32
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -49,25 +50,26 @@ struct Settings {
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
+@group(2) @binding(0) var<storage, read_write> radii: array<f32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
 
 
-const dT: f32 = 0.000005;//0.0000391236;
+// const dT: f32 = 0.000005;//0.0000391236;
 const PI = 3.141592653589793238;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
-
+    if radii[id] == 0.0 { return; }
     var int_vel = velocities[id];
     var int_rot_vel = rot_vel[id];
     
-    if fixity[id].x_vel   == 0 { int_vel.x   += accelerations[id].x * dT * 0.5; }
-    if fixity[id].y_vel   == 0 { int_vel.y   += accelerations[id].y * dT * 0.5; }
-    if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc      [id]   * dT * 0.5; }
+    if fixity[id].x_vel   == 0 { int_vel.x   += accelerations[id].x * settings.dT * 0.5; }
+    if fixity[id].y_vel   == 0 { int_vel.y   += accelerations[id].y * settings.dT * 0.5; }
+    if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc      [id]   * settings.dT * 0.5; }
     
-    del_pos[id] = int_vel * dT; 
-    del_rot[id] = int_rot_vel * dT; 
+    del_pos[id] = int_vel * settings.dT; 
+    del_rot[id] = int_rot_vel * settings.dT; 
 
     positions[id] += del_pos[id];
     rot[id]       += del_rot[id];

@@ -39,7 +39,7 @@ pub struct State {
     pub radii: Vec<f32>,
     pub fixity: Vec<i32>,
     pub bonds: Vec<i32>,
-    pub bond_info: Vec<i32>,
+    // pub bond_info: Vec<i32>,
     pub material_pointers: Vec<i32>,
     pub selections: Vec<i32>,
     pub contacts: Vec<f32>,
@@ -60,57 +60,14 @@ impl State {
         let mut radii = vec![0.0 as f32; p_count];
         let mut fixity = vec![0; p_count*6];
         let mut bonds = vec![-1; 1];
-        let mut bond_info = vec![-1; 1];
+        // let mut bond_info = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
         let mut selections = vec![0; p_count];
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let mut data = vec![0.0; p_count * 4];
         let flatbuffer = vec![0 as u8; 1];
-
-        // Setup initial state, Fill with random values
-        match config.prog_settings.structure {
-            Structure::Grid => {
-                let bond_vecs = setup::grid(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp1 => {
-                let bond_vecs = setup::exp1(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp2 => {
-                let bond_vecs = setup::exp2(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp3 => {
-                let bond_vecs = setup::exp3(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp4 => {
-                let bond_vecs = setup::exp4(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp5 => {
-                let bond_vecs = setup::exp5(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Exp6 => {
-                let bond_vecs = setup::exp6(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Mats => {
-                let bond_vecs = setup::mats(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-                bonds = bond_vecs.0;
-                bond_info = bond_vecs.1;
-            },
-            Structure::Random => {},
-        }
+        // Setup initial state
+        setup::grid(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
 
         let mut state = State {
             p_count,
@@ -123,7 +80,7 @@ impl State {
             radii,
             fixity,
             bonds,
-            bond_info,
+            // bond_info,
             material_pointers,
             selections,
             contacts,
@@ -190,7 +147,6 @@ impl State {
 
         let MAX_BONDS = config.prog_settings.max_bonds;
         let mut bonds = vec![-1; self.p_count*MAX_BONDS*3];
-        let mut bond_info = vec![-1; self.p_count*2];
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*self.p_count];
         let mut found_bonds = true;
         let mut bond_index = 0;
@@ -246,31 +202,16 @@ impl State {
                 }
             }
         }
-
-        let mut index = 0;
-        for i in 0..self.p_count {
-            let start = index;
-            let mut length = 0;
-            for j in 0..MAX_BONDS {
-                if bonds[(i*MAX_BONDS+j)*3] != -1 {
-                    length += 1;
-                    index += 1;
-                }
-            }
-            if length > 0 {
-                bond_info[i*2] = start as i32;
-                bond_info[i*2+1] = length as i32;
-            } else {
-                bond_info[i*2] = -1;
-                bond_info[i*2+1] = -1;
-            }
-        }
-        if found_bonds {
-            bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
-        }
+        // if found_bonds {
+        //     bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
+        // }
         self.bonds     = bonds;
-        self.bond_info = bond_info;
         self.contacts  = contacts;
+        // for num in self.bonds.clone().into_iter() {
+        //     println!("{}", num);
+
+        // }
+        // println!("{}", self.contacts.len());
     }
 
     pub fn save(&mut self, config: &mut WGPUConfig) {
@@ -285,7 +226,7 @@ impl State {
         let radii = builder.create_vector(&self.radii);
         let fixity = builder.create_vector(&self.fixity);
         let bonds = builder.create_vector(&self.bonds);
-        let bond_info = builder.create_vector(&self.bond_info);
+        let contacts = builder.create_vector(&self.contacts);
         let material_pointers = builder.create_vector(&self.material_pointers);
         let materials = builder.create_vector(&config.prog_settings.materials);
         let wall_settings = schema_generated::Wall_Settings::new(
@@ -302,6 +243,7 @@ impl State {
             config.prog_settings.color_code_rot,
         );
         let physics_settings = schema_generated::Physics_Settings::new(
+            config.prog_settings.timestep,
             config.prog_settings.genPerFrame,
             config.prog_settings.gravity,
             config.prog_settings.planet_mode,
@@ -328,7 +270,7 @@ impl State {
             radii: Some(radii),
             fixity: Some(fixity),
             bonds: Some(bonds),
-            bond_info: Some(bond_info),
+            contacts: Some(contacts),
             material_pointers: Some(material_pointers),
             materials: Some(materials),
             settings: Some(&settings)
@@ -370,7 +312,7 @@ impl State {
         self.radii = State::f32_vec_from_vector(state.radii());
         self.fixity = State::i32_vec_from_vector(state.fixity());
         self.bonds = State::i32_vec_from_vector(state.bonds());
-        self.bond_info = State::i32_vec_from_vector(state.bond_info());
+        self.contacts = State::f32_vec_from_vector(state.contacts());
         self.material_pointers = State::i32_vec_from_vector(state.material_pointers());
         if init {
             config.prog_settings.materials = State::f32_vec_from_vector(state.materials());
@@ -389,6 +331,7 @@ impl State {
             config.prog_settings.random_colors      = rs.random_colors();
             config.prog_settings.color_code_rot     = rs.color_code_rotation();
             // physics settings
+            config.prog_settings.timestep = ps.timestep();
             config.prog_settings.genPerFrame = ps.gen_per_frame();
             config.prog_settings.gravity = ps.gravity();
             config.prog_settings.planet_mode = ps.planet_mode();
@@ -401,6 +344,7 @@ impl State {
             // set update flags
             config.prog_settings.changed_collision_settings = true;
             config.prog_settings.materials_changed = true;
+            config.prog_settings.updateBonds();
         }
     }
 
@@ -408,7 +352,7 @@ impl State {
         let mut sums = [0.0; 10];
         let mut count = 0;
         for i in 0..self.selections.len() {
-            if self.selections[i] == 1 {
+            if self.selections[i] != 0 {
                 count += 1;
                 sums[0] += self.pos[i*2]   as f64;
                 sums[1] += self.pos[i*2+1] as f64;
@@ -466,8 +410,9 @@ impl State {
         State::update_i32(config, &mut self.fixity, &mut buffers.mov_buffers.buffers[6]);
         State::update_f32(config, &mut self.forces, &mut buffers.mov_buffers.buffers[7]);
         State::update_i32(config, &mut self.bonds, &mut buffers.contact_buffers.buffers[0]);
-        State::update_i32(config, &mut self.bond_info, &mut buffers.contact_buffers.buffers[1]);
-        State::update_i32(config, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[4]);
+        // State::update_i32(config, &mut self.bond_info, &mut buffers.contact_buffers.buffers[1]);
+        State::update_f32(config, &mut self.contacts, &mut buffers.contact_buffers.buffers[1]);
+        State::update_i32(config, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
         State::update_i32(config, &mut self.selections, &mut buffers.selections.buffer);
         State::update_f32(config, &mut self.data, &mut buffers.data_buffer.buffer);
 

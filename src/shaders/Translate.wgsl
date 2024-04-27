@@ -36,9 +36,6 @@ struct Forces {
 @group(3) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(4) @binding(0) var<storage, read_write> click_info: array<i32>;
 
-
-const deltaTime: f32 = 0.0000390625;
-
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;

@@ -479,7 +479,7 @@ impl WGPUComputeProg {
         let radii_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.radii), "Radii Buffer".to_string(), 0);
         let mut contact_buffers = BufferGroup::new(&config.device, vec![
             bytemuck::cast_slice(&state.bonds),
-            bytemuck::cast_slice(&state.bond_info),
+            // bytemuck::cast_slice(&state.bond_info),
             bytemuck::cast_slice(&state.contacts),
             bytemuck::cast_slice(&contact_pointers),
             bytemuck::cast_slice(&state.material_pointers),
@@ -600,7 +600,7 @@ impl WGPUComputeProg {
 
         let release_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Release compute"),
-            bind_group_layouts: &[&buffers.release_input.bind_group_layout, &buffers.selections.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
+            bind_group_layouts: &[&buffers.release_input.bind_group_layout, &buffers.selections.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.collision_settings.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -786,9 +786,9 @@ impl WGPUComputeProg {
         self.buffers.mov_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.fixity.as_slice()), 6);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.forces.as_bytes(), 7);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bonds.as_slice()), 0);
-        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
-        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 4);
-        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 2);
+        // self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
+        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 1);
+        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 3);
     }
 
     // fn save_state(&self , state: &State) {
@@ -856,7 +856,9 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(0, &self.buffers.release_input.bind_group, &[]);
             compute_pass.set_bind_group(1, &self.buffers.selections.bind_group, &[]);   
             compute_pass.set_bind_group(2, &self.buffers.mov_buffers.bind_group, &[]);  
-            compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);   
+            compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]); 
+            compute_pass.set_bind_group(4, &self.buffers.collision_settings.bind_group, &[]);   
+
 
             compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
             

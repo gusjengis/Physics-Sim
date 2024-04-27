@@ -12,15 +12,16 @@ use self::flatbuffers::{EndianScalar, Follow};
 // struct Physics_Settings, aligned to 4
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq)]
-pub struct Physics_Settings(pub [u8; 32]);
+pub struct Physics_Settings(pub [u8; 36]);
 impl Default for Physics_Settings { 
   fn default() -> Self { 
-    Self([0; 32])
+    Self([0; 36])
   }
 }
 impl core::fmt::Debug for Physics_Settings {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
     f.debug_struct("Physics_Settings")
+      .field("timestep", &self.timestep())
       .field("gen_per_frame", &self.gen_per_frame())
       .field("gravity", &self.gravity())
       .field("planet_mode", &self.planet_mode())
@@ -71,6 +72,7 @@ impl<'a> flatbuffers::Verifiable for Physics_Settings {
 impl<'a> Physics_Settings {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
+    timestep: f32,
     gen_per_frame: i32,
     gravity: bool,
     planet_mode: bool,
@@ -81,7 +83,8 @@ impl<'a> Physics_Settings {
     collisions: bool,
     friction_coef: f32,
   ) -> Self {
-    let mut s = Self([0; 32]);
+    let mut s = Self([0; 36]);
+    s.set_timestep(timestep);
     s.set_gen_per_frame(gen_per_frame);
     s.set_gravity(gravity);
     s.set_planet_mode(planet_mode);
@@ -94,6 +97,35 @@ impl<'a> Physics_Settings {
     s
   }
 
+  pub fn timestep(&self) -> f32 {
+    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_timestep(&mut self, x: f32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
   pub fn gen_per_frame(&self) -> i32 {
     let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
     // Safety:
@@ -101,7 +133,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[0..].as_ptr(),
+        self.0[4..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
       );
@@ -117,7 +149,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[0..].as_mut_ptr(),
+        self.0[4..].as_mut_ptr(),
         core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
       );
     }
@@ -130,7 +162,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[4..].as_ptr(),
+        self.0[8..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -146,7 +178,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[4..].as_mut_ptr(),
+        self.0[8..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
@@ -159,7 +191,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[5..].as_ptr(),
+        self.0[9..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -175,7 +207,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[5..].as_mut_ptr(),
+        self.0[9..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
@@ -188,7 +220,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[8..].as_ptr(),
+        self.0[12..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
@@ -204,7 +236,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[8..].as_mut_ptr(),
+        self.0[12..].as_mut_ptr(),
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
@@ -217,7 +249,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[12..].as_ptr(),
+        self.0[16..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
@@ -233,7 +265,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[12..].as_mut_ptr(),
+        self.0[16..].as_mut_ptr(),
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
@@ -246,7 +278,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[16..].as_ptr(),
+        self.0[20..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
       );
@@ -262,7 +294,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[16..].as_mut_ptr(),
+        self.0[20..].as_mut_ptr(),
         core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
       );
     }
@@ -275,7 +307,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[20..].as_ptr(),
+        self.0[24..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
@@ -291,7 +323,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[20..].as_mut_ptr(),
+        self.0[24..].as_mut_ptr(),
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
@@ -304,7 +336,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[24..].as_ptr(),
+        self.0[28..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -320,7 +352,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[24..].as_mut_ptr(),
+        self.0[28..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
@@ -333,7 +365,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[28..].as_ptr(),
+        self.0[32..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
@@ -349,7 +381,7 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[28..].as_mut_ptr(),
+        self.0[32..].as_mut_ptr(),
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
@@ -768,10 +800,10 @@ impl<'a> Wall_Settings {
 // struct Settings, aligned to 4
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq)]
-pub struct Settings(pub [u8; 52]);
+pub struct Settings(pub [u8; 56]);
 impl Default for Settings { 
   fn default() -> Self { 
-    Self([0; 52])
+    Self([0; 56])
   }
 }
 impl core::fmt::Debug for Settings {
@@ -825,7 +857,7 @@ impl<'a> Settings {
     render_settings: &Render_Settings,
     wall_settings: &Wall_Settings,
   ) -> Self {
-    let mut s = Self([0; 52]);
+    let mut s = Self([0; 56]);
     s.set_physics_settings(physics_settings);
     s.set_render_settings(render_settings);
     s.set_wall_settings(wall_settings);
@@ -841,31 +873,31 @@ impl<'a> Settings {
 
   #[allow(clippy::identity_op)]
   pub fn set_physics_settings(&mut self, x: &Physics_Settings) {
-    self.0[0..0 + 32].copy_from_slice(&x.0)
+    self.0[0..0 + 36].copy_from_slice(&x.0)
   }
 
   pub fn render_settings(&self) -> &Render_Settings {
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid struct in this slot
-    unsafe { &*(self.0[32..].as_ptr() as *const Render_Settings) }
+    unsafe { &*(self.0[36..].as_ptr() as *const Render_Settings) }
   }
 
   #[allow(clippy::identity_op)]
   pub fn set_render_settings(&mut self, x: &Render_Settings) {
-    self.0[32..32 + 6].copy_from_slice(&x.0)
+    self.0[36..36 + 6].copy_from_slice(&x.0)
   }
 
   pub fn wall_settings(&self) -> &Wall_Settings {
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid struct in this slot
-    unsafe { &*(self.0[40..].as_ptr() as *const Wall_Settings) }
+    unsafe { &*(self.0[44..].as_ptr() as *const Wall_Settings) }
   }
 
   #[allow(clippy::identity_op)]
   pub fn set_wall_settings(&mut self, x: &Wall_Settings) {
-    self.0[40..40 + 12].copy_from_slice(&x.0)
+    self.0[44..44 + 12].copy_from_slice(&x.0)
   }
 
 }
@@ -896,7 +928,7 @@ impl<'a> State<'a> {
   pub const VT_RADII: flatbuffers::VOffsetT = 18;
   pub const VT_FIXITY: flatbuffers::VOffsetT = 20;
   pub const VT_BONDS: flatbuffers::VOffsetT = 22;
-  pub const VT_BOND_INFO: flatbuffers::VOffsetT = 24;
+  pub const VT_CONTACTS: flatbuffers::VOffsetT = 24;
   pub const VT_MATERIAL_POINTERS: flatbuffers::VOffsetT = 26;
   pub const VT_MATERIALS: flatbuffers::VOffsetT = 28;
   pub const VT_SETTINGS: flatbuffers::VOffsetT = 30;
@@ -914,7 +946,7 @@ impl<'a> State<'a> {
     if let Some(x) = args.settings { builder.add_settings(x); }
     if let Some(x) = args.materials { builder.add_materials(x); }
     if let Some(x) = args.material_pointers { builder.add_material_pointers(x); }
-    if let Some(x) = args.bond_info { builder.add_bond_info(x); }
+    if let Some(x) = args.contacts { builder.add_contacts(x); }
     if let Some(x) = args.bonds { builder.add_bonds(x); }
     if let Some(x) = args.fixity { builder.add_fixity(x); }
     if let Some(x) = args.radii { builder.add_radii(x); }
@@ -1000,11 +1032,11 @@ impl<'a> State<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, i32>>>(State::VT_BONDS, None)}
   }
   #[inline]
-  pub fn bond_info(&self) -> Option<flatbuffers::Vector<'a, i32>> {
+  pub fn contacts(&self) -> Option<flatbuffers::Vector<'a, f32>> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, i32>>>(State::VT_BOND_INFO, None)}
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, f32>>>(State::VT_CONTACTS, None)}
   }
   #[inline]
   pub fn material_pointers(&self) -> Option<flatbuffers::Vector<'a, i32>> {
@@ -1046,7 +1078,7 @@ impl flatbuffers::Verifiable for State<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("radii", Self::VT_RADII, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("fixity", Self::VT_FIXITY, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("bonds", Self::VT_BONDS, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("bond_info", Self::VT_BOND_INFO, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("contacts", Self::VT_CONTACTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("material_pointers", Self::VT_MATERIAL_POINTERS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("materials", Self::VT_MATERIALS, false)?
      .visit_field::<Settings>("settings", Self::VT_SETTINGS, false)?
@@ -1065,7 +1097,7 @@ pub struct StateArgs<'a> {
     pub radii: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub fixity: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     pub bonds: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
-    pub bond_info: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
+    pub contacts: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub material_pointers: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     pub materials: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub settings: Option<&'a Settings>,
@@ -1084,7 +1116,7 @@ impl<'a> Default for StateArgs<'a> {
       radii: None,
       fixity: None,
       bonds: None,
-      bond_info: None,
+      contacts: None,
       material_pointers: None,
       materials: None,
       settings: None,
@@ -1138,8 +1170,8 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> StateBuilder<'a, 'b, A> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_BONDS, bonds);
   }
   #[inline]
-  pub fn add_bond_info(&mut self, bond_info: flatbuffers::WIPOffset<flatbuffers::Vector<'b , i32>>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_BOND_INFO, bond_info);
+  pub fn add_contacts(&mut self, contacts: flatbuffers::WIPOffset<flatbuffers::Vector<'b , f32>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_CONTACTS, contacts);
   }
   #[inline]
   pub fn add_material_pointers(&mut self, material_pointers: flatbuffers::WIPOffset<flatbuffers::Vector<'b , i32>>) {
@@ -1181,7 +1213,7 @@ impl core::fmt::Debug for State<'_> {
       ds.field("radii", &self.radii());
       ds.field("fixity", &self.fixity());
       ds.field("bonds", &self.bonds());
-      ds.field("bond_info", &self.bond_info());
+      ds.field("contacts", &self.contacts());
       ds.field("material_pointers", &self.material_pointers());
       ds.field("materials", &self.materials());
       ds.field("settings", &self.settings());

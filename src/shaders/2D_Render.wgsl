@@ -80,9 +80,9 @@ struct Bond {
 @group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
 @group(3) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 // @group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(4) @binding(2) var<storage, read_write> contacts: array<Contact>;
+@group(4) @binding(1) var<storage, read_write> contacts: array<Contact>;
 // @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
-@group(4) @binding(4) var<storage, read_write> material_pointers: array<i32>;
+@group(4) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(5) @binding(0) var<uniform> settings: Settings;
 @group(6) @binding(0) var<storage, read_write> materials: array<Material>;
 @group(7) @binding(0) var<storage, read_write> selections: array<i32>;
@@ -191,7 +191,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // bonds
     if settings.render_bonds == 1 {
-        for(var i = in.id*16u; i<(in.id+1u)*16u; i++){
+        for(var i = in.id*8u; i<(in.id+1u)*8u; i++){
             if contacts[i].bonded > 0 {
                 let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
                 var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);

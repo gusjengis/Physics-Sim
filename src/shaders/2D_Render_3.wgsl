@@ -58,8 +58,8 @@ struct Bond {
 @group(3) @binding(2) var<storage, read_write> rot_buf: array<f32>;
 @group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
 @group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
-@group(4) @binding(4) var<storage, read_write> material_pointers: array<i32>;
+// @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
+@group(4) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(5) @binding(0) var<uniform> settings: Settings;
 @group(6) @binding(0) var<storage, read_write> materials: array<Material>;
 @group(7) @binding(0) var<storage, read_write> selections: array<i32>;

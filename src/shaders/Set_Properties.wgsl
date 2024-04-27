@@ -57,8 +57,7 @@ struct Forces {
 @group(1) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(2) @binding(0) var<storage, read_write> radii: array<f32>;
-@group(3) @binding(3) var<storage, read_write> contact_pointers: array<i32>;
-@group(3) @binding(4) var<storage, read_write> material_pointers: array<i32>;
+@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(4) @binding(0) var<storage, read_write> selections: array<i32>;
 @group(5) @binding(0) var<uniform> input: Input;
 
