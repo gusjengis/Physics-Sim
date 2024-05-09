@@ -180,7 +180,8 @@ pub struct Settings {
     pub timestep: f32,
     pub maxGenPerFrame: i32,
     pub hz: f32,
-    pub fps: f32
+    pub fps: f32,
+    pub render_bp_grid: bool,
 }
 
 impl Settings {
@@ -344,7 +345,8 @@ impl Settings {
             timestep: 0.0000390625,
             maxGenPerFrame: 213,
             hz: 120.0,
-            fps: 120.0
+            fps: 120.0,
+            render_bp_grid: false
         }
     }
 
@@ -380,6 +382,7 @@ impl Settings {
                     ui.checkbox(&mut self.colors, "Colors");
                     ui.checkbox(&mut self.random_colors, "Random Colors");
                     ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
+                    ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
                 });
             }
             if self.menu.properties_menu {
@@ -831,6 +834,7 @@ impl Settings {
             self.vert_bound.to_bits() as i32,
             self.stiffness.to_bits() as i32,
             self.random_colors as i32,
+            self.render_bp_grid as i32,
         ];
     }
 

@@ -127,16 +127,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var cell_id = i32(cell_y * u32(grid_info.w) + cell_x);
         let base_index = cell_id * grid_info.cell_cap;
         var neighbors = grid[base_index];
-        for(var i = 1; i<neighbors+1; i++){
-            let b = grid[base_index + i];
-            if u32(b) != id {
-                if length(positions[b] - positions[id]) < (radii[b] + radii[id]){
-                    collisions[count] = b;
-                    count += 1u;
-                    if count == max_contacts {
-                        break;
-                    }
-                } 
+        if neighbors > 1 {
+            for(var i = 1; i<neighbors+1; i++){
+                let b = grid[base_index + i];
+                if u32(b) != id {
+                    if length(positions[b] - positions[id]) < (radii[b] + radii[id]){
+                        collisions[count] = b;
+                        count += 1u;
+                        if count == max_contacts {
+                            break;
+                        }
+                    } 
+                }
             }
         }
 

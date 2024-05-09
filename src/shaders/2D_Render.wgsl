@@ -64,7 +64,8 @@ struct Settings {
     w: f32,
     h: f32,
     stiffness: f32,
-    random_colors: i32
+    random_colors: i32,
+    render_grid: i32,
 }
 
 struct Bond {

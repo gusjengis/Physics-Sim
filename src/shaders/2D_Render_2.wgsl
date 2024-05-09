@@ -47,7 +47,8 @@ struct Settings {
     w: f32,
     h: f32,
     stiffness: f32,
-    random_colors: i32
+    random_colors: i32,
+    render_grid: i32,
 }
 
 struct Bond {
@@ -107,35 +108,36 @@ const PI = 3.141592653589793238;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = vec4(0.0, 0.0, 0.0, 1.0); 
+    
     if in.position.x >= settings.w || in.position.x <= -settings.w || in.position.y >= settings.h || in.position.y <= -settings.h {
         color = vec4(0.02, 0.02, 0.02, 1.0);
-    }
-    
-    let grid_info = grid_info_buffer[0];
-    let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
-    let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
-    var cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
-    var cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
-    var cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
-    let left   = base_x + grid_info.cell_size * f32(cell_x    );
-    let right  = base_x + grid_info.cell_size * f32(cell_x + 1);
-    let top    = base_y - grid_info.cell_size * f32(cell_y    );
-    let bottom = base_y - grid_info.cell_size * f32(cell_y + 1);
-    let v1 = vec2(base_x, base_y);
-    if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
-        let seed1 = u32(rand(cell_id, 4294967296.0));
-        let seed2 = u32(rand(seed1,   4294967296.0));
-        let seed3 = u32(rand(seed2,   4294967296.0));
-        let brightness = f32(grid[i32(cell_id)*grid_info.cell_cap]);
-        color = vec4(
-            color.x + brightness * 0.05 + 0.01 * rand(seed1, 1.0),
-            color.y + brightness * 0.05 + 0.01 * rand(seed2, 1.0),
-            color.z + brightness * 0.05 + 0.01 * rand(seed3, 1.0),
-            1.0
-        );
-    }
-    if in.position.x - left < 0.01 || right - in.position.x < 0.01 || in.position.y - bottom < 0.01 || top - in.position.y < 0.01 {
-        color *= 4.0;
+    } else if settings.render_grid == 1 {
+        let grid_info = grid_info_buffer[0];
+        let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
+        let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
+        var cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
+        var cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
+        var cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
+        let left   = base_x + grid_info.cell_size * f32(cell_x    );
+        let right  = base_x + grid_info.cell_size * f32(cell_x + 1);
+        let top    = base_y - grid_info.cell_size * f32(cell_y    );
+        let bottom = base_y - grid_info.cell_size * f32(cell_y + 1);
+        let v1 = vec2(base_x, base_y);
+        if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
+            let seed1 = u32(rand(cell_id, 4294967296.0));
+            let seed2 = u32(rand(seed1,   4294967296.0));
+            let seed3 = u32(rand(seed2,   4294967296.0));
+            var brightness = f32(grid[i32(cell_id)*grid_info.cell_cap])/f32(grid_info.cell_cap);
+            color = vec4(
+                color.x + brightness * rand(seed1, 1.0) * 0.5,
+                color.y + brightness * rand(seed2, 1.0) * 0.5,
+                color.z + brightness * rand(seed3, 1.0) * 0.5,
+                1.0
+            );
+        }
+        if (in.position.x + settings.w < 0.005 || settings.w - in.position.x < 0.005 || in.position.y + settings.h < 0.005 || settings.h - in.position.y < 0.005 || in.position.x - left < 0.005 || right - in.position.x < 0.005 || in.position.y - bottom < 0.005 || top - in.position.y < 0.005) && cell_x < grid_info.w && cell_y < grid_info.h && cell_x >= 0 && cell_y >= 0  {
+            color *= 4.0;
+        }
     }
 
     //done
