@@ -56,19 +56,28 @@ struct Bond {
     length: f32
 };
 
+struct GridInfo {
+    cell_size: f32,
+    cell_cap: i32,
+    w: i32,
+    h: i32,
+}
+
 @group(0) @binding(0) var<uniform> dim: Dimensions;
 @group(1) @binding(0) var<storage, read_write> pos_buf: array<vec2<f32>>;
-@group(2) @binding(0) var<storage, read_write> radii_buf: array<f32>;
-// @group(3) @binding(0) var<storage, read_write> color_buf: array<vec3<f32>>;
-@group(3) @binding(2) var<storage, read_write> rot_buf: array<f32>;
-@group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
-// @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
-@group(4) @binding(3) var<storage, read_write> material_pointers: array<i32>;
-@group(5) @binding(0) var<uniform> settings: Settings;
-@group(6) @binding(0) var<storage, read_write> materials: array<Material>;
-@group(7) @binding(0) var<storage, read_write> selections: array<i32>;
-
+@group(1) @binding(1) var<storage, read_write> radii_buf: array<f32>;
+// @group(2) @binding(0) var<storage, read_write> color_buf: array<vec3<f32>>;
+@group(2) @binding(2) var<storage, read_write> rot_buf: array<f32>;
+@group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
+@group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
+@group(3) @binding(4) var<storage, read_write> grid: array<i32>;
+@group(3) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+// @group(3) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
+@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(4) @binding(0) var<uniform> settings: Settings;
+@group(5) @binding(0) var<storage, read_write> materials: array<Material>;
+@group(6) @binding(0) var<storage, read_write> selections: array<i32>;
+@group(7) @binding(0) var<storage, read_write> click_info: array<i32>;
 
 @vertex
 fn vs_main(
@@ -101,20 +110,29 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if in.position.x >= settings.w || in.position.x <= -settings.w || in.position.y >= settings.h || in.position.y <= -settings.h {
         color = vec4(0.02, 0.02, 0.02, 1.0);
     }
+    
+    let grid_info = grid_info_buffer[0];
+    let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
+    let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
+    var cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
+    var cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
+    var cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
+    let v1 = vec2(base_x, base_y);
+    if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
+        let seed1 = u32(rand(cell_id, 4294967296.0));
+        let seed2 = u32(rand(seed1,   4294967296.0));
+        let seed3 = u32(rand(seed2,   4294967296.0));
+        let brightness = f32(grid[i32(cell_id)*grid_info.cell_cap]);
+        color = vec4(
+            color.x + brightness * 0.05 + 0.01 * rand(seed1, 1.0),
+            color.y + brightness * 0.05 + 0.01 * rand(seed2, 1.0),
+            color.z + brightness * 0.05 + 0.01 * rand(seed3, 1.0),
+            1.0
+        );
+    }
 
-    // if abs(in.position.x) % 1.0 < 0.003 || abs(in.position.x) % 1.0 > 0.997 || abs(in.position.y) % 1.0 < 0.003 || abs(in.position.y) % 1.0 > 0.997 {
-    //     return vec4(0.04, 0.04, 0.04, 1.0);
-    // }
-
-    // if abs(in.position.x) % 0.5 < 0.002 || abs(in.position.x) % 0.5 > 0.998 || abs(in.position.y) % 0.5 < 0.002 || abs(in.position.y) % 0.5 > 0.998 {
-    //     return vec4(0.04, 0.04, 0.04, 1.0);
-    // }
-
-    // if abs(in.position.x) % 0.25 < 0.001 || abs(in.position.x) % 0.25 > 0.999 || abs(in.position.y) % 0.25 < 0.001 || abs(in.position.y) % 0.25 > 0.999 {
-    //     return vec4(0.04, 0.04, 0.04, 1.0);
-    // }
     //done
-    if dim.pressed == 1 {
+    if dim.pressed == 1 && click_info[0] == 0 {
         // let pos1 = in.scale*(in.position.xy);
         let pos = (vec2(in.pixel.x + 1.0, -in.pixel.y + 1.0))/2.0;
         let pixel = vec2(i32(pos.x*f32(in.w_h.x)),i32(pos.y*f32(in.w_h.y)));
@@ -157,4 +175,14 @@ fn srgb_to_linear(value: f32) -> f32 {
     } else {
         return pow((value + 0.055) / 1.055, 2.4);
     }
+}
+
+fn rand(seed: u32, max: f32) -> f32{
+    //PCG Hash
+    var res = seed;
+    res = res * 747796405u + 2891336453u;
+    res = ((res >> ((res >> 28u) + 4u)) ^ res) * 277803737u;
+    res = (res >> 22u) ^ res;
+
+    return max*f32(res)/4294967296.0;
 }

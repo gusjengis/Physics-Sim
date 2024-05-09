@@ -924,14 +924,15 @@ impl<'a> State<'a> {
   pub const VT_ACC: flatbuffers::VOffsetT = 10;
   pub const VT_ROT: flatbuffers::VOffsetT = 12;
   pub const VT_ROT_VEL: flatbuffers::VOffsetT = 14;
-  pub const VT_FORCES: flatbuffers::VOffsetT = 16;
-  pub const VT_RADII: flatbuffers::VOffsetT = 18;
-  pub const VT_FIXITY: flatbuffers::VOffsetT = 20;
-  pub const VT_BONDS: flatbuffers::VOffsetT = 22;
-  pub const VT_CONTACTS: flatbuffers::VOffsetT = 24;
-  pub const VT_MATERIAL_POINTERS: flatbuffers::VOffsetT = 26;
-  pub const VT_MATERIALS: flatbuffers::VOffsetT = 28;
-  pub const VT_SETTINGS: flatbuffers::VOffsetT = 30;
+  pub const VT_ROT_ACC: flatbuffers::VOffsetT = 16;
+  pub const VT_FORCES: flatbuffers::VOffsetT = 18;
+  pub const VT_RADII: flatbuffers::VOffsetT = 20;
+  pub const VT_FIXITY: flatbuffers::VOffsetT = 22;
+  pub const VT_BONDS: flatbuffers::VOffsetT = 24;
+  pub const VT_CONTACTS: flatbuffers::VOffsetT = 26;
+  pub const VT_MATERIAL_POINTERS: flatbuffers::VOffsetT = 28;
+  pub const VT_MATERIALS: flatbuffers::VOffsetT = 30;
+  pub const VT_SETTINGS: flatbuffers::VOffsetT = 32;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -951,6 +952,7 @@ impl<'a> State<'a> {
     if let Some(x) = args.fixity { builder.add_fixity(x); }
     if let Some(x) = args.radii { builder.add_radii(x); }
     if let Some(x) = args.forces { builder.add_forces(x); }
+    if let Some(x) = args.rot_acc { builder.add_rot_acc(x); }
     if let Some(x) = args.rot_vel { builder.add_rot_vel(x); }
     if let Some(x) = args.rot { builder.add_rot(x); }
     if let Some(x) = args.acc { builder.add_acc(x); }
@@ -1002,6 +1004,13 @@ impl<'a> State<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, f32>>>(State::VT_ROT_VEL, None)}
+  }
+  #[inline]
+  pub fn rot_acc(&self) -> Option<flatbuffers::Vector<'a, f32>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, f32>>>(State::VT_ROT_ACC, None)}
   }
   #[inline]
   pub fn forces(&self) -> Option<flatbuffers::Vector<'a, f32>> {
@@ -1074,6 +1083,7 @@ impl flatbuffers::Verifiable for State<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("acc", Self::VT_ACC, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("rot", Self::VT_ROT, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("rot_vel", Self::VT_ROT_VEL, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("rot_acc", Self::VT_ROT_ACC, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("forces", Self::VT_FORCES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("radii", Self::VT_RADII, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("fixity", Self::VT_FIXITY, false)?
@@ -1093,6 +1103,7 @@ pub struct StateArgs<'a> {
     pub acc: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub rot: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub rot_vel: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
+    pub rot_acc: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub forces: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub radii: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub fixity: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
@@ -1112,6 +1123,7 @@ impl<'a> Default for StateArgs<'a> {
       acc: None,
       rot: None,
       rot_vel: None,
+      rot_acc: None,
       forces: None,
       radii: None,
       fixity: None,
@@ -1152,6 +1164,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> StateBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_rot_vel(&mut self, rot_vel: flatbuffers::WIPOffset<flatbuffers::Vector<'b , f32>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_ROT_VEL, rot_vel);
+  }
+  #[inline]
+  pub fn add_rot_acc(&mut self, rot_acc: flatbuffers::WIPOffset<flatbuffers::Vector<'b , f32>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_ROT_ACC, rot_acc);
   }
   #[inline]
   pub fn add_forces(&mut self, forces: flatbuffers::WIPOffset<flatbuffers::Vector<'b , f32>>) {
@@ -1209,6 +1225,7 @@ impl core::fmt::Debug for State<'_> {
       ds.field("acc", &self.acc());
       ds.field("rot", &self.rot());
       ds.field("rot_vel", &self.rot_vel());
+      ds.field("rot_acc", &self.rot_acc());
       ds.field("forces", &self.forces());
       ds.field("radii", &self.radii());
       ds.field("fixity", &self.fixity());

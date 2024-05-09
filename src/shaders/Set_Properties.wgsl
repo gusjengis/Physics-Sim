@@ -48,6 +48,7 @@ struct Forces {
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> radii: array<f32>;
 @group(1) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
 @group(1) @binding(1) var<storage, read_write> velocities_buf: array<vec2<f32>>;
 @group(1) @binding(2) var<storage, read_write> rot: array<f32>;
@@ -56,10 +57,11 @@ struct Forces {
 @group(1) @binding(5) var<storage, read_write> acc: array<vec3<f32>>;
 @group(1) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
-@group(2) @binding(0) var<storage, read_write> radii: array<f32>;
-@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
-@group(4) @binding(0) var<storage, read_write> selections: array<i32>;
-@group(5) @binding(0) var<uniform> input: Input;
+@group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
+@group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
+@group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(3) @binding(0) var<storage, read_write> selections: array<i32>;
+@group(4) @binding(0) var<uniform> input: Input;
 
 
 @compute @workgroup_size(256)
@@ -67,9 +69,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
 
     if selections[id] != 0 {
-        if input.set_x_pos       == 1 { positions[id].x       = input.x_pos; } 
-        if input.set_y_pos       == 1 { positions[id].y       = input.y_pos; } 
-        if input.set_rot         == 1 { rot[id]               = input.rot; } 
+        if input.set_x_pos       == 1 { del_pos[id].x = input.x_pos - positions[id].x; positions[id].x = input.x_pos; } 
+        if input.set_y_pos       == 1 { del_pos[id].y = input.y_pos - positions[id].y; positions[id].y = input.y_pos; } 
+        if input.set_rot         == 1 { del_rot[id] = input.rot - rot[id]; rot[id] = input.rot; } 
         if input.set_x_vel       == 1 { velocities[id].x      = input.x_vel; } 
         if input.set_y_vel       == 1 { velocities[id].y      = input.y_vel; } 
         if input.set_rot_vel     == 1 { rot_vel[id]           = input.rot_vel; } 

@@ -40,6 +40,7 @@ struct Settings {
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
+@group(0) @binding(1) var<storage, read_write> radii: array<f32>;
 @group(1) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
 @group(1) @binding(1) var<storage, read_write> accelerations: array<vec2<f32>>;
 @group(1) @binding(2) var<storage, read_write> rot: array<f32>;
@@ -50,8 +51,7 @@ struct Settings {
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
-@group(2) @binding(0) var<storage, read_write> radii: array<f32>;
-@group(4) @binding(0) var<uniform> settings: Settings;
+@group(2) @binding(0) var<uniform> settings: Settings;
 
 
 // const dT: f32 = 0.000005;//0.0000391236;

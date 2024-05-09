@@ -60,6 +60,9 @@ pub struct Data {
     pub data2: Vec<[f64; 2]>,
     pub data3: Vec<[f64; 2]>,
     pub data4: Vec<[f64; 2]>,
+    pub fps: Vec<[f64; 2]>,
+    pub current_file: std::path::PathBuf,
+    pub save: bool
 }
 
 impl Data {
@@ -75,10 +78,13 @@ impl Data {
             data2: Vec::new(),
             data3: Vec::new(),
             data4: Vec::new(),
+            fps: Vec::new(),
+            current_file: std::path::PathBuf::new(),
+            save: false
         };
     }
 
-    pub fn push(&mut self, timestamp: f64, datum: [f64; 10]) {
+    pub fn push(&mut self, timestamp: f64, datum: [f64; 10], fps: f64) {
         self.x_pos_data.push([timestamp, datum[0]]);
         self.y_pos_data.push([timestamp, datum[1]]);
         self.x_vel_data.push([timestamp, datum[2]]);
@@ -89,6 +95,23 @@ impl Data {
         self.data2.push([timestamp, datum[7]]);
         self.data3.push([timestamp, datum[8]]);
         self.data4.push([timestamp, datum[9]]);
+        self.fps.push([timestamp, fps]);
+    }
+
+    pub fn save(&mut self) {
+        let path = FileDialog::new()
+            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/data")
+            .add_filter("CSV File", &["csv"])
+            .show_save_single_file()
+            .unwrap();
+
+        match path {
+            Some(path) => {
+                self.current_file = path.clone();
+                self.save = true;
+            },
+            None => {},
+        };
     }
 }
 
@@ -146,6 +169,7 @@ pub struct Settings {
     pub properties: Properties,
     pub set_properties: bool,
     pub data: Data,
+    pub gather_data: bool,
     pub auto_size_plot: bool,
     pub plotted_prop: Property,
     pub contact_damping: f32,
@@ -309,6 +333,7 @@ impl Settings {
             },
             set_properties: false,
             data: Data::new(),
+            gather_data: false,
             auto_size_plot: true,
             plotted_prop: Property::Y_Position,
             contact_damping: 0.2,
@@ -657,7 +682,6 @@ impl Settings {
                                 }
                             };
                 });
-
             }
             if self.menu.materials_menu { egui::Window::new("Materials").collapsible(false).auto_sized().show(ctx, |ui| {
                 let materials_count = self.materials.len()/self.material_size;
@@ -675,6 +699,7 @@ impl Settings {
             });}
             if self.menu.data_menu {
                 egui::Window::new("Data").collapsible(false).resizable(true).show(ctx, |ui| {
+                    ui.checkbox(&mut self.gather_data, "Gather Data");
                     let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
                     let button = egui::Button::new("Reset View");
                     egui::ComboBox::from_label("Property")
@@ -690,6 +715,7 @@ impl Settings {
                                 ui.selectable_value(&mut self.plotted_prop, Property::Data_2, "Data 2");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Data_3, "Data 3");
                                 ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
+                                ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
                             });
                     if ui.add(button).clicked() { plot = plot.reset() }
                     plot.show(ui, |plot_ui| {
@@ -704,6 +730,7 @@ impl Settings {
                             Property::Data_2 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
                             Property::Data_3 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));},
                             Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
+                            Property::FPS => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));},
                         }
                     });
                 });
@@ -894,4 +921,5 @@ pub enum Property {
     Data_2,
     Data_3,
     Data_4,
+    FPS,
 }

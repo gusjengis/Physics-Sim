@@ -618,6 +618,7 @@ impl BufferGroup {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM |wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             }
         );
+        // println!("{}: {}", self.label, self.buffers[index].size());
         let mut layout_entries = vec![];
         let mut entries = vec![];
         for i in 0..self.buffers.len() {
@@ -645,6 +646,7 @@ impl BufferGroup {
             entries: &entries,
             label: Some(&self.label),
         });
+        self.bind_group_layout = bind_group_layout;
         self.bind_group = bind_group;
     }
 

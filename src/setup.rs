@@ -21,12 +21,11 @@ pub fn p_count(settings: &mut Settings) -> usize {
 }
 
 
-pub fn grid(settings: &mut Settings, pos: &mut Vec<f32>, vel: &mut Vec<f32>, rot: &mut Vec<f32>, rot_vel: &mut Vec<f32>, radii: &mut Vec<f32>, fixity: &mut Vec<i32>, forces: &mut Vec<f32>, material_pointers: &mut Vec<i32>) {
+pub fn grid(settings: &mut Settings, pos: &mut Vec<f32>, vel: &mut Vec<f32>, radii: &mut Vec<f32>, fixity: &mut Vec<i32>, forces: &mut Vec<f32>, material_pointers: &mut Vec<i32>) {
     settings.two_part = false;
     settings.materials.resize(settings.material_size*2, 0.0);
 
     let p_count = settings.particles;
-    println!("{}", p_count);
     let mut rng = rand::thread_rng();
     let max_rad = settings.max_radius;
     let min_rad = settings.min_radius;

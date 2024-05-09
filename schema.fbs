@@ -39,6 +39,7 @@ table State {
   acc: [float];
   rot: [float];
   rot_vel: [float];
+  rot_acc: [float];
   forces: [float];
   radii: [float];
   fixity: [int];

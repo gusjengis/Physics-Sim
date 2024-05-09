@@ -35,16 +35,17 @@ pub struct State {
     pub acc: Vec<f32>,
     pub rot: Vec<f32>,
     pub rot_vel: Vec<f32>,
+    pub rot_acc: Vec<f32>,
     pub forces: Vec<f32>,
     pub radii: Vec<f32>,
     pub fixity: Vec<i32>,
     pub bonds: Vec<i32>,
-    // pub bond_info: Vec<i32>,
     pub material_pointers: Vec<i32>,
     pub selections: Vec<i32>,
     pub contacts: Vec<f32>,
     pub data: Vec<f32>,
-    pub flatbuffer: Vec<u8>
+    pub flatbuffer: Vec<u8>,
+    pub grid: Vec<i32>
 }
 
 impl State {
@@ -53,9 +54,10 @@ impl State {
         let p_count = setup::p_count(&mut config.prog_settings);
         let mut pos = vec![0.0 as f32; p_count*2];
         let mut vel = vec![0.0 as f32; p_count*2];
-        let mut acc = vec![0.0 as f32; p_count*3];
+        let mut acc = vec![0.0 as f32; p_count*2];
         let mut rot = vec![0.0 as f32; p_count];
         let mut rot_vel = vec![0.0 as f32; p_count];
+        let mut rot_acc = vec![0.0 as f32; p_count];
         let mut forces = vec![0.0 as f32; p_count*6];
         let mut radii = vec![0.0 as f32; p_count];
         let mut fixity = vec![0; p_count*6];
@@ -67,7 +69,7 @@ impl State {
         let mut data = vec![0.0; p_count * 4];
         let flatbuffer = vec![0 as u8; 1];
         // Setup initial state
-        setup::grid(&mut config.prog_settings, &mut pos, &mut vel, &mut rot, &mut rot_vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
+        setup::grid(&mut config.prog_settings, &mut pos, &mut vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
 
         let mut state = State {
             p_count,
@@ -76,16 +78,17 @@ impl State {
             acc,
             rot,
             rot_vel,
+            rot_acc,
             forces,
             radii,
             fixity,
             bonds,
-            // bond_info,
             material_pointers,
             selections,
             contacts,
             data,
             flatbuffer,
+            grid:  vec![0; 1]
         };
 
         state.regen_bonds(config);
@@ -153,19 +156,19 @@ impl State {
         for i in 0..self.p_count {
             let mut col_num = 0;
             for j in 0..self.p_count {
-                if j != i {
+                if i != j {
                     let distance = ((self.pos[j*2] - self.pos[i*2]).powf(2.0) + (self.pos[j*2+1] - self.pos[i*2+1]).powf(2.0)).sqrt();
                     let sum_of_radii = (self.radii[i] + self.radii[j]);
                     if distance < sum_of_radii*1.05 { // bond detected
                         if col_num < MAX_BONDS && bonds[(i*MAX_BONDS+col_num)*3] == -1 {
                             
                             // CREATE BOND
-                            bonds[bond_index*3] = 1 as i32;
                             let delta = (self.pos[j*2] - self.pos[i*2], self.pos[j*2+1] - self.pos[i*2+1]);
                             let magnitude = (delta.0*delta.0 + delta.1*delta.1).powf(0.5);
                             let normalized_delta = (delta.0/magnitude, delta.1/magnitude);
                             let angle = normalized_delta.0.atan2(normalized_delta.1);
                             // println!("({}, {}) vs ({}, {})", normalized_delta.0, normalized_delta.1, angle.sin(), angle.cos());
+                            bonds[bond_index*3] = 1 as i32;
                             bonds[bond_index*3+1] = (angle).to_bits() as i32;
                             bonds[bond_index*3+2] = (magnitude).to_bits() as i32;
                             // println!("{}, {}, {}", bonds[(i*MAX_BONDS+col_num)*3], angle, magnitude);
@@ -200,18 +203,23 @@ impl State {
                         }
                     }
                 }
+
             }
         }
-        // if found_bonds {
-        //     bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
+        if found_bonds {
+            bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
+        }
+        if bonds.is_empty() {
+            bonds = vec![-1; 1];
+        }
+        // for num in bonds.clone() {
+        //     println!("Bonds: {}", num);
+        // }
+        // for num in contacts.clone() {
+        //     println!("Contacts: {}", num);
         // }
         self.bonds     = bonds;
         self.contacts  = contacts;
-        // for num in self.bonds.clone().into_iter() {
-        //     println!("{}", num);
-
-        // }
-        // println!("{}", self.contacts.len());
     }
 
     pub fn save(&mut self, config: &mut WGPUConfig) {
@@ -222,6 +230,7 @@ impl State {
         let acc = builder.create_vector(&self.acc);
         let rot = builder.create_vector(&self.rot);
         let rot_vel = builder.create_vector(&self.rot_vel);
+        let rot_acc = builder.create_vector(&self.rot_acc);
         let forces = builder.create_vector(&self.forces);
         let radii = builder.create_vector(&self.radii);
         let fixity = builder.create_vector(&self.fixity);
@@ -266,6 +275,7 @@ impl State {
             acc: Some(acc),
             rot: Some(rot),
             rot_vel: Some(rot_vel),
+            rot_acc: Some(rot_acc),
             forces: Some(forces),
             radii: Some(radii),
             fixity: Some(fixity),
@@ -296,6 +306,18 @@ impl State {
         Ok(())
     }
 
+    pub fn get_min_max_radii(self) -> (f32, f32) {
+        let mut min = f32::MAX;
+        let mut max = f32::MIN;
+        
+        for num in self.radii {
+            if num > max { max = num; }
+            if num < min { min = num; }
+        }
+
+        return (min, max);
+    }
+
     pub fn load(&mut self, config: &mut WGPUConfig, init: bool) {
         let state = schema_generated::root_as_state(self.flatbuffer.as_slice()).unwrap();
         let new_p_count = state.particles() as usize;
@@ -308,6 +330,7 @@ impl State {
         self.acc = State::f32_vec_from_vector(state.acc());
         self.rot = State::f32_vec_from_vector(state.rot());
         self.rot_vel = State::f32_vec_from_vector(state.rot_vel());
+        self.rot_acc = State::f32_vec_from_vector(state.rot_acc());
         self.forces = State::f32_vec_from_vector(state.forces());
         self.radii = State::f32_vec_from_vector(state.radii());
         self.fixity = State::i32_vec_from_vector(state.fixity());
@@ -401,12 +424,13 @@ impl State {
     pub fn update_state(&mut self, config: &mut WGPUConfig, buffers: &mut BufferContainer) {
 
         self.p_count = config.prog_settings.particles;
-        State::update_f32(config, &mut self.pos, &mut buffers.pos_buffer.buffer);
-        State::update_f32(config, &mut self.radii, &mut buffers.radii_buffer.buffer);
+        State::update_f32(config, &mut self.pos, &mut buffers.pos_buffers.buffers[0]);
+        State::update_f32(config, &mut self.radii, &mut buffers.pos_buffers.buffers[1]);
         State::update_f32(config, &mut self.vel, &mut buffers.mov_buffers.buffers[0]);
+        State::update_f32(config, &mut self.acc, &mut buffers.mov_buffers.buffers[1]);
         State::update_f32(config, &mut self.rot, &mut buffers.mov_buffers.buffers[2]);
         State::update_f32(config, &mut self.rot_vel, &mut buffers.mov_buffers.buffers[3]);
-        State::update_f32(config, &mut self.acc, &mut buffers.mov_buffers.buffers[5]);
+        State::update_f32(config, &mut self.rot_acc, &mut buffers.mov_buffers.buffers[4]);
         State::update_i32(config, &mut self.fixity, &mut buffers.mov_buffers.buffers[6]);
         State::update_f32(config, &mut self.forces, &mut buffers.mov_buffers.buffers[7]);
         State::update_i32(config, &mut self.bonds, &mut buffers.contact_buffers.buffers[0]);
@@ -415,12 +439,16 @@ impl State {
         State::update_i32(config, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
         State::update_i32(config, &mut self.selections, &mut buffers.selections.buffer);
         State::update_f32(config, &mut self.data, &mut buffers.data_buffer.buffer);
+        State::update_i32(config, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
+        for n in self.grid.iter() {
+            println!("{}", n);
 
+        }
     }
 
     pub fn update_i32(config: &mut WGPUConfig, vector: &mut Vec<i32>, buffer: &mut wgpu::Buffer) {
         
-        let buffer_size = (vector.len() * mem::size_of::<i32>()) as u64;
+        let buffer_size = (buffer.size());// as usize * mem::size_of::<i32>()) as u64;
 
         let staging_buffer = config.device.create_buffer(&wgpu::BufferDescriptor {
             size: buffer_size,
@@ -475,7 +503,7 @@ impl State {
 
     pub fn update_f32(config: &mut WGPUConfig, vector: &mut Vec<f32>, buffer: &mut wgpu::Buffer) {
         
-        let buffer_size = (vector.len() * mem::size_of::<f32>()) as u64;
+        let buffer_size = (buffer.size());// as usize * mem::size_of::<f32>()) as u64;
 
         let staging_buffer = config.device.create_buffer(&wgpu::BufferDescriptor {
             size: buffer_size,

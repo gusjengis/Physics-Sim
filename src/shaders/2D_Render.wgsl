@@ -75,18 +75,19 @@ struct Bond {
 
 @group(0) @binding(0) var<uniform> dim: Dimensions;
 @group(1) @binding(0) var<storage, read_write> pos_buf: array<vec2<f32>>;
-@group(2) @binding(0) var<storage, read_write> radii_buf: array<f32>;
-@group(3) @binding(2) var<storage, read_write> rot_buf: array<f32>;
-@group(3) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(3) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
-// @group(4) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(4) @binding(1) var<storage, read_write> contacts: array<Contact>;
-// @group(4) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
-@group(4) @binding(3) var<storage, read_write> material_pointers: array<i32>;
-@group(5) @binding(0) var<uniform> settings: Settings;
-@group(6) @binding(0) var<storage, read_write> materials: array<Material>;
-@group(7) @binding(0) var<storage, read_write> selections: array<i32>;
-
+@group(1) @binding(1) var<storage, read_write> radii_buf: array<f32>;
+@group(2) @binding(0) var<storage, read_write> vel: array<vec2<f32>>;
+@group(2) @binding(2) var<storage, read_write> rot_buf: array<f32>;
+@group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
+@group(2) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
+// @group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
+@group(3) @binding(1) var<storage, read_write> contacts: array<Contact>;
+// @group(3) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
+@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(4) @binding(0) var<uniform> settings: Settings;
+@group(5) @binding(0) var<storage, read_write> materials: array<Material>;
+@group(6) @binding(0) var<storage, read_write> selections: array<i32>;
+@group(7) @binding(0) var<storage, read_write> click_info: array<i32>;
 
 @vertex
 fn vs_main(
@@ -148,6 +149,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     var color = vec4(in.color, 1.0);
+    // color = vec4(vel[in.id].x*255.0, vel[in.id].y*255.0, rot_vel[in.id]*255.0, 1.0);
     if settings.colors == 0 {
         color = vec4(0.05, 0.05, 0.05, 1.0);
     }
@@ -191,8 +193,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // bonds
     if settings.render_bonds == 1 {
-        for(var i = in.id*8u; i<(in.id+1u)*8u; i++){
-            if contacts[i].bonded > 0 {
+        for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
+            if contacts[i].bonded >= 0 {
                 let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
                 var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);
                 if dot(dir, normalize(in.position)) > 0.99 {
@@ -216,7 +218,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     
     //done
-    if dim.pressed == 1 {
+    if dim.pressed == 1 && click_info[0] == 0 {
         let pos = (vec2(in.pixel.x + 1.0, -in.pixel.y + 1.0))/2.0;
         let pixel = vec2(i32(pos.x*f32(in.w_h.x)),i32(pos.y*f32(in.w_h.y)));
         let lower_x = min(dim.x, dim.x + dim.rW);
