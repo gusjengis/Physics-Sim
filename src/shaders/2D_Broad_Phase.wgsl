@@ -49,7 +49,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let cell_index  = vec2(
         id % grid_info.w,
-        id / grid_info.h
+        id / grid_info.w
     );
 
     let left   = base_x + grid_info.cell_size * f32(cell_index.x    );
