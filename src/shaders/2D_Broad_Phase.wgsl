@@ -1,26 +1,3 @@
-struct Settings {
-    hor_bound: f32,
-    vert_bound: f32,
-    gravity: i32,
-    planet_mode: i32,
-    bonds: i32,
-    collisions: i32,
-    friction: i32,
-    friction_coefficient: f32,
-    rotation: i32,
-    linear_contact_bonds: i32,
-    gravity_acc: f32,
-    stiffness: f32,
-    bonds_tear: i32,
-    bond_force_limit: f32,
-    contact_damping: f32,
-    bond_damping: f32,
-    drag: f32,
-    bond_shear_lim: f32,
-    verlet: i32,
-    dT: f32
-}
-
 struct GridInfo {
     cell_size: f32,
     cell_cap: i32,
@@ -32,7 +9,6 @@ struct GridInfo {
 @group(0) @binding(1) var<storage, read_write> radii: array<f32>;
 @group(1) @binding(4) var<storage, read_write> grid: array<i32>;
 @group(1) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
-@group(2) @binding(0) var<uniform> settings: Settings;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

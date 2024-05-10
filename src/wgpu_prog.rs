@@ -446,7 +446,7 @@ pub struct WGPUComputeProg {
 pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
     let width  = settings.hor_bound  * 2.0;
     let height = settings.vert_bound * 2.0;
-    let     max_rad = settings.max_radius * 7.0;
+    let     max_rad = settings.max_radius * 10.0;
     let mut min_rad = settings.min_radius;
     if !settings.variable_rad { min_rad = settings.max_radius; }
     let w = (width/max_rad).ceil() as i32;
