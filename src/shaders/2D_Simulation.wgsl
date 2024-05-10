@@ -140,7 +140,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 var neighbors = grid[base_index];
 
                 if neighbors > 1 {
-                    for (var i = 1; i < neighbors + 1; i++) {
+                    for (var i = 2; i < neighbors + 2; i++) {
                         let b = grid[base_index + i];
                         if u32(b) != id {
                             if length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
@@ -157,17 +157,17 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
 
         // make a list of particles that we're colliding with
-        // for(var i = 0u; i<arrayLength(&radii); i++){
-        //     if i != id {
-        //         if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
-        //             collisions[count] = i32(i);
-        //             count += 1u;
-        //             if count == max_contacts {
-        //                 break;
-        //             }
-        //         } 
-        //     }
-        // }
+        for(var i = 0u; i<arrayLength(&radii); i++){
+            if i != id {
+                if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
+                    collisions[count] = i32(i);
+                    count += 1u;
+                    if count == max_contacts {
+                        break;
+                    }
+                } 
+            }
+        }
 
         // delete contacts that don't exist
         for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){

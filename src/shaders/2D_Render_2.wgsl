@@ -128,6 +128,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let seed2 = u32(rand(seed1,   4294967296.0));
             let seed3 = u32(rand(seed2,   4294967296.0));
             var brightness = f32(grid[i32(cell_id)*grid_info.cell_cap])/f32(grid_info.cell_cap);
+            // var brightness = f32(grid[i32(cell_id)*grid_info.cell_cap + 1]);
             color = vec4(
                 color.x + brightness * rand(seed1, 1.0) * 0.5,
                 color.y + brightness * rand(seed2, 1.0) * 0.5,

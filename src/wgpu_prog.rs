@@ -446,12 +446,12 @@ pub struct WGPUComputeProg {
 pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
     let width  = settings.hor_bound  * 2.0;
     let height = settings.vert_bound * 2.0;
-    let     max_rad = settings.max_radius * 10.0;
+    let     max_rad = settings.max_radius * 2.0;
     let mut min_rad = settings.min_radius;
     if !settings.variable_rad { min_rad = settings.max_radius; }
     let w = (width/max_rad).ceil() as i32;
     let h = (height/max_rad).ceil() as i32;
-    let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.particles as i32) + 1;
+    let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.particles as i32) + 2;
     let total_size = w * h * cell_cap;
     println!("Cell Capacity:   {}", cell_cap);
     println!("Cell Dimensions: {} x {}", w, h);
@@ -472,7 +472,7 @@ impl WGPUComputeProg {
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let grid_info_return = grid_capacity(&config.prog_settings);
         let mut contact_pointers = vec![-1; 1];
-        let mut bp_grid = vec![-1; grid_info_return.0 * grid_info_return.2 as usize];
+        let mut bp_grid = vec![1; grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
             grid_info_return.0,
@@ -598,7 +598,7 @@ impl WGPUComputeProg {
         //create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("LOM compute"),
-            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.collision_settings.bind_group_layout],
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.collision_settings.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -985,7 +985,8 @@ impl WGPUComputeProg {
                 
                 compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
                 compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);      
-                compute_pass.set_bind_group(2, &self.buffers.collision_settings.bind_group, &[]);   
+                compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);         
+                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);   
 
                 compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
 
