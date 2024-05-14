@@ -678,11 +678,6 @@ impl Client {
                 self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config);
                 self.wgpu_prog.shader_prog.state.save_to_file(settings!().current_file.clone());
             }
-
-            if settings!().data.save && settings!().data.current_file.file_name().is_some() {
-                settings!().data.save = false;
-                
-            }
         
             if settings!().load && settings!().current_file.file_name().is_some() {
                 settings!().load = false;
@@ -919,8 +914,9 @@ impl Client {
 
     let now = Local::now();
     let sim_time_passed = settings!().timestep*self.generation as f32;    
+    settings!().sim_time = sim_time_passed;
 
-    if self.toggle && self.wgpu_config.prog_settings.gather_data {
+    if self.toggle && settings!().gather_data || settings!().recording {
         self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
         match self.wgpu_prog.shader_prog.state.get_datum(&settings!().plotted_prop) {
             Some(datum) => {settings!().data.push(sim_time_passed as f64, datum, self.wgpu_config.prog_settings.fps as f64);},

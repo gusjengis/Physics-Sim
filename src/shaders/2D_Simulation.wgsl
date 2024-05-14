@@ -153,21 +153,28 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                         }
                     }
                 }
+                if count == max_contacts {
+                    break;
+                }
+            }
+            if count == max_contacts {
+                break;
             }
         }
 
         // make a list of particles that we're colliding with
-        for(var i = 0u; i<arrayLength(&radii); i++){
-            if i != id {
-                if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
-                    collisions[count] = i32(i);
-                    count += 1u;
-                    if count == max_contacts {
-                        break;
-                    }
-                } 
-            }
-        }
+
+        // for(var i = 0u; i<arrayLength(&radii); i++){
+        //     if i != id {
+        //         if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
+        //             collisions[count] = i32(i);
+        //             count += 1u;
+        //             if count == max_contacts {
+        //                 break;
+        //             }
+        //         } 
+        //     }
+        // }
 
         // delete contacts that don't exist
         for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){

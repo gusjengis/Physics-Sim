@@ -439,11 +439,11 @@ impl State {
         State::update_i32(config, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
         State::update_i32(config, &mut self.selections, &mut buffers.selections.buffer);
         State::update_f32(config, &mut self.data, &mut buffers.data_buffer.buffer);
-        State::update_i32(config, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
-        for n in self.grid.iter() {
-            println!("{}", n);
+        // State::update_i32(config, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
+        // for n in self.grid.iter() {
+        //     println!("{}", n);
 
-        }
+        // }
     }
 
     pub fn update_i32(config: &mut WGPUConfig, vector: &mut Vec<i32>, buffer: &mut wgpu::Buffer) {

@@ -1,4 +1,7 @@
 use std::fmt::Debug;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 use egui::*;
 use std::*;
@@ -61,8 +64,6 @@ pub struct Data {
     pub data3: Vec<[f64; 2]>,
     pub data4: Vec<[f64; 2]>,
     pub fps: Vec<[f64; 2]>,
-    pub current_file: std::path::PathBuf,
-    pub save: bool
 }
 
 impl Data {
@@ -79,8 +80,6 @@ impl Data {
             data3: Vec::new(),
             data4: Vec::new(),
             fps: Vec::new(),
-            current_file: std::path::PathBuf::new(),
-            save: false
         };
     }
 
@@ -96,22 +95,6 @@ impl Data {
         self.data3.push([timestamp, datum[8]]);
         self.data4.push([timestamp, datum[9]]);
         self.fps.push([timestamp, fps]);
-    }
-
-    pub fn save(&mut self) {
-        let path = FileDialog::new()
-            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/data")
-            .add_filter("CSV File", &["csv"])
-            .show_save_single_file()
-            .unwrap();
-
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                self.save = true;
-            },
-            None => {},
-        };
     }
 }
 
@@ -182,6 +165,11 @@ pub struct Settings {
     pub hz: f32,
     pub fps: f32,
     pub render_bp_grid: bool,
+    pub timed_recording: bool,
+    pub recording_duration: f32,
+    pub start_time: f32,
+    pub sim_time: f32,
+    pub recording: bool,
 }
 
 impl Settings {
@@ -346,7 +334,12 @@ impl Settings {
             maxGenPerFrame: 213,
             hz: 120.0,
             fps: 120.0,
-            render_bp_grid: false
+            render_bp_grid: false,
+            timed_recording: false,
+            recording_duration: 0.003,
+            start_time: 0.0,
+            sim_time: 0.0,
+            recording: false
         }
     }
 
@@ -359,6 +352,10 @@ impl Settings {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
+        }
+        if self.recording && self.start_time + self.recording_duration < self.sim_time {
+            self.gather_data = false;
+            self.recording = false;
         }
         if self.settings_menu {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
@@ -702,9 +699,24 @@ impl Settings {
             });}
             if self.menu.data_menu {
                 egui::Window::new("Data").collapsible(false).resizable(true).show(ctx, |ui| {
-                    ui.checkbox(&mut self.gather_data, "Gather Data");
+                    if ui.checkbox(&mut self.gather_data, "Gather Data").changed() {
+                        self.start_time = self.sim_time;
+                    }
                     let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
                     let button = egui::Button::new("Reset View");
+                    if ui.checkbox(&mut self.timed_recording,"Timed").changed() {
+                        self.start_time = self.sim_time;
+                    }
+                    if self.timed_recording {
+                        ui.add(egui::Slider::new(&mut self.recording_duration, 0.0..=600.0).step_by(0.0001));
+                    }
+                    if ui.button("Record").clicked() {
+                        self.recording = true;
+                        self.start_time = self.sim_time;
+                    }
+                    if ui.button("Export").clicked() {
+                        self.save_data();
+                    }
                     egui::ComboBox::from_label("Property")
                             .selected_text(format!("{:?}", self.plotted_prop))
                             .show_ui(ui, |ui| {
@@ -795,6 +807,51 @@ impl Settings {
         // if !self.current_file.file_name().is_none() {
         //     self.save = false;
         // }
+    }
+
+    pub fn save_data(&mut self) {
+        let path = FileDialog::new()
+            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/data")
+            .add_filter("CSV File", &["csv"])
+            .show_save_single_file()
+            .unwrap();
+
+        if let Some(path) = path {
+            let file_path = Path::new(&path);
+            let mut file = File::create(file_path).expect("Unable to create file");
+    
+            // Write the header
+            writeln!(
+                file,
+                "Timestamp,X Position,Y Position,X Velocity,Y Velocity,Rotation,Rotation Velocity,Data1,Data2,Data3,Data4,FPS"
+            )
+            .expect("Unable to write header");
+    
+            // Write the data rows
+            for i in 0..self.data.x_pos_data.len() {
+                let timestamp = self.data.x_pos_data[i][0];
+                let x_pos = self.data.x_pos_data[i][1];
+                let y_pos = self.data.y_pos_data[i][1];
+                let x_vel = self.data.x_vel_data[i][1];
+                let y_vel = self.data.y_vel_data[i][1];
+                let rot = self.data.rot_data[i][1];
+                let rot_vel = self.data.rot_vel_data[i][1];
+                let data1 = self.data.data1[i][1];
+                let data2 = self.data.data2[i][1];
+                let data3 = self.data.data3[i][1];
+                let data4 = self.data.data4[i][1];
+                let fps = self.data.fps[i][1];
+    
+                writeln!(
+                    file,
+                    "{},{},{},{},{},{},{},{},{},{},{},{}",
+                    timestamp, x_pos, y_pos, x_vel, y_vel, rot, rot_vel, data1, data2, data3, data4, fps
+                )
+                .expect("Unable to write data row");
+            }
+    
+            println!("Data saved to: {:?}", file_path);
+        }
     }
 
     pub fn collison_settings(&mut self) -> Vec<f32> {
