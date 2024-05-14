@@ -336,7 +336,7 @@ impl Settings {
             fps: 120.0,
             render_bp_grid: false,
             timed_recording: false,
-            recording_duration: 0.003,
+            recording_duration: 0.0025,
             start_time: 0.0,
             sim_time: 0.0,
             recording: false
@@ -691,9 +691,9 @@ impl Settings {
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=1000000.0).text("Density")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=1000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=1000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=10000000000.0).text("Density")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=10000000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=10000000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
                     });
                 }
             });}

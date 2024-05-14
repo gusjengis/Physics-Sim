@@ -946,18 +946,18 @@ impl WGPUComputeProg {
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
 
         for i in 0..config.prog_settings.genPerFrame {
-            // BROAD PHASE
-            {
-                let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
+            // // BROAD PHASE
+            // {
+            //     let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
 
-                compute_pass.set_pipeline(&self.broad_phase_compute_pipeline);
+            //     compute_pass.set_pipeline(&self.broad_phase_compute_pipeline);
                 
-                compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(1, &self.buffers.contact_buffers.bind_group, &[]);         
-                compute_pass.set_bind_group(2, &self.buffers.collision_settings.bind_group, &[]);   
+            //     compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
+            //     compute_pass.set_bind_group(1, &self.buffers.contact_buffers.bind_group, &[]);         
+            //     compute_pass.set_bind_group(2, &self.buffers.collision_settings.bind_group, &[]);   
 
-                compute_pass.dispatch_workgroups((self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
-            }
+            //     compute_pass.dispatch_workgroups((self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
+            // }
 
             // SIMULATION/COLLISIONS/BONDS
 

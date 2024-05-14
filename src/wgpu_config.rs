@@ -81,7 +81,7 @@ impl WGPUConfig {
 
         let (device, queue) = adapter.request_device( //&descriptor,
             &wgpu::DeviceDescriptor {
-                features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+                features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
                 // WebGL doesn't support all of wgpu's features, so if
                 // we're building for the web we'll have to disable some.
                 limits: wgpu::Limits { //downlevel_defaults()

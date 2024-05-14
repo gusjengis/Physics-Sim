@@ -119,62 +119,62 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if settings.collisions == 1 {
         var collisions = array<i32, 14u>();
         var count = 0u;
-
-        let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
-        let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
-
-        let particle_left = positions[id].x - radii[id];
-        let particle_right = positions[id].x + radii[id];
-        let particle_bottom = positions[id].y - radii[id];
-        let particle_top = positions[id].y + radii[id];
-
-        let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
-        let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
-        let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
-        let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
-
-        for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
-            for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
-                let cell_id = cell_y * grid_info.w + cell_x;
-                let base_index = cell_id * grid_info.cell_cap;
-                var neighbors = grid[base_index];
-
-                if neighbors > 1 {
-                    for (var i = 2; i < neighbors + 2; i++) {
-                        let b = grid[base_index + i];
-                        if u32(b) != id {
-                            if length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
-                                collisions[count] = b;
-                                count += 1u;
-                                if count == max_contacts {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                if count == max_contacts {
-                    break;
-                }
-            }
-            if count == max_contacts {
-                break;
-            }
-        }
-
+ 
         // make a list of particles that we're colliding with
 
-        // for(var i = 0u; i<arrayLength(&radii); i++){
-        //     if i != id {
-        //         if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
-        //             collisions[count] = i32(i);
-        //             count += 1u;
-        //             if count == max_contacts {
-        //                 break;
+        // let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
+        // let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
+
+        // let particle_left = positions[id].x - radii[id];
+        // let particle_right = positions[id].x + radii[id];
+        // let particle_bottom = positions[id].y - radii[id];
+        // let particle_top = positions[id].y + radii[id];
+
+        // let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
+        // let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
+        // let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
+        // let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
+
+        // for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
+        //     for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
+        //         let cell_id = cell_y * grid_info.w + cell_x;
+        //         let base_index = cell_id * grid_info.cell_cap;
+        //         var neighbors = grid[base_index];
+
+        //         if neighbors > 1 {
+        //             for (var i = 2; i < neighbors + 2; i++) {
+        //                 let b = grid[base_index + i];
+        //                 if u32(b) != id {
+        //                     if length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
+        //                         collisions[count] = b;
+        //                         count += 1u;
+        //                         if count == max_contacts {
+        //                             break;
+        //                         }
+        //                     }
+        //                 }
         //             }
-        //         } 
+        //         }
+        //         if count == max_contacts {
+        //             break;
+        //         }
+        //     }
+        //     if count == max_contacts {
+        //         break;
         //     }
         // }
+
+        for(var i = 0u; i<arrayLength(&radii); i++){
+            if i != id {
+                if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
+                    collisions[count] = i32(i);
+                    count += 1u;
+                    if count == max_contacts {
+                        break;
+                    }
+                } 
+            }
+        }
 
         // delete contacts that don't exist
         for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){
@@ -279,8 +279,8 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     
     let overlap = -distance(a, b);
     
-    let normal_stiffness = (materials[(material_pointers[a])].normal_stiffness + materials[(material_pointers[b])].normal_stiffness) / 2.0;
-    let shear_stiffness  = (materials[(material_pointers[a])].shear_stiffness  + materials[(material_pointers[b])].shear_stiffness ) / 2.0;
+    let normal_stiffness = 1.0/(1.0/materials[(material_pointers[a])].normal_stiffness + 1.0/materials[(material_pointers[b])].normal_stiffness);
+    let shear_stiffness  = 1.0/(1.0/materials[(material_pointers[a])].shear_stiffness  + 1.0/materials[(material_pointers[b])].shear_stiffness);
 
     var normal_force = overlap*normal_stiffness;
     let normal = normalize(positions[a] - positions[b]); 
@@ -296,14 +296,14 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     
     let rel_tangent = dot(rel_trans, tangent) + rel_rot;
     
-    var friction_limit = settings.bond_shear_lim;
+    var shear_limit = settings.bond_shear_lim;
 
     // let contact_pos = vec2(
     //     (positions[a].x + positions[b].x)*0.5,
     //     (positions[a].y + positions[b].y)*0.5,
     // );
 
-    contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);//clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
+    contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -shear_limit, shear_limit);//clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
     let force  = settings.contact_damping * (normal*normal_force + tangent*contacts[i].tangent_force);
     let moment = (radii[a])*contacts[i].tangent_force;
     data[u32(a)*4u   ] += normal_force;
@@ -373,14 +373,11 @@ fn linear_model(a: i32, b: i32, i: u32) -> vec3<f32> { //unbonded
 
 fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
     // Apply sum of forces and gravity to velocities
-    var density = 1.0;
-    if mat_id != -1 {
-        density = materials[mat_id].density;
-    }
-    let mass1 = density * PI * radii[id] * radii[id];
-    let rot_inertia = 0.5*mass1*radii[id]*radii[id];
+    let density = materials[mat_id].density;
+    let mass = density * PI * radii[id] * radii[id];
+    let rot_inertia = 0.5*mass*radii[id]*radii[id];
     // natural accelerations
-    accelerations[id] = net_force/mass1;
+    accelerations[id] = net_force/mass;
     rot_acc[id] = net_moment/rot_inertia;
 
     data[id*4u] = net_force.x;
