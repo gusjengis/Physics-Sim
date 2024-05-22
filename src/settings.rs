@@ -19,6 +19,7 @@ pub struct Menu {
     pub save_load_menu: bool,
     pub properties_menu: bool,
     pub data_menu: bool,
+    pub bond_menu: bool,
 }
 
 pub struct Properties {
@@ -170,52 +171,26 @@ pub struct Settings {
     pub start_time: f32,
     pub sim_time: f32,
     pub recording: bool,
+    pub round_walls: bool,
+    pub wall_friction: f32,
+    pub wall_radius: f32,
+    pub bond_shear_strength: f32,
 }
 
 impl Settings {
     pub fn new(canvas: &Canvas) -> Self {
-        let genPerFrame = 1;
         let particles = 256;
         let workgroup_size = 256;
         let workgroups = (particles as f32/workgroup_size as f32).ceil() as usize;
         //particle settings
         let max_radius = 0.025;
-        let variable_rad = false;
         let holeyness = 1.7;
         let min_radius = max_radius/holeyness;
         let max_bonds = 6;
         let max_contacts = max_bonds + 8;
-        let max_h_velocity = 0.0;
-        let min_h_velocity = 0.0;
-        let max_v_velocity = 0.0;
-        let min_v_velocity = 0.0;
-        let structure = Structure::Grid;
-        let grid_width = 32.0;
-        let settings_menu = true;
-        let maintain_ar = true;
-        let hor_bound = 1.333;
         let vert_bound = 1.0;
-        let gravity = true;
-        let gravity_acceleration = 1.0;
-        let bonds = 0;
-        let bondenum = BondType::Unbonded;
-        let bond_tearing = false;
-        let bond_force_limit = 0.5;
-        let stiffness = 10.0;
-        let collisions = true;
-        let friction = true;
-        let friction_coefficient = 0.5;
-        let rotation = true;
-        let linear_contact_bonds = true;
-        let changed_collision_settings = false;
+        let hor_bound = vert_bound*1.333;
         let scale = 1.0/vert_bound;
-        let circular_particles = true;
-        let render_rot = false;
-        let color_code_rot = false;
-        let colors = true;
-        let random_colors = false;
-        let render_bonds = true;
-        let two_part = false;
         let materials = vec![
             1.0,
             1.0,
@@ -224,8 +199,7 @@ impl Settings {
             100.0,
             50.0
         ];
-        let material_size = 6;
-        let materials_changed = false; 
+        let material_size = materials.len();
         let menu = Menu {
             render_settings: false,
             materials_menu: false,
@@ -235,12 +209,11 @@ impl Settings {
             save_load_menu: false,
             properties_menu: false,
             data_menu: false,
+            bond_menu: false,
         };
 
-        let current_file = std::path::PathBuf::new();
-
         Self {
-            genPerFrame,
+            genPerFrame: 1,
             particles,
             workgroups,
             workgroup_size,
@@ -248,45 +221,45 @@ impl Settings {
             min_radius,
             max_bonds,
             max_contacts,
-            max_h_velocity,
-            min_h_velocity,
-            max_v_velocity,
-            min_v_velocity,
-            structure,
-            grid_width,
-            variable_rad,
-            settings_menu,
+            max_h_velocity: 0.0,
+            min_h_velocity: 0.0,
+            max_v_velocity: 0.0,
+            min_v_velocity: 0.0,
+            structure: Structure::Grid,
+            grid_width: 32.0,
+            variable_rad: false,
+            settings_menu: true,
             holeyness,
-            maintain_ar,
+            maintain_ar: true,
             hor_bound,
             vert_bound,
-            gravity,
+            gravity: true,
             planet_mode: false,
-            gravity_acceleration,
-            bonds,
-            bondenum,
-            bond_tearing,
-            bond_force_limit,
-            stiffness,
-            collisions,
-            friction,
-            friction_coefficient,
-            rotation,
-            linear_contact_bonds,
-            changed_collision_settings,
+            gravity_acceleration: 1.0,
+            bonds: 0,
+            bondenum: BondType::Unbonded,
+            bond_tearing: false,
+            bond_force_limit: 0.5,
+            stiffness: 10.0,
+            collisions: true,
+            friction: true,
+            friction_coefficient: 0.5,
+            rotation: true,
+            linear_contact_bonds: true,
+            changed_collision_settings: false,
             scale,
-            circular_particles,
-            render_rot,
-            color_code_rot,
-            colors,
-            random_colors,
-            render_bonds,
-            two_part,
+            circular_particles: true,
+            render_rot: false,
+            color_code_rot: false,
+            colors: true,
+            random_colors: false,
+            render_bonds: true,
+            two_part: false,
             materials,
             material_size,
-            materials_changed,
+            materials_changed: false,
             menu,
-            current_file,
+            current_file: std::path::PathBuf::new(),
             load: false,
             save: false,
             regen_bonds: false,
@@ -330,7 +303,7 @@ impl Settings {
             drag: 1.0,
             bond_shear_limit: 0.5,
             verlet: true,
-            timestep: 0.0000390625,
+            timestep: 0.00008,//0.0000390625,
             maxGenPerFrame: 213,
             hz: 120.0,
             fps: 120.0,
@@ -339,7 +312,11 @@ impl Settings {
             recording_duration: 0.0025,
             start_time: 0.0,
             sim_time: 0.0,
-            recording: false
+            recording: false,
+            round_walls: false,
+            wall_friction: 0.0,
+            wall_radius: 1.0,
+            bond_shear_strength: 10.0,
         }
     }
 
@@ -363,6 +340,7 @@ impl Settings {
                     // ui.heading("Menu");
                     if ui.selectable_label(self.menu.setup_menu, "Setup").clicked() { self.menu.setup_menu = !self.menu.setup_menu; }
                     if ui.selectable_label(self.menu.physics_menu, "Physics Settings").clicked() { self.menu.physics_menu = !self.menu.physics_menu; }
+                    if ui.selectable_label(self.menu.bond_menu, "Bonds").clicked() { self.menu.bond_menu = !self.menu.bond_menu; }
                     if ui.selectable_label(self.menu.materials_menu, "Materials").clicked() { self.menu.materials_menu = !self.menu.materials_menu; }
                     if ui.selectable_label(self.menu.properties_menu, "Properties").clicked() { self.menu.properties_menu = !self.menu.properties_menu; }
                     if ui.selectable_label(self.menu.render_settings, "Render Settings").clicked() { self.menu.render_settings = !self.menu.render_settings; }
@@ -584,9 +562,6 @@ impl Settings {
                                 reset = true;
                             };
                         });}
-                        if ui.button("Regenerate Bonds").clicked() {
-                            self.regen_bonds = true;                            
-                        }
                     });
                 }
             if self.menu.physics_menu {
@@ -617,6 +592,23 @@ impl Settings {
                     text("contact_damping")).changed() {
                         self.changed_collision_settings = true;
                     };
+                    if ui.checkbox(&mut self.collisions, "Collisions").changed() {
+                        self.changed_collision_settings = true;
+                    }
+                    if self.collisions {
+                        if ui.add(egui::Slider::new(&mut self.friction_coefficient, 0.0..=1.0).
+                        text("Friction Coef.")).changed() {
+                            self.changed_collision_settings = true;
+                        };
+                    }
+                    if ui.add(egui::Slider::new(&mut self.wall_friction, 0.0..=1.0).
+                        text("Wall Friction Coef.")).changed() {
+                            self.changed_collision_settings = true;
+                        };
+                });
+            }          
+            if self.menu.bond_menu {
+                egui::Window::new("Bonds").collapsible(false).auto_sized().show(ctx, |ui| {
                     let mut changed_bonds = false;
                     egui::ComboBox::from_label("Bonds")
                     .selected_text(format!("{:?}", self.bondenum))
@@ -630,42 +622,53 @@ impl Settings {
                         self.changed_collision_settings = true;
                         self.updateBonds();
                     }
-                    // if ui.checkbox(&mut self.bonds, "Bonds").changed() {
-                        //     self.changed_collision_settings = true;
-                        // }
+
                     if self.bonds != 0 {
-                        if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=1000000.0).step_by(0.001).
-                        text("Stiffness")).changed() {
+                        if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=10000000000.0).step_by(0.001).
+                        text("Normal Stiffness")).changed() {
                             self.changed_collision_settings = true;
                         };
-                        // if ui.add(egui::Slider::new(&mut self.bond_shear_limit, 0.0..=10.0).
-                        // text("Bond Shear Limit")).changed() {
-                        //     self.changed_collision_settings = true;
-                        // };
+                        if self.bonds > 1 {
+                            if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.001..=10000000000.0).step_by(0.001).
+                                text("Shear Stiffness")).changed() {
+                                    self.changed_collision_settings = true;
+                            };
+                        }
                         if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
                             self.changed_collision_settings = true;
                         }
                         if self.bond_tearing {
                             if ui.add(egui::Slider::new(&mut self.bond_force_limit, 0.0..=5.0).step_by(0.0001).
-                            text("Tear Limit")).changed() {
-                                self.changed_collision_settings = true;
+                                text("Tear Limit")).changed() {
+                                    self.changed_collision_settings = true;
                             };
+                            if self.bonds > 1 {
+                                if ui.add(egui::Slider::new(&mut self.bond_shear_limit, 0.0..=5.0).step_by(0.0001).
+                                    text("Shear Limit")).changed() {
+                                        self.changed_collision_settings = true;
+                                };
+                            }
+                            
                         }
                     }
-                    if ui.checkbox(&mut self.collisions, "Collisions").changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    if self.collisions {
-                        if ui.add(egui::Slider::new(&mut self.friction_coefficient, 0.0..=1.0).
-                        text("Friction Coef.")).changed() {
-                            self.changed_collision_settings = true;
-                        };
+                    if ui.button("Regenerate Bonds").clicked() {
+                        self.regen_bonds = true;                            
                     }
                 });
             }          
             if self.menu.walls_menu {
                 egui::Window::new("Walls").collapsible(false).auto_sized().show(ctx, |ui| {
-                    ui.checkbox(&mut self.maintain_ar, "Maintain Aspect Ratio");
+                    if ui.checkbox(&mut self.round_walls, "Round Walls").changed() {
+                        self.changed_collision_settings = true;
+                    }
+                    if self.round_walls {
+                        if ui.add(egui::Slider::new(&mut self.wall_radius, 0.0..=64.0).
+                            text("Radius")).changed() {
+                                self.changed_collision_settings = true;
+                            };
+                    } else {
+
+                        ui.checkbox(&mut self.maintain_ar, "Maintain Aspect Ratio");
                         let ar = self.hor_bound/self.vert_bound;
                         if ui.add(egui::Slider::new(&mut self.hor_bound, 0.0..=64.0).
                             text("Width")).changed() {
@@ -681,6 +684,7 @@ impl Settings {
                                     self.hor_bound = self.vert_bound*ar;
                                 }
                             };
+                    }
                 });
             }
             if self.menu.materials_menu { egui::Window::new("Materials").collapsible(false).auto_sized().show(ctx, |ui| {
@@ -859,6 +863,9 @@ impl Settings {
         return vec![
             self.hor_bound,
             self.vert_bound,
+            bytemuck::cast(self.round_walls as i32),
+            self.wall_radius,
+            self.wall_friction,
             bytemuck::cast(self.gravity as i32),
             bytemuck::cast(self.planet_mode as i32),
             bytemuck::cast(self.bonds),
@@ -876,7 +883,8 @@ impl Settings {
             self.drag,
             self.bond_shear_limit,
             bytemuck::cast(self.verlet as i32),
-            self.timestep
+            self.timestep,
+            self.bond_shear_strength
         ];
     }
 
@@ -892,6 +900,8 @@ impl Settings {
             self.stiffness.to_bits() as i32,
             self.random_colors as i32,
             self.render_bp_grid as i32,
+            self.round_walls as i32,
+            self.wall_radius.to_bits() as i32,
         ];
     }
 

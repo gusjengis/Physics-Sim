@@ -32,6 +32,9 @@ struct Bond {
 struct Settings {
     hor_bound: f32,
     vert_bound: f32,
+    round_bounds: i32,
+    bound_radius: f32,
+    wall_friction: f32,
     gravity: i32,
     planet_mode: i32,
     bonds: i32,
@@ -41,7 +44,7 @@ struct Settings {
     rotation: i32,
     linear_contact_bonds: i32,
     gravity_acc: f32,
-    stiffness: f32,
+    bond_tensile_strength: f32,
     bonds_tear: i32,
     bond_force_limit: f32,
     contact_damping: f32,
@@ -49,7 +52,8 @@ struct Settings {
     drag: f32,
     bond_shear_lim: f32,
     verlet: i32,
-    dT: f32
+    dT: f32,
+    bond_shear_strength: f32,
 }
 
 struct Material {
@@ -254,35 +258,40 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             if settings.bonds == 1 {
                 forces = normal_bonds(a, b, i, bonded);
             } else if settings.bonds == 2 {
-                forces = linear_contact_bonds(a, b, i, bonded);
+                forces = linear_contact_bonds(a, b, i, bonded, id);
             }
         }
         
         net_force  += forces.xy;
-        net_moment -= forces.z;
+        net_moment += forces.z;
     }
 
     // data[id*4] = stress_tensor.x;
     // data[id*4+1] = stress_tensor.y;
     // data[id*4+2] = stress_tensor.z;
     
+    let wall_forces = walls(id);
+    net_force -= wall_forces.xy;
+    net_moment -= wall_forces.z;
+
     store_forces(id, mat_id, net_force, net_moment);
     
-    walls(id);
 }
 
 fn distance(a: i32, b: i32) -> f32 {
     return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
 }
 
-fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
-    
-    let overlap = -distance(a, b);
-    
-    let normal_stiffness = 1.0/(1.0/materials[(material_pointers[a])].normal_stiffness + 1.0/materials[(material_pointers[b])].normal_stiffness);
-    let shear_stiffness  = 1.0/(1.0/materials[(material_pointers[a])].shear_stiffness  + 1.0/materials[(material_pointers[b])].shear_stiffness);
+fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32, id: u32) -> vec3<f32> { //unbonded
+    // let normal_displacement = (length((positions[a] - positions[b])) - (radii[a] + radii[b]));
+    let normal_displacement = f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
 
-    var normal_force = overlap*normal_stiffness;
+    // let normal_stiffness = 1.0/(1.0/materials[(material_pointers[a])].normal_stiffness + 1.0/materials[(material_pointers[b])].normal_stiffness);
+    // let shear_stiffness  = 1.0/(1.0/materials[(material_pointers[a])].shear_stiffness  + 1.0/materials[(material_pointers[b])].shear_stiffness);
+    let normal_stiffness = 1.0/(1.0/settings.bond_tensile_strength + 1.0/settings.bond_tensile_strength);
+    let shear_stiffness  = 1.0/(1.0/settings.bond_shear_strength   + 1.0/settings.bond_shear_strength);
+
+    let normal_force = -normal_displacement*normal_stiffness;
     let normal = normalize(positions[a] - positions[b]); 
     let tangent = vec2(-normal.y, normal.x);
 
@@ -290,32 +299,27 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     let del_pos_b = del_pos[b];
     let del_rot_a = del_rot[a]*(radii[a]);
     let del_rot_b = del_rot[b]*(radii[b]);
-    
+
     let rel_trans = del_pos_b - del_pos_a;  
     let rel_rot = del_rot_b + del_rot_a;
-    
+
     let rel_tangent = dot(rel_trans, tangent) + rel_rot;
-    
-    var shear_limit = settings.bond_shear_lim;
 
-    // let contact_pos = vec2(
-    //     (positions[a].x + positions[b].x)*0.5,
-    //     (positions[a].y + positions[b].y)*0.5,
-    // );
-
-    contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -shear_limit, shear_limit);//clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
+    contacts[i].tangent_force += rel_tangent*shear_stiffness;
     let force  = settings.contact_damping * (normal*normal_force + tangent*contacts[i].tangent_force);
-    let moment = (radii[a])*contacts[i].tangent_force;
-    data[u32(a)*4u   ] += normal_force;
-    data[u32(a)*4u+1u] += contacts[i].tangent_force;
-    data[u32(a)*4u+2u] += moment;
-    data[u32(a)*4u+3u] += del_pos_a.y;
+    let moment = -(radii[a])*contacts[i].tangent_force;
+    data[u32(id)*4u   ] = normal_force;
+    data[u32(id)*4u+1u] = contacts[i].tangent_force;
+    data[u32(id)*4u+2u] = moment;
+    data[u32(id)*4u+3u] = normal_displacement;//atan2(normal.y, normal.x);
 
     // TEAR BOND
-    // if settings.bonds_tear == 1 && displacement < -settings.bond_force_limit {
-    //     bonds[bonded].index = -bonds[bonded].index;
-    //     contacts[i].bonded = -1;
-    // }
+    var shear_limit  = settings.bond_shear_lim;
+    var normal_limit = settings.bond_force_limit;
+    if settings.bonds_tear == 1 && (normal_force < -normal_limit || abs(contacts[i].tangent_force) > shear_limit){
+        bonds[bonded].index = -bonds[bonded].index;
+        contacts[i].bonded = -1;
+    }
 
     return vec3(force, moment);
 }
@@ -323,32 +327,27 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
 fn normal_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     let displacement: f32 = -distance(i32(a), b);
     var force = vec2(0.0, 0.0);
-    if bonded > 0 {
-        let spring_force: vec2<f32> = settings.stiffness * displacement * normalize(positions[b] - positions[a]);
-        force -= (spring_force) * settings.bond_damping;
-    }
+    let spring_force = settings.bond_tensile_strength * displacement;// * abs(displacement);
+    force -= spring_force * normalize(positions[b] - positions[a]) * settings.bond_damping;
 
-    if settings.bonds_tear == 1 && displacement < -settings.bond_force_limit {
+    if settings.bonds_tear == 1 && spring_force < -settings.bond_force_limit {
         bonds[bonded].index = -bonds[bonded].index;
-        // bonded = -1;
         contacts[i].bonded = -1;
     }
-    // let overlapping = distance(i32(a), b) > 0.0;
-    // let forces = linear_model(a, b, i, bonded);
     return linear_model(a, b, i) + vec3(force, 0.0);
 }
 
 fn linear_model(a: i32, b: i32, i: u32) -> vec3<f32> { //unbonded
     
-    let overlap = max(-distance(a, b), 0.0);
-    if overlap == 0.0 {
+    let normal_displacement = min(0.0, f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b]))));
+    if normal_displacement == 0.0 {
         return vec3(0.0, 0.0, 0.0);
     }
     
-    let normal_stiffness = (materials[(material_pointers[a])].normal_stiffness + materials[(material_pointers[b])].normal_stiffness) / 2.0;
-    let shear_stiffness  = (materials[(material_pointers[a])].shear_stiffness  + materials[(material_pointers[b])].shear_stiffness ) / 2.0;
+    let normal_stiffness = 1.0/(1.0/materials[(material_pointers[a])].normal_stiffness + 1.0/materials[(material_pointers[b])].normal_stiffness);
+    let shear_stiffness  = 1.0/(1.0/materials[(material_pointers[a])].shear_stiffness  + 1.0/materials[(material_pointers[b])].shear_stiffness);
 
-    var normal_force = overlap*normal_stiffness;
+    var normal_force = -normal_displacement*normal_stiffness;
     let normal = normalize(positions[a] - positions[b]); 
     let tangent = vec2(-normal.y, normal.x);
 
@@ -363,10 +362,10 @@ fn linear_model(a: i32, b: i32, i: u32) -> vec3<f32> { //unbonded
     let rel_tangent = dot(rel_trans, tangent) + rel_rot;
     
     var friction_limit = abs(normal_force)*settings.friction_coefficient;
-    contacts[i].tangent_force = contacts[i].tangent_force + rel_tangent*shear_stiffness;//clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
+    contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
     let force  = settings.contact_damping * (normal*normal_force + tangent*contacts[i].tangent_force);
-    let moment = (radii[a])*contacts[i].tangent_force;
-    data[u32(a)*4u+3u] = contacts[i].tangent_force;
+    let moment = -(radii[a])*contacts[i].tangent_force;
+    // data[u32(a)*4u+3u] = contacts[i].tangent_force;
 
     return vec3(force, moment);
 }
@@ -380,9 +379,9 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
     accelerations[id] = net_force/mass;
     rot_acc[id] = net_moment/rot_inertia;
 
-    data[id*4u] = net_force.x;
-    data[id*4u+1u] = net_force.y;
-    data[id*4u+2u] = net_moment;
+    // data[id*4u]    = net_force.x;
+    // data[id*4u+1u] = net_force.y;
+    // data[id*4u+2u] = net_moment;
     // gravity
     if settings.gravity == 1 && settings.planet_mode == 1  {
         let delta = (vec2(0.0, 0.0) - positions[id]);
@@ -400,7 +399,7 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
     rot_vel[id] += forces[id].rot*settings.dT;
 }
 
-fn walls(id: u32) {
+fn walls(id: u32) -> vec3<f32> {
     // BS Walls
     let pos = positions[id];
     let rad = radii[id];
@@ -408,26 +407,52 @@ fn walls(id: u32) {
     let anti_stick_coating = 0.01;
     let yH = settings.vert_bound;
     let xW = settings.hor_bound;
-    
-    if pos.x+rad > xW {
-        velocities[id] = vec2(-velocities[id].x, velocities[id].y)*elasticity;
+    var forces = vec3(0.0, 0.0, 0.0);
 
-        rot_vel[id] = rot_vel[id]*0.9;
-        positions[id] = vec2(xW-rad, pos.y);
-    } else if pos.x-rad < -xW {
-        velocities[id] = vec2(-velocities[id].x, velocities[id].y)*elasticity;
-        rot_vel[id] = rot_vel[id]*0.9;
-        positions[id] = vec2(-xW+rad, pos.y);
+    if settings.round_bounds == 0 {
+
+        if pos.x+rad > xW {
+            velocities[id] = vec2(-velocities[id].x, velocities[id].y)*elasticity;
+            rot_vel[id] = rot_vel[id]*0.9;
+            positions[id] = vec2(xW-rad, pos.y);
+        } else if pos.x-rad < -xW {
+            velocities[id] = vec2(-velocities[id].x, velocities[id].y)*elasticity;
+            rot_vel[id] = rot_vel[id]*0.9;
+            positions[id] = vec2(-xW+rad, pos.y);
+        }
+        if pos.y+rad > yH {
+            velocities[id] = vec2(velocities[id].x, -velocities[id].y)*elasticity;
+            rot_vel[id] = rot_vel[id]*0.9;
+            positions[id] = vec2(pos.x, yH-rad - anti_stick_coating);
+        } else if pos.y-rad < -yH {
+            velocities[id] = vec2(velocities[id].x, -velocities[id].y)*elasticity;
+            rot_vel[id] = rot_vel[id]*0.9;
+            positions[id] = vec2(pos.x, -yH+rad);
+        }
+
+    } else if length(pos) + rad > settings.bound_radius { // circular bounds
+        let norm_pos = normalize(pos);
+        let vel = velocities[id];
+        positions[id] = norm_pos * (settings.bound_radius - rad);
+        let tangent = vec2(-norm_pos.y, norm_pos.x);
+        let comp_v_p = dot(vel, norm_pos) * norm_pos;
+        let comp_v_p_t = dot(vel, tangent) * tangent;
+        velocities[id] -= comp_v_p * 1.6;// + friction;
+
+        // Doesn't work
+        // let del_pos = del_pos[id];
+        // let del_rot = del_rot[id]*(radii[id]);
+        // let rel_trans = dot(del_pos, tangent) * tangent;  
+        // let rel_rot = del_rot;
+        // let rel_tangent = dot(rel_trans, tangent) + rel_rot;
+
+        // let friction = rel_tangent*tangent * settings.wall_friction;
+        // let moment = rel_tangent * settings.wall_friction * radii[id];
+        // rot_vel[id] = moment;
+        // forces = vec3(friction, moment);
+        // data[id*4u + 3u] = moment;
     }
-    if pos.y+rad > yH {
-        velocities[id] = vec2(velocities[id].x, -velocities[id].y)*elasticity;
-        rot_vel[id] = rot_vel[id]*0.9;
-        positions[id] = vec2(pos.x, yH-rad - anti_stick_coating);
-    } else if pos.y-rad < -yH {
-        velocities[id] = vec2(velocities[id].x, -velocities[id].y)*elasticity;
-        rot_vel[id] = rot_vel[id]*0.9;
-        positions[id] = vec2(pos.x, -yH+rad);
-    }
+    return forces;
 }
 
 fn stress_tensor(id: u32, force: vec2<f32>, delta: vec2<f32>) -> vec3<f32> {

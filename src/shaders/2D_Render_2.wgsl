@@ -49,6 +49,8 @@ struct Settings {
     stiffness: f32,
     random_colors: i32,
     render_grid: i32,
+    round_bounds: i32,
+    wall_radius: f32,
 }
 
 struct Bond {
@@ -108,8 +110,7 @@ const PI = 3.141592653589793238;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = vec4(0.0, 0.0, 0.0, 1.0); 
-    
-    if in.position.x >= settings.w || in.position.x <= -settings.w || in.position.y >= settings.h || in.position.y <= -settings.h {
+    if (settings.round_bounds == 1 && length(in.position.xy) > settings.wall_radius) || (settings.round_bounds == 0 && (in.position.x >= settings.w || in.position.x <= -settings.w || in.position.y >= settings.h || in.position.y <= -settings.h)) {
         color = vec4(0.02, 0.02, 0.02, 1.0);
     } else if settings.render_grid == 1 {
         let grid_info = grid_info_buffer[0];

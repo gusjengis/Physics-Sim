@@ -604,7 +604,7 @@ impl WGPUComputeProg {
 
         let broad_phase_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Broad phase compute"),
-            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.collision_settings.bind_group_layout],
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -954,7 +954,6 @@ impl WGPUComputeProg {
                 
             //     compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
             //     compute_pass.set_bind_group(1, &self.buffers.contact_buffers.bind_group, &[]);         
-            //     compute_pass.set_bind_group(2, &self.buffers.collision_settings.bind_group, &[]);   
 
             //     compute_pass.dispatch_workgroups((self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
             // }

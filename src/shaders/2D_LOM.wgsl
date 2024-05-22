@@ -19,6 +19,9 @@ struct Forces {
 struct Settings {
     hor_bound: f32,
     vert_bound: f32,
+    round_bounds: i32,
+    bound_radius: f32,
+    wall_friction: f32,
     gravity: i32,
     planet_mode: i32,
     bonds: i32,
@@ -28,7 +31,7 @@ struct Settings {
     rotation: i32,
     linear_contact_bonds: i32,
     gravity_acc: f32,
-    stiffness: f32,
+    bond_tensile_strength: f32,
     bonds_tear: i32,
     bond_force_limit: f32,
     contact_damping: f32,
@@ -36,8 +39,11 @@ struct Settings {
     drag: f32,
     bond_shear_lim: f32,
     verlet: i32,
-    dT: f32
+    dT: f32,
+    bond_shear_strength: f32,
 }
+
+
 
 struct GridInfo {
     cell_size: f32,
@@ -68,17 +74,17 @@ const PI = 3.141592653589793238;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id: u32 = global_id.x;
+    let id = global_id.x;
     let grid_info = grid_info_buffer[0];
     if radii[id] == 0.0 { return; }
-    var int_vel = velocities[id];
+    var int_vel     = velocities[id];
     var int_rot_vel = rot_vel[id];
     
     if fixity[id].x_vel   == 0 { int_vel.x   += accelerations[id].x * settings.dT * 0.5; }
     if fixity[id].y_vel   == 0 { int_vel.y   += accelerations[id].y * settings.dT * 0.5; }
     if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc      [id]   * settings.dT * 0.5; }
     
-    del_pos[id] = int_vel * settings.dT; 
+    del_pos[id] = int_vel     * settings.dT; 
     del_rot[id] = int_rot_vel * settings.dT; 
 
     positions[id] += del_pos[id];

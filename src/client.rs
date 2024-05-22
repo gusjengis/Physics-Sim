@@ -77,37 +77,7 @@ impl Client {
 
         let canvas = window_init::Canvas::new(window);
         let mut wgpu_config = WGPUConfig::new(&canvas).await;
-        let last_draw = Local::now();
-        let log_framerate = false;
         let wgpu_prog = WGPUProg::new(&mut wgpu_config, (canvas.size.width as u32, canvas.size.height as u32));
-        let start_time = Local::now();
-        let bench_start_time = Local::now();
-        let generations = 100.0;//256.1;
-        let temp = 34.0;//256.1;
-        let toggle = false;
-        let prev_gen_time = Local::now();
-        let cursor_pos = (0, 0);
-        let click_pos = (0, 0);
-        let cursor_delta = (0, 0);
-        let minimized = false;
-        let HL = false;
-        let prevGen = 0;
-        let generation = 0;
-        let xOff = 0.0;
-        let yOff = 0.0;
-        let middle = false;
-        let shift = false;
-        let ctrl = false;
-        let dark = 0.0;
-        let W = false;
-        let A = false;
-        let S = false;
-        let D = false;
-        let G = false;
-        let V = false;
-        let B = false;
-        let N = false;
-        let init = false;
         
         // UI Setup
 
@@ -120,43 +90,43 @@ impl Client {
             style: Default::default(),
         });
         platform.context().set_pixels_per_point(2.0);
-        // platform.context().set_pixels_per_point(platform.context().pixels_per_point()*4.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
         let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32/1000.0;
+
         let mut client = Client {
             canvas,
             wgpu_config,
-            last_draw,
-            log_framerate,
+            last_draw: Local::now(),
+            log_framerate: false,
             wgpu_prog,
-            start_time,
-            bench_start_time,
-            temp,
-            prevGen,
-            generations,
-            toggle,
-            prev_gen_time,
-            cursor_pos,
-            click_pos,
-            cursor_delta,
-            minimized,
-            HL,
-            generation,
-            xOff,
-            yOff,
-            middle,
-            shift,
-            ctrl,
-            dark,
-            W,
-            A,
-            S,
-            D,
-            G,
-            V,
-            B,
-            N,
-            init,
+            start_time: Local::now(),
+            bench_start_time: Local::now(),
+            temp: 34.0,
+            prevGen: 0,
+            generations: 100.0,
+            toggle: false,
+            prev_gen_time: Local::now(),
+            cursor_pos: (0, 0),
+            click_pos: (0, 0),
+            cursor_delta: (0, 0),
+            minimized: false,
+            HL: false,
+            generation: 0,
+            xOff: 0.0,
+            yOff: 0.0,
+            middle: false,
+            shift: false,
+            ctrl: false,
+            dark: 0.0,
+            W: false,
+            A: false,
+            S: false,
+            D: false,
+            G: false,
+            V: false,
+            B: false,
+            N: false,
+            init: false,
             platform,
             egui_rpass,
             data_length_backup: 1,

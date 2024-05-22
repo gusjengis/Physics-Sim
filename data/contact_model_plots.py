@@ -69,7 +69,7 @@ def bond_behavior_plots(df,experiment,kn_ks):
     # Contact Shear Force
     ax9 = fig.add_subplot(gs[3,1])
     ax9.sharex(ax1)
-    ax9.plot(df["Timestamp"], df["Data2"])
+    ax9.plot(df["Timestamp"], df["Data2"].apply(abs))
     ax9.set_xlabel('Cycle Time (s)')
     ax9.set_title('Contact Shear Force')
 

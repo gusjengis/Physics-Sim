@@ -30,6 +30,9 @@ struct Forces {
 struct Settings {
     hor_bound: f32,
     vert_bound: f32,
+    round_bounds: i32,
+    bound_radius: f32,
+    wall_friction: f32,
     gravity: i32,
     planet_mode: i32,
     bonds: i32,
@@ -39,7 +42,7 @@ struct Settings {
     rotation: i32,
     linear_contact_bonds: i32,
     gravity_acc: f32,
-    stiffness: f32,
+    bond_tensile_strength: f32,
     bonds_tear: i32,
     bond_force_limit: f32,
     contact_damping: f32,
@@ -47,8 +50,10 @@ struct Settings {
     drag: f32,
     bond_shear_lim: f32,
     verlet: i32,
-    dT: f32
+    dT: f32,
+    bond_shear_strength: f32,
 }
+
 
 @group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> selections: array<i32>;

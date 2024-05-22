@@ -1,16 +1,3 @@
-struct Settings {
-    circular_particles: i32,
-    render_rot: i32,
-    color_code_rot: i32,
-    colors: i32,
-    render_bonds: i32,
-    w: f32,
-    h: f32,
-    stiffness: f32,
-    random_colors: i32,
-    render_grid: i32,
-}
-
 struct GridInfo {
     cell_size: f32,
     cell_cap: i32,
@@ -22,7 +9,6 @@ struct GridInfo {
 @group(0) @binding(1) var<storage, read_write> radii: array<f32>;
 @group(1) @binding(4) var<storage, read_write> grid: array<i32>;
 @group(1) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
-@group(2) @binding(0) var<uniform> settings: Settings;
 
 
 @compute @workgroup_size(256)
