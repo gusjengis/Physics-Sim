@@ -126,7 +126,7 @@ pub struct Settings {
     pub bonds: i32,
     pub bondenum: BondType,
     pub bond_tearing: bool,
-    pub bond_force_limit: f32,
+    pub bond_normal_strength: f32,
     pub stiffness: f32,
     pub collisions: bool,
     pub friction: bool,
@@ -159,7 +159,7 @@ pub struct Settings {
     pub contact_damping: f32,
     pub bond_damping: f32,
     pub drag: f32,
-    pub bond_shear_limit: f32,
+    pub bond_shear_strength: f32,
     pub verlet: bool,
     pub timestep: f32,
     pub maxGenPerFrame: i32,
@@ -174,7 +174,9 @@ pub struct Settings {
     pub round_walls: bool,
     pub wall_friction: f32,
     pub wall_radius: f32,
-    pub bond_shear_strength: f32,
+    pub bond_shear_stiffness: f32,
+    pub bond_rotational_stiffness: f32,
+    pub bond_rotational_strength: f32,
 }
 
 impl Settings {
@@ -239,7 +241,7 @@ impl Settings {
             bonds: 0,
             bondenum: BondType::Unbonded,
             bond_tearing: false,
-            bond_force_limit: 0.5,
+            bond_normal_strength: 0.5,
             stiffness: 10.0,
             collisions: true,
             friction: true,
@@ -301,7 +303,7 @@ impl Settings {
             contact_damping: 0.2,
             bond_damping: 0.2,
             drag: 1.0,
-            bond_shear_limit: 0.5,
+            bond_shear_strength: 0.5,
             verlet: true,
             timestep: 0.00008,//0.0000390625,
             maxGenPerFrame: 213,
@@ -316,7 +318,9 @@ impl Settings {
             round_walls: false,
             wall_friction: 0.0,
             wall_radius: 1.0,
-            bond_shear_strength: 10.0,
+            bond_shear_stiffness: 10.0,
+            bond_rotational_stiffness: 0.001,
+            bond_rotational_strength: 0.5,
         }
     }
 
@@ -629,24 +633,36 @@ impl Settings {
                             self.changed_collision_settings = true;
                         };
                         if self.bonds > 1 {
-                            if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.001..=10000000000.0).step_by(0.001).
+                            if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
                                 text("Shear Stiffness")).changed() {
                                     self.changed_collision_settings = true;
                             };
+                            if self.bonds > 2 {
+                                if ui.add(egui::Slider::new(&mut self.bond_rotational_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                                    text("Rotational Stiffness")).changed() {
+                                        self.changed_collision_settings = true;
+                                };
+                            }
                         }
                         if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
                             self.changed_collision_settings = true;
                         }
                         if self.bond_tearing {
-                            if ui.add(egui::Slider::new(&mut self.bond_force_limit, 0.0..=5.0).step_by(0.0001).
+                            if ui.add(egui::Slider::new(&mut self.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
                                 text("Tear Limit")).changed() {
                                     self.changed_collision_settings = true;
                             };
                             if self.bonds > 1 {
-                                if ui.add(egui::Slider::new(&mut self.bond_shear_limit, 0.0..=5.0).step_by(0.0001).
+                                if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
                                     text("Shear Limit")).changed() {
                                         self.changed_collision_settings = true;
                                 };
+                                if self.bonds > 2 {
+                                    if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=5.0).step_by(0.0001).
+                                        text("Rotational Limit")).changed() {
+                                            self.changed_collision_settings = true;
+                                    };
+                                }
                             }
                             
                         }
@@ -877,14 +893,16 @@ impl Settings {
             self.gravity_acceleration,
             self.stiffness,
             bytemuck::cast(self.bond_tearing as i32),
-            self.bond_force_limit,
+            self.bond_normal_strength,
             self.contact_damping,
             self.bond_damping,
             self.drag,
-            self.bond_shear_limit,
+            self.bond_shear_strength,
             bytemuck::cast(self.verlet as i32),
             self.timestep,
-            self.bond_shear_strength
+            self.bond_shear_stiffness,
+            self.bond_rotational_stiffness,
+            self.bond_rotational_strength
         ];
     }
 

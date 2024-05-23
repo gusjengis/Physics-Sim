@@ -52,6 +52,8 @@ struct Settings {
     verlet: i32,
     dT: f32,
     bond_shear_strength: f32,
+    bond_rotational_stiffness: f32,
+    bond_rotational_strength: f32
 }
 
 
