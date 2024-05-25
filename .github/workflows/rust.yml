@@ -22,11 +22,11 @@ jobs:
     - name: Build
       run: cross build --release --target x86_64-pc-windows-gnu
     
-    - name: Upload PS.exe
-      uses: actions/upload-artifact@v4
-      with:
-        name: PS
-        path: target/x86_64-pc-windows-gnu/release/PS.exe
+    # - name: Upload PS.exe
+    #   uses: actions/upload-artifact@v4
+    #   with:
+    #     name: PS
+    #     path: target/x86_64-pc-windows-gnu/release/PS.exe
 
   # release:
     # runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./PS.exe
+        asset_path: target/x86_64-pc-windows-gnu/release/PS.exe
         asset_name: PS.exe
-        asset_content_type: application/zip
+        asset_content_type: application/vnd.microsoft.portable-executable
       
