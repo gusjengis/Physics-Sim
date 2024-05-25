@@ -27,7 +27,11 @@ jobs:
       with:
         name: WGPU
         path: target/x86_64-pc-windows-gnu/release/WGPU.exe
-    
+
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
