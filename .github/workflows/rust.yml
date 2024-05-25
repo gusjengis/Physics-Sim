@@ -48,7 +48,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./PS.exe
+        asset_path: ./PS.zip
         asset_name: PS.exe
-        asset_content_type: application/vnd.microsoft.portable-executable
-        
+        asset_content_type: application/zip
+      
