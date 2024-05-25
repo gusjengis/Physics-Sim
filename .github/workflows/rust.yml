@@ -23,10 +23,14 @@ jobs:
       run: cross build --release --target x86_64-pc-windows-gnu
 
     - name: MacOS(ARM) Build
-      run: cross build --release --target aarch64-apple-darwin
+      run: |
+        rustup target add aarch64-apple-darwin
+        cross build --release --target aarch64-apple-darwin
       
     - name: MacOS(x86-64) Build
-      run: cross build --release --target x86_64-apple-darwin
+      run: |
+        rustup target add x86_64-apple-darwin
+        cross build --release --target x86_64-apple-darwin
       
     - name: Create Release
       id: create_release
