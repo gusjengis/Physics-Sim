@@ -199,9 +199,15 @@ impl Settings {
             1.0,
             0.01,
             100.0,
+            50.0,
+            1.0,
+            0.0,
+            0.0,
+            0.01,
+            100.0,
             50.0
         ];
-        let material_size = materials.len();
+        let material_size = 6;//materials.len();
         let menu = Menu {
             render_settings: false,
             materials_menu: false,
@@ -215,7 +221,7 @@ impl Settings {
         };
 
         Self {
-            genPerFrame: 1,
+            genPerFrame: 104,
             particles,
             workgroups,
             workgroup_size,
@@ -791,7 +797,8 @@ impl Settings {
 
     pub fn load(&mut self) {
         let path = FileDialog::new()
-            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
+            // .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
+            .set_location("~")
             .add_filter("Binary File", &["bin"])
             .show_open_single_file()
             .unwrap();
@@ -811,7 +818,8 @@ impl Settings {
     
     pub fn save(&mut self) {
         let path = FileDialog::new()
-            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
+            // .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
+            .set_location("~")
             .add_filter("Binary File", &["bin"])
             .show_save_single_file()
             .unwrap();
@@ -831,7 +839,8 @@ impl Settings {
 
     pub fn save_data(&mut self) {
         let path = FileDialog::new()
-            .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/data")
+            // .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/data")
+            .set_location("~")
             .add_filter("CSV File", &["csv"])
             .show_save_single_file()
             .unwrap();
