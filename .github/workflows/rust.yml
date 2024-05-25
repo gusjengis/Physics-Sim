@@ -15,16 +15,6 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-    - name: Rename Previous Release  
-      uses: softprops/action-gh-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: $(github.run_number - 41)$
-        name: v$(github.run_number - 41)$
-        body: ''
-        draft: false
-        prerelease: false
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -32,7 +22,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: $(github.run_number - 41)$
-        name: v$(github.run_number - 41)$ - Latest
+        name: v$(github.run_number - 41)$
   win-build:
     runs-on: windows-latest
     needs: release
