@@ -18,9 +18,6 @@ jobs:
     
     - name: Install cross
       run: cargo install cross
-    
-    - name: Windows Build
-      run: cross build --release --target x86_64-pc-windows-gnu
 
     - name: MacOS(ARM) Build
       run: |
@@ -31,6 +28,11 @@ jobs:
       run: |
         cargo rustup target add x86_64-apple-darwin
         build --release --target x86_64-apple-darwin
+        
+    - name: Windows Build
+      run: cross build --release --target x86_64-pc-windows-gnu
+
+
       
     - name: Create Release
       id: create_release
