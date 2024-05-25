@@ -20,8 +20,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ format('{0}', github.run_number - 1) }}
-        name: Release ${{ format('{0}', github.run_number - 1) }}
+        tag_name: $(github.run_number - 41)$
+        name: v$(github.run_number - 41)$
         body: ''
         draft: false
         prerelease: false
@@ -31,8 +31,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.run_number }}
-        release_name: Latest
+        tag_name: $(github.run_number - 41)$
+        name: v$(github.run_number - 41)$ - Latest
   win-build:
     runs-on: windows-latest
     needs: release
