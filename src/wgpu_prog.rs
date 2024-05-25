@@ -453,11 +453,11 @@ pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, 
     let h = (height/max_rad).ceil() as i32;
     let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.particles as i32) + 2;
     let total_size = w * h * cell_cap;
-    println!("Cell Capacity:   {}", cell_cap);
-    println!("Cell Dimensions: {} x {}", w, h);
-    println!("Total Cells:     {}", w * h);
-    println!("Total Capacity:  {}", total_size);
-    println!("Bytes:           {}", total_size * 4);
+    // println!("Cell Capacity:   {}", cell_cap);
+    // println!("Cell Dimensions: {} x {}", w, h);
+    // println!("Total Cells:     {}", w * h);
+    // println!("Total Capacity:  {}", total_size);
+    // println!("Bytes:           {}", total_size * 4);
 
     return ((w * h) as usize, max_rad, cell_cap, w, h);
 }
