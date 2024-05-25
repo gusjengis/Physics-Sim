@@ -28,7 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Windows Build
-      run: cargo build --release --target x86_64-pc-windows-gnu
+      run: cargo build --release --target x86_64-uwp-windows-gnu
     - name: Upload Windows Release Asset
       uses: actions/upload-release-asset@v1
       env:
