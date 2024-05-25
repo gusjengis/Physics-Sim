@@ -17,7 +17,7 @@ jobs:
     steps:
     - name: Calculate Previous Run Number
       id: previous_run_number
-      run: echo "::set-output name=run_number::$((github.run_number - 42))"
+      run: echo "::set-output name=run_number::$((${{ github.run_number }} - 43))"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
