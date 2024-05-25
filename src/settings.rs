@@ -722,6 +722,17 @@ impl Settings {
                         if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=10000000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
                     });
                 }
+                if ui.button("Add Material").clicked() {
+                    self.materials.resize(self.material_size + self.materials.len(), 0.0);
+                    let base = self.materials.len() - 6;
+                    self.materials[base]     = rand::random();
+                    self.materials[base + 1] = rand::random();
+                    self.materials[base + 2] = rand::random();
+                    self.materials[base + 3] = self.materials[3];
+                    self.materials[base + 4] = self.materials[4];
+                    self.materials[base + 5] = self.materials[5];
+                    self.materials_changed = true;
+                }
             });}
             if self.menu.data_menu {
                 egui::Window::new("Data").collapsible(false).resizable(true).show(ctx, |ui| {
