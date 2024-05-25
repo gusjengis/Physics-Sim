@@ -17,14 +17,14 @@ jobs:
     steps:
     - name: Calculate Previous Run Number
       id: previous_run_number
-      run: echo "::set-output name=run_number::$((${{ github.run_number }} - 43))"
+      run: echo "::set-output name=run_number::$((${{ github.run_number }} - 44))"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.previous_run_number.outputs.run_number }}
+        tag_name: v${{ steps.previous_run_number.outputs.run_number }}
         name: v${{ steps.previous_run_number.outputs.run_number }}
   win-build:
     runs-on: windows-latest
