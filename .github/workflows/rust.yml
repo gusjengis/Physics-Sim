@@ -36,8 +36,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.release.outputs.upload_url }}
-        asset_path: target/x86_64-pc-windows-gnu/release/PS.exe
-        asset_name: PS-windows.exe
+        asset_path: target/release/PS.exe
+        asset_name: PS.exe
         asset_content_type: application/vnd.microsoft.portable-executable
 
   osx-build:
@@ -53,6 +53,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.release.outputs.upload_url }}
-        asset_path: target/x86_64-pc-windows-gnu/release/PS.exe
-        asset_name: PS-windows.exe
-        asset_content_type: application/vnd.microsoft.portable-executable
+        asset_path: target/release/PS
+        asset_name: PS
+        asset_content_type: application/octet-stream
