@@ -12,7 +12,8 @@ env:
 jobs:
   release: 
     runs-on: ubuntu-latest
-
+    outputs:
+      url: ${{ steps.create_releaese.outputs.upload_url }}
     steps:
       - name: Create Release
         id: create_release
@@ -36,7 +37,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ needs.release.steps.create_release.outputs.upload_url }}
+        upload_url: ${{ jobs.release.outputs.url }}
         asset_path: target/x86_64-pc-windows-gnu/release/PS.exe
         asset_name: PS-windows.exe
         asset_content_type: application/vnd.microsoft.portable-executable
