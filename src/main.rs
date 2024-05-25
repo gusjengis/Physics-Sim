@@ -1,3 +1,4 @@
+#![allow(warnings)]
 pub mod window_init;
 pub mod client;
 pub mod wgpu_config;
