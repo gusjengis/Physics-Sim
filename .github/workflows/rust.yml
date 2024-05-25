@@ -12,7 +12,8 @@ env:
 jobs:
   release: 
     runs-on: ubuntu-latest
-
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Create Release
         id: create_release
@@ -23,47 +24,35 @@ jobs:
           tag_name: ${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
   win-build:
-    runs-on: ubuntu-latest
-
+    runs-on: windows-latest
+    needs: release
     steps:
     - uses: actions/checkout@v4
-            
-    - name: Windows Build
-      run: cargo build --release --target x86_64-pc-windows-gnu
-    
-    - name: Upload Windows Release Asset
+    - name: Build
+      run: cargo build --release
+    - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ jobs.release.steps.create_release.outputs.upload_url }}
-        asset_path: target/x86_64-pc-windows-gnu/release/PS.exe
-        asset_name: PS-windows.exe
+        upload_url: ${{ needs.release.outputs.upload_url }}
+        asset_path: target/release/PS.exe
+        asset_name: PS.exe
         asset_content_type: application/vnd.microsoft.portable-executable
-    # - name: Upload MacOS(ARM) Release Asset
-    #   uses: actions/upload-release-asset@v1
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-    #     asset_path: target/aarch64-apple-darwin/release/PS
-    #     asset_name: PS-macos-arm
-    #     asset_content_type: application/octet-stream
-    # - name: Upload MacOS(x86-64) Release Asset
-    #   uses: actions/upload-release-asset@v1
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-    #     asset_path: target/x86_64-apple-darwin/release/PS
-    #     asset_name: PS-macos-x86_64
-    #     asset_content_type: application/octet-stream
 
-          # # - name: Install cross
-    # #   run: cargo install cross
-
-    # - name: MacOS(ARM) Build
-    #   run: cargo build --release --target aarch64-apple-darwin
-      
-    # - name: MacOS(x86-64) Build
-    #   run: cargo build --release --target x86_64-apple-darwin
+  osx-build:
+    runs-on: macos-latest
+    needs: release
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --release
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.release.outputs.upload_url }}
+        asset_path: target/release/PS
+        asset_name: PS
+        asset_content_type: application/octet-stream
