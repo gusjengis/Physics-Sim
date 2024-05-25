@@ -73,7 +73,7 @@ impl Client {
         let window = WindowBuilder::new()
             .build(&event_loop)
             .unwrap();
-        window.set_title("DEM Physics");
+        window.set_title("Physics Simulator");
 
         let canvas = window_init::Canvas::new(window);
         let mut wgpu_config = WGPUConfig::new(&canvas).await;

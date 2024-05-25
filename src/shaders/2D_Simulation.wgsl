@@ -317,7 +317,7 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32, id: u32) -> vec3<f
     data[u32(id)*4u   ] = normal_force;
     data[u32(id)*4u+1u] = contacts[i].tangent_force;
     data[u32(id)*4u+2u] = moment;
-    data[u32(id)*4u+3u] = normal_displacement;//atan2(normal.y, normal.x);
+    data[u32(id)*4u+3u] = angular_force;
 
     // TEAR BOND
     var shear_limit  = settings.bond_shear_lim;
