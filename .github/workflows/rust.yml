@@ -28,9 +28,9 @@ jobs:
         name: PS
         path: target/x86_64-pc-windows-gnu/release/PS.exe
 
-  release:
-    runs-on: ubuntu-latest
-    needs: build
+  # release:
+    # runs-on: ubuntu-latest
+    # needs: build
     steps:
     - name: Create Release
       id: create_release
@@ -49,6 +49,6 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./PS.zip
-        asset_name: PS.exe
+        asset_name: PS.zip
         asset_content_type: application/zip
       
