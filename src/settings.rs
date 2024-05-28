@@ -20,6 +20,7 @@ pub struct Menu {
     pub properties_menu: bool,
     pub data_menu: bool,
     pub bond_menu: bool,
+    pub speed_menu: bool,
 }
 
 pub struct Properties {
@@ -218,6 +219,7 @@ impl Settings {
             properties_menu: false,
             data_menu: false,
             bond_menu: false,
+            speed_menu: false
         };
 
         Self {
@@ -350,6 +352,7 @@ impl Settings {
                     // ui.heading("Menu");
                     if ui.selectable_label(self.menu.setup_menu, "Setup").clicked() { self.menu.setup_menu = !self.menu.setup_menu; }
                     if ui.selectable_label(self.menu.physics_menu, "Physics Settings").clicked() { self.menu.physics_menu = !self.menu.physics_menu; }
+                    if ui.selectable_label(self.menu.speed_menu, "Speed").clicked() { self.menu.speed_menu = !self.menu.speed_menu; }
                     if ui.selectable_label(self.menu.bond_menu, "Bonds").clicked() { self.menu.bond_menu = !self.menu.bond_menu; }
                     if ui.selectable_label(self.menu.materials_menu, "Materials").clicked() { self.menu.materials_menu = !self.menu.materials_menu; }
                     if ui.selectable_label(self.menu.properties_menu, "Properties").clicked() { self.menu.properties_menu = !self.menu.properties_menu; }
@@ -574,14 +577,18 @@ impl Settings {
                         });}
                     });
                 }
-            if self.menu.physics_menu {
+            if self.menu.speed_menu {
                 egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
                     if ui.add(egui::Slider::new(&mut self.timestep, 0.0..=1.0/self.hz).logarithmic(true).text("Sec/Tick")).changed() {
                         self.changed_collision_settings = true;
                     }
-                    let fps_perc = 100.0*self.fps/self.hz; 
-                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text(format!("Ticks/Frame ({:.0}/{:.0})", self.fps, self.hz)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
-
+                    let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+                    let fps_perc = max_perc * self.fps/self.hz; 
+                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text(format!("Ticks/Frame ({:.0}/{:.0}%)", fps_perc, max_perc)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
+                });
+            }
+            if self.menu.physics_menu {
+                egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
                     if ui.checkbox(&mut self.gravity, "Gravity").changed() {
                         self.changed_collision_settings = true;
                     }

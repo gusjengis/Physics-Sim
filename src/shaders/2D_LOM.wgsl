@@ -89,6 +89,53 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     del_pos[id] = int_vel     * settings.dT; 
     del_rot[id] = int_rot_vel * settings.dT; 
 
+    // Walls
+    let new_pos = positions[id] + del_pos[id];
+    if settings.round_bounds == 0 {
+        let yH = settings.vert_bound;
+        let xW = settings.hor_bound;
+
+        if new_pos.y-radii[id] < -yH {
+            int_vel.y = -int_vel.y * 0.5;
+            positions[id].y += -yH - (new_pos.y-radii[id]);
+                rot_vel[id] = rot_vel[id]*0.9;
+
+        } else if new_pos.y+radii[id] > yH {
+            int_vel.y = -int_vel.y * 0.5;
+            positions[id].y -= (new_pos.y+radii[id]) - yH;
+                rot_vel[id] = rot_vel[id]*0.9;
+
+        }
+        if new_pos.x-radii[id] < -xW {
+            int_vel.x = -int_vel.x * 0.5;
+            positions[id].x += -xW - (new_pos.x-radii[id]);
+                rot_vel[id] = rot_vel[id]*0.9;
+
+        } else if new_pos.x+radii[id] > xW {
+            int_vel.x = -int_vel.x * 0.5;
+            positions[id].x -= (new_pos.x+radii[id]) - xW;
+                rot_vel[id] = rot_vel[id]*0.9;
+
+        }
+
+    } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
+    // } else if length(positions[id]) + radii[id] > settings.bound_radius { // circular bounds
+
+        let norm_pos = normalize(new_pos);
+        let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
+        positions[id] = norm_pos * (settings.bound_radius - radii[id]) - del_comp;
+        let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
+        int_vel -= comp_v_p * 1.5;
+            rot_vel[id] = rot_vel[id]*0.9;
+        // let norm_pos = normalize(positions[id]);
+        // positions[id] = norm_pos * (settings.bound_radius - radii[id]);
+        // let tangent = vec2(-norm_pos.y, norm_pos.x);
+        // let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
+        // int_vel -= comp_v_p * 1.5;// + friction;
+        
+
+    }
+
     positions[id] += del_pos[id];
     rot[id]       += del_rot[id];
     
