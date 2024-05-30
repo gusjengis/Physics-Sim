@@ -50,12 +50,14 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --release
+    - name: Creating Zip
+      run: zip PS.zip ./target/release/PS
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ needs.release.outputs.upload_url }}
-        asset_path: target/release/PS
-        asset_name: PS
-        asset_content_type: application/octet-stream
+        asset_path: ./PS.zip
+        asset_name: PS_macOS.zip
+        asset_content_type: application/zip
