@@ -17,7 +17,7 @@ jobs:
     steps:
     - name: Calculate Previous Run Number
       id: previous_run_number
-      run: echo "::set-output name=run_number::$((${{ github.run_number }} - 46))"
+      run: echo "::set-output name=run_number::$((${{ github.run_number }} - 47))"
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -51,7 +51,7 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Creating Zip
-      run: zip -j PS.zip ./PS
+      run: zip -j PS.zip ./target/release/PS
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
