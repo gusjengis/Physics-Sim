@@ -578,7 +578,7 @@ impl Settings {
                     });
                 }
             if self.menu.speed_menu {
-                egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
+                egui::Window::new("Speed").collapsible(false).auto_sized().show(ctx, |ui| {
                     if ui.add(egui::Slider::new(&mut self.timestep, 0.0..=1.0/self.hz).logarithmic(true).text("Sec/Tick")).changed() {
                         self.changed_collision_settings = true;
                     }
