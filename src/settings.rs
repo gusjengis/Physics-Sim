@@ -178,6 +178,17 @@ pub struct Settings {
     pub bond_shear_stiffness: f32,
     pub bond_rotational_stiffness: f32,
     pub bond_rotational_strength: f32,
+    pub backup: bool,
+    pub restore: bool,
+    pub reset: bool,
+    pub zoom_in: bool,
+    pub zoom_out: bool,
+    pub home: bool,
+    pub simulating: bool,
+    pub select_all: bool,
+    pub fix: bool,
+    pub drop: bool,
+    pub speed_perc: f32,
 }
 
 impl Settings {
@@ -191,9 +202,9 @@ impl Settings {
         let min_radius = max_radius/holeyness;
         let max_bonds = 6;
         let max_contacts = max_bonds + 8;
-        let vert_bound = 1.0;
+        let vert_bound = 2.0;
         let hor_bound = vert_bound*1.333;
-        let scale = 1.0/vert_bound;
+        let scale = 2.0/vert_bound;
         let materials = vec![
             1.0,
             1.0,
@@ -223,7 +234,7 @@ impl Settings {
         };
 
         Self {
-            genPerFrame: 104,
+            genPerFrame: 105,
             particles,
             workgroups,
             workgroup_size,
@@ -313,7 +324,7 @@ impl Settings {
             drag: 1.0,
             bond_shear_strength: 0.5,
             verlet: true,
-            timestep: 0.00008,//0.0000390625,
+            timestep: 1.0/12600.0,//0.0000390625,
             maxGenPerFrame: 213,
             hz: 120.0,
             fps: 120.0,
@@ -329,6 +340,17 @@ impl Settings {
             bond_shear_stiffness: 10.0,
             bond_rotational_stiffness: 0.001,
             bond_rotational_strength: 0.5,
+            backup: false,
+            restore: false,
+            reset: false,
+            zoom_in: false,
+            zoom_out: false,
+            home: false,
+            simulating: false,
+            select_all: false,
+            fix: false,
+            drop: false,
+            speed_perc: 100.0
         }
     }
 
@@ -348,435 +370,673 @@ impl Settings {
         }
         if self.settings_menu {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
-                ui.horizontal_centered(|ui| {
-                    // ui.heading("Menu");
-                    if ui.selectable_label(self.menu.setup_menu, "Setup").clicked() { self.menu.setup_menu = !self.menu.setup_menu; }
-                    if ui.selectable_label(self.menu.physics_menu, "Physics Settings").clicked() { self.menu.physics_menu = !self.menu.physics_menu; }
-                    if ui.selectable_label(self.menu.speed_menu, "Speed").clicked() { self.menu.speed_menu = !self.menu.speed_menu; }
-                    if ui.selectable_label(self.menu.bond_menu, "Bonds").clicked() { self.menu.bond_menu = !self.menu.bond_menu; }
-                    if ui.selectable_label(self.menu.materials_menu, "Materials").clicked() { self.menu.materials_menu = !self.menu.materials_menu; }
-                    if ui.selectable_label(self.menu.properties_menu, "Properties").clicked() { self.menu.properties_menu = !self.menu.properties_menu; }
-                    if ui.selectable_label(self.menu.render_settings, "Render Settings").clicked() { self.menu.render_settings = !self.menu.render_settings; }
-                    if ui.selectable_label(self.menu.walls_menu, "Walls").clicked() { self.menu.walls_menu = !self.menu.walls_menu; }
-                    if ui.selectable_label(self.menu.data_menu, "Data").clicked() { self.menu.data_menu = !self.menu.data_menu; }
-                    if ui.selectable_label(self.menu.save_load_menu, "Save/Load").clicked() { self.menu.save_load_menu = !self.menu.save_load_menu; }
+                // ui.heading("Menu");
+                egui::menu::bar(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        self.file_menu(ui);
+                        self.view_menu(ui);
+                        self.state_menu(ui);
+                        self.sim_controls_menu(ui);
+                        self.physics_menu(ui);
+                        self.particle_menu(ui);
+                        self.materials_menu(ui);
+                        self.data_menu(ui, ctx);
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                        let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+                        let mut fps_perc = max_perc * self.fps/self.hz; 
+                        if !self.simulating {
+                            fps_perc = 0.0;
+                        }
+                        ui.add(egui::Label::new(format!("{:.0}/{:.0}%", fps_perc, max_perc))).on_hover_text("Actual/Target simulation speed.");
+                    });
                 });
             });
-            if self.menu.render_settings {
-                egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
-                    ui.checkbox(&mut self.circular_particles, "Circular Particles");
-                    ui.checkbox(&mut self.render_rot, "Render Rotation");
-                    ui.checkbox(&mut self.render_bonds, "Render Bonds");
-                    ui.checkbox(&mut self.colors, "Colors");
-                    ui.checkbox(&mut self.random_colors, "Random Colors");
-                    ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
-                    ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
-                });
-            }
-            if self.menu.properties_menu {
-                egui::Window::new("Properties").collapsible(false).auto_sized().show(ctx, |ui| {
-                    ui.horizontal(|inner_ui| {
-                        inner_ui.vertical(|inner_ui2| {
-                            inner_ui2.label("Forces");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_x_force, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_x_force, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_force).speed(0.01));
-                                });
-                                inner_ui3.label("X Force");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_y_force, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_y_force, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_force).speed(0.01));
-                                });
-                                inner_ui3.label("Y Force");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_rot_force, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_rot_force, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_force).speed(0.01));
-                                });
-                                inner_ui3.label("Rotational Force");
-                            });
-                            inner_ui2.label("Position");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_x_pos, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_x_pos, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
-                                });
-                                inner_ui3.label("X Position");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_y_pos, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_y_pos, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
-                                });
-                                inner_ui3.label("Y Position");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_rot, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_rot, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot).speed(0.0000001).clamp_range(0.0..=6.28318530718));
-                                });
-                                inner_ui3.label("Rotation");
-                            });
-                            inner_ui2.label("Velocity");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_x_vel, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_x_vel, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.x_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
-                                });
-                                inner_ui3.label("X Velocity");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_y_vel, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_y_vel, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.y_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
-                                });
-                                inner_ui3.label("Y Velocity");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_rot_vel, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_rot_vel, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_vel).speed(0.001).clamp_range(0.0..=6.28318530718));
-                                });
-                                inner_ui3.label("Rotational Velocity");
-                            });
-                            inner_ui2.label("Radius");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_radius, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_radius, |inner_ui4| {
-                                    inner_ui4.add(egui::DragValue::new(&mut self.properties.radius).speed(0.001).clamp_range(0.0..=f32::MAX));
-                                });
-                            });
-                            inner_ui2.label("Fixity");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_x_fixity, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_x_fixity, |inner_ui4| {
-                                    if inner_ui4.add(egui::SelectableLabel::new(self.properties.x_fixity, match self.properties.x_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.x_fixity = ! self.properties.x_fixity; };
-                                });
-                                inner_ui3.label("X Fixity");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_y_fixity, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_y_fixity, |inner_ui4| {
-                                    if inner_ui4.add(egui::SelectableLabel::new(self.properties.y_fixity, match self.properties.y_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.y_fixity = ! self.properties.y_fixity; };
-                                });
-                                inner_ui3.label("Y Fixity");
-                            });
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_rot_fixity, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_rot_fixity, |inner_ui4| {
-                                    if inner_ui4.add(egui::SelectableLabel::new(self.properties.rot_fixity, match self.properties.rot_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.rot_fixity = ! self.properties.rot_fixity; };
-                                });
-                                inner_ui3.label("Rotational Fixity");
-                            });
-                            inner_ui2.label("Material");
-                            inner_ui2.horizontal(|inner_ui3| {
-                                inner_ui3.checkbox(&mut self.properties.set_material, "");
-                                inner_ui3.add_enabled_ui(self.properties.set_material, |inner_ui4| {
-                                    // inner_ui4.add(egui::DragValue::new(&mut self.properties.material).clamp_range(0..=(self.materials.len()/self.material_size - 1)));
-                                    inner_ui4.add(egui::Slider::new(&mut self.properties.material, 0..=(self.materials.len()/self.material_size - 1) as i32));
-                                });
-                            });
-                            if inner_ui2.add_enabled(
-                                self.properties.set_material || self.properties.set_x_pos || self.properties.set_y_pos || self.properties.set_rot || self.properties.set_x_vel || self.properties.set_y_vel || self.properties.set_rot_vel || self.properties.set_radius || self.properties.set_rot_fixity || self.properties.set_rot_force || self.properties.set_x_fixity || self.properties.set_x_force || self.properties.set_y_fixity || self.properties.set_y_force,
-                                egui::Button::new("Set Properties")).
-                                clicked() 
-                            {
-                                self.set_properties = !self.set_properties;
-                            }
-                        });
-                    });
-                });
-            }
-            if self.menu.setup_menu {
-                egui::Window::new("Setup").collapsible(false).auto_sized().show(ctx, |ui| {
-                    if !self.two_part { if ui.add(egui::Slider::new(&mut self.particles, 1..=self.workgroup_size*200).
-                        text("Particles").
-                        step_by(1.0)).changed() {
-                            self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
-                            self.grid_width = self.grid_width.min(self.particles as f32);
-                            reset = true;
-                        };}
+        }
+        return reset;   
+    }
 
-                        egui::ComboBox::from_label("Structures")
-                            .selected_text(format!("{:?}", self.structure))
-                            .show_ui(ui, |ui| {
-                                // reset = ui.selectable_value(&mut self.structure, Structure::Random, "Random").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Grid, "Grid").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp1, "Experiment 1").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp2, "Experiment 2").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp3, "Experiment 3").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp4, "Experiment 4").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp5, "Experiment 5").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Exp6, "Experiment 6").changed();
-                                reset = reset || ui.selectable_value(&mut self.structure, Structure::Mats, "Mats").changed();
-                            });
-                        if !self.two_part { if self.structure == Structure::Grid {
-                            if ui.add(egui::Slider::new(&mut self.grid_width, 1.0..=self.particles as f32).
-                            text("Grid Width").step_by(0.01)
-                            .logarithmic(true)).changed() {
-                                reset = true;
-                            };
-                        }
-                        if ui.checkbox(&mut self.variable_rad, "Random Radius").changed() {
-                            reset = true;
-                        }
-                        if self.variable_rad {
-                            match self.structure {
-                                Structure::Grid => {
-                                    if ui.add(egui::Slider::new(&mut self.holeyness, 1.0..=10.0).
-                                    text("Holeyness")).changed() {
-                                        self.min_radius = self.max_radius/self.holeyness;
-                                        reset = true;
-                                    };
-                                },
-                                _ => {
-                                    if ui.add(egui::Slider::new(&mut self.max_radius, 0.0001..=0.5).
-                                    text("Max Radius")).changed() {
-                                        reset = true;
-                                    };
-                                    if ui.add(egui::Slider::new(&mut self.min_radius, 0.0001..=0.5).
-                                    text("Min Radius")).changed() {
-                                        reset = true;
-                                    };
-                                }
-                            }
-                        }
-                        egui::CollapsingHeader::new("Initial Velocities").show(ui, |ui| {
-                            if ui.add(egui::Slider::new(&mut self.max_h_velocity, -10.0..=10.0).
-                            text("Max xV")).changed() {
-                                if self.max_h_velocity < self.min_h_velocity {
-                                    self.min_h_velocity = self.max_h_velocity;
-                                }
-                                reset = true;
-                            };
-                            if ui.add(egui::Slider::new(&mut self.min_h_velocity, -10.0..=10.0).
-                            text("Min xV")).changed() {
-                                if self.max_h_velocity < self.min_h_velocity {
-                                    self.max_h_velocity = self.min_h_velocity;
-                                }
-                                reset = true;
-                            };
-                            if ui.add(egui::Slider::new(&mut self.max_v_velocity, -10.0..=10.0).
-                            text("Max yV")).changed() {
-                                if self.max_v_velocity < self.min_v_velocity {
-                                    self.min_v_velocity = self.max_v_velocity;
-                                }
-                                reset = true;
-                            };
-                            if ui.add(egui::Slider::new(&mut self.min_v_velocity, -10.0..=10.0).
-                            text("Min yV")).changed() {
-                                if self.max_v_velocity < self.min_v_velocity {
-                                    self.max_v_velocity = self.min_v_velocity;
-                                }
-                                reset = true;
-                            };
-                        });}
-                    });
-                }
-            if self.menu.speed_menu {
-                egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
-                    if ui.add(egui::Slider::new(&mut self.timestep, 0.0..=1.0/self.hz).logarithmic(true).text("Sec/Tick")).changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
-                    let fps_perc = max_perc * self.fps/self.hz; 
-                    ui.add(egui::Slider::new(&mut self.genPerFrame, 1..=self.maxGenPerFrame).logarithmic(true).text(format!("Ticks/Frame ({:.0}/{:.0}%)", fps_perc, max_perc)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
-                });
+    fn file_menu(&mut self, ui: &mut Ui) {
+        let load_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::O);
+        let save_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::S);
+
+        ui.menu_button("File", |ui| {
+            ui.style_mut().wrap = Some(false);
+
+            let min_x = 80.0;
+            let min_y = 0.0;
+            if ui.add(egui::Button::new("Load")
+                 .min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&load_shortcut)),)
+                 .clicked() {
+                    self.load();
+                    ui.close_menu();
             }
-            if self.menu.physics_menu {
-                egui::Window::new("Physics").collapsible(false).auto_sized().show(ctx, |ui| {
-                    if ui.checkbox(&mut self.gravity, "Gravity").changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    if ui.checkbox(&mut self.verlet, "Verlet Velocity Integration").changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    if self.gravity {
-                        if ui.checkbox(&mut self.planet_mode, "Planet Mode").changed() {
-                            self.changed_collision_settings = true;
+
+            if ui.add(egui::Button::new("Save")
+                 .min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&save_shortcut)),)
+                 .clicked() {
+                    self.save();
+                    ui.close_menu();
+            }
+        });
+    }
+
+    fn state_menu(&mut self, ui: &mut Ui) {
+        let backup_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::B);
+        let restore_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::R);
+        let reset_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::SHIFT, egui::Key::R);
+
+        ui.menu_button("State", |ui| {
+            ui.style_mut().wrap = Some(false);
+
+            ui.set_min_width(225.0);
+            let min_x = 80.0;
+            let min_y = 0.0;
+            if ui.add(egui::Button::new("Backup").min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&backup_shortcut)),)
+                 .on_hover_text("Store current state.")
+                 .clicked() {
+                    self.backup = true;
+                    ui.close_menu();
+            }
+
+            if ui.add(egui::Button::new("Restore").min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&restore_shortcut)),)
+                 .on_hover_text("Restore stored state.")
+                 .clicked() {
+                    self.restore = true;
+                    ui.close_menu();
+            }
+
+            if ui.add(egui::Button::new("Hard Reset").min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&reset_shortcut)),)
+                 .on_hover_text("Rerun setup. Store generated state.")
+                 .clicked() {
+                    self.reset = true;
+                    ui.close_menu();
+            }
+            ui.separator();
+            ui.label("Setup");
+            if !self.two_part { if ui.add(egui::Slider::new(&mut self.particles, 1..=self.workgroup_size*200).
+                text("Particles").
+                step_by(1.0)).changed() {
+                    self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
+                    self.grid_width = self.grid_width.min(self.particles as f32);
+                    self.reset = true;
+                };}
+                if !self.two_part { if self.structure == Structure::Grid {
+                    if ui.add(egui::Slider::new(&mut self.grid_width, 1.0..=self.particles as f32).
+                    text("Grid Width").step_by(0.01)
+                    .logarithmic(true)).changed() {
+                        self.reset = true;
+                    };
+                }
+                if ui.checkbox(&mut self.variable_rad, "Random Radius").changed() {
+                    self.reset = true;
+                }
+                if self.variable_rad {
+                    match self.structure {
+                        Structure::Grid => {
+                            if ui.add(egui::Slider::new(&mut self.holeyness, 1.0..=10.0).
+                            text("Holeyness")).changed() {
+                                self.min_radius = self.max_radius/self.holeyness;
+                                self.reset = true;
+                            };
+                        },
+                        _ => {
+                            if ui.add(egui::Slider::new(&mut self.max_radius, 0.0001..=0.5).
+                            text("Max Radius")).changed() {
+                                self.reset = true;
+                            };
+                            if ui.add(egui::Slider::new(&mut self.min_radius, 0.0001..=0.5).
+                            text("Min Radius")).changed() {
+                                self.reset = true;
+                            };
                         }
-                        if ui.add(egui::Slider::new(&mut self.gravity_acceleration, -100.0..=100.0).step_by(0.1).
-                        text("G Force")).changed() {
-                            // println!("{}", self.gravity_acceleration);
-                            self.changed_collision_settings = true;
-                        };
                     }
-                    if ui.add(egui::Slider::new(&mut self.contact_damping, 0.0..=10.0).
-                    text("contact_damping")).changed() {
+                }
+                egui::CollapsingHeader::new("Initial Velocities").show(ui, |ui| {
+                    if ui.add(egui::Slider::new(&mut self.max_h_velocity, -10.0..=10.0).
+                    text("Max xV")).changed() {
+                        if self.max_h_velocity < self.min_h_velocity {
+                            self.min_h_velocity = self.max_h_velocity;
+                        }
+                        self.reset = true;
+                    };
+                    if ui.add(egui::Slider::new(&mut self.min_h_velocity, -10.0..=10.0).
+                    text("Min xV")).changed() {
+                        if self.max_h_velocity < self.min_h_velocity {
+                            self.max_h_velocity = self.min_h_velocity;
+                        }
+                        self.reset = true;
+                    };
+                    if ui.add(egui::Slider::new(&mut self.max_v_velocity, -10.0..=10.0).
+                    text("Max yV")).changed() {
+                        if self.max_v_velocity < self.min_v_velocity {
+                            self.min_v_velocity = self.max_v_velocity;
+                        }
+                        self.reset = true;
+                    };
+                    if ui.add(egui::Slider::new(&mut self.min_v_velocity, -10.0..=10.0).
+                    text("Min yV")).changed() {
+                        if self.max_v_velocity < self.min_v_velocity {
+                            self.max_v_velocity = self.min_v_velocity;
+                        }
+                        self.reset = true;
+                    };
+                });}
+            });
+    }
+
+    fn view_menu(&mut self, ui: &mut Ui) {
+        let zoom_in_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::PlusEquals);
+        let zoom_out_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Minus);
+        // let pan_shortcut =
+        //     egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::R);
+        let home_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::H);
+
+        ui.menu_button("View", |ui| {
+            ui.style_mut().wrap = Some(false);
+            let min_x = 100.0;
+            ui.set_min_width(min_x);
+            if ui.add(egui::Button::new("Zoom In").min_size(Vec2::new(min_x, 0.0))
+                 .shortcut_text(format!("{}/Wheel +", ui.ctx().format_shortcut(&zoom_in_shortcut))),)
+                 .on_hover_text("Zoom in 2x.")
+                 .clicked() {
+                    self.zoom_in = true;
+                    // ui.close_menu();
+            }
+
+            if ui.add(egui::Button::new("Zoom Out").min_size(Vec2::new(min_x, 0.0))
+                 .shortcut_text(format!("{}/Wheel -", ui.ctx().format_shortcut(&zoom_out_shortcut))),)
+                 .on_hover_text("Zoom out 2x.")
+                 .clicked() {
+                    self.zoom_out = true;
+                    // ui.close_menu();
+            }
+
+
+            if ui.add(egui::Button::new("Home").min_size(Vec2::new(min_x, 0.0))
+                 .shortcut_text(ui.ctx().format_shortcut(&home_shortcut)),)
+                 .on_hover_text("Centers the view on (0,0).")
+                 .clicked() {
+                    self.home = true;
+                    ui.close_menu();
+            }
+            ui.add_enabled(false, egui::Button::new("Pan").min_size(Vec2::new(min_x, 0.0)).shortcut_text(format!("Shift + Drag")));
+            ui.separator();
+            ui.label("Rendering");
+            // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
+                ui.checkbox(&mut self.circular_particles, "Circular Particles");
+                ui.checkbox(&mut self.render_rot, "Render Rotation");
+                ui.checkbox(&mut self.render_bonds, "Render Bonds");
+                ui.checkbox(&mut self.colors, "Colors");
+                ui.checkbox(&mut self.random_colors, "Random Colors");
+                ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
+                // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
+            // });
+            
+        });
+    }
+
+    fn sim_controls_menu(&mut self, ui: &mut Ui) {
+        let play_pause_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Space);
+
+        ui.menu_button("Simulation", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.set_min_width(200.0);
+
+            let min_x = 175.0;
+            let min_y = 0.0;
+            if ui.add(egui::Button::new("Start/Stop").min_size(Vec2::new(min_x, min_y))
+            .shortcut_text(ui.ctx().format_shortcut(&play_pause_shortcut)),)
+            .on_hover_text("Toggle simulation.")
+            .clicked() {
+                self.simulating = !self.simulating;
+            }
+            ui.separator();
+            ui.label(format!("Speed | {} ticks/frame", self.genPerFrame));
+            // ui.menu_button("Speed", |ui| {
+            let mut max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+            if self.speed_perc != max_perc {
+                self.speed_perc = max_perc;
+            }
+            if ui.add(egui::Slider::new(&mut self.speed_perc, 1.0/self.maxGenPerFrame as f32..=100.0).custom_formatter(|n, _| {
+                let n = n as i32;
+                format!("{n}%")
+            })).changed() {
+                self.genPerFrame = 1.max((self.speed_perc/100.0 * self.maxGenPerFrame as f32) as i32);
+            };//.logarithmic(true);//.text(format!("Ticks/Frame ({:.0}/{:.0}%)", fps_perc, max_perc)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
+                
+            if ui.add(egui::Button::new("Speed Up").min_size(Vec2::new(min_x, 0.0))
+                 .shortcut_text("Right Arrow"),)
+                 .on_hover_text("Increase ticks/frame.")
+                 .clicked() {
+                    self.genPerFrame = self.maxGenPerFrame.min(self.genPerFrame + 1);
+            }
+
+            if ui.add(egui::Button::new("Slow Down").min_size(Vec2::new(min_x, 0.0))
+            .shortcut_text("Left Arrow"),)
+            .on_hover_text("Decrease ticks/frame.")
+            .clicked() {
+               self.genPerFrame = 1.max(self.genPerFrame - 1);
+            }
+            ui.separator();
+            ui.label(format!("Quality | {} ticks/s", (1.0/self.timestep).round() as i32));
+            if ui.add(egui::Slider::new(&mut self.timestep, 0.0000000001..=1.0/self.hz).logarithmic(true)).changed() {
+                self.timestep = 1.0/(((1.0/self.timestep as f32)/120.0).ceil()*120.0); 
+                self.changed_collision_settings = true;
+            }
+            ui.separator();
+            ui.label("Bounds");
+            if ui.checkbox(&mut self.round_walls, "Circular Bounds").changed() {
+                self.changed_collision_settings = true;
+            }
+            if self.round_walls {
+                if ui.add(egui::Slider::new(&mut self.wall_radius, 0.0..=64.0).
+                    text("Radius")).changed() {
+                        self.changed_collision_settings = true;
+                    }
+            } else {
+                ui.checkbox(&mut self.maintain_ar, "Maintain Aspect Ratio");
+                let ar = self.hor_bound/self.vert_bound;
+                if ui.add(egui::Slider::new(&mut self.hor_bound, 0.0..=64.0).
+                    text("Width")).changed() {
+                        self.changed_collision_settings = true;
+                        if self.maintain_ar {
+                            self.vert_bound = self.hor_bound*1.0/ar;
+                        }
+                }
+                if ui.add(egui::Slider::new(&mut self.vert_bound, 0.0..=64.0).
+                    text("Height")).changed() {
+                        self.changed_collision_settings = true;
+                        if self.maintain_ar {
+                            self.hor_bound = self.vert_bound*ar;
+                        }
+                }
+            }
+        });
+    }
+
+    fn physics_menu(&mut self, ui: &mut Ui) {            
+        let min_y = 0.0;
+        let mut min_x = match self.bondenum {
+            BondType::Unbonded => 0.0,
+            BondType::Normal_Bonds => 200.0,
+            BondType::Linear_Contact_Bond => 200.0,
+            BondType::Parallel_Linear_Contact_Bond => 220.0,
+        };
+        ui.menu_button("Physics", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.set_min_width(min_x);
+            if ui.checkbox(&mut self.gravity, "Gravity").changed() {
+                self.changed_collision_settings = true;
+            }
+            ui.add_enabled_ui(self.gravity, |ui|{
+                if ui.checkbox(&mut self.planet_mode, "Planet Mode").changed() {
+                    self.changed_collision_settings = true;
+                }
+                ui.label("G Force");
+                if ui.add(egui::Slider::new(&mut self.gravity_acceleration, -100.0..=100.0).step_by(0.1)).changed() {
+                    self.changed_collision_settings = true;
+                }
+            });
+            ui.separator();
+            if ui.checkbox(&mut self.collisions, "Collisions").changed() {
+                self.changed_collision_settings = true;
+            }
+            ui.add_enabled_ui(self.collisions, |ui|{
+                ui.label("Friction Coefficient");
+                if ui.add(egui::Slider::new(&mut self.friction_coefficient, 0.0..=1.0)).changed() {
+                    self.changed_collision_settings = true;
+                }
+            });
+            ui.separator();
+            let mut changed_bonds = false;
+
+            ui.menu_button(format!("{}", self.bondenum.to_string()), |ui| {
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Unbonded, "Unbonded").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Parallel_Linear_Contact_Bond, "Linear Parallel Bonds").changed();
+            });
+
+            if changed_bonds { 
+                self.changed_collision_settings = true;
+                self.updateBonds();
+            }
+
+            if self.bonds != 0 {
+                ui.separator();
+                ui.label("Stiffness");
+                if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=10000000000.0).step_by(0.001).
+                    text("Normal")).changed() {
                         self.changed_collision_settings = true;
                     };
-                    if ui.checkbox(&mut self.collisions, "Collisions").changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    if self.collisions {
-                        if ui.add(egui::Slider::new(&mut self.friction_coefficient, 0.0..=1.0).
-                        text("Friction Coef.")).changed() {
-                            self.changed_collision_settings = true;
+                    if self.bonds > 1 {
+                        if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                            text("Shear")).changed() {
+                                self.changed_collision_settings = true;
                         };
-                    }
-                    if ui.add(egui::Slider::new(&mut self.wall_friction, 0.0..=1.0).
-                        text("Wall Friction Coef.")).changed() {
-                            self.changed_collision_settings = true;
-                        };
-                });
-            }          
-            if self.menu.bond_menu {
-                egui::Window::new("Bonds").collapsible(false).auto_sized().show(ctx, |ui| {
-                    let mut changed_bonds = false;
-                    egui::ComboBox::from_label("Bonds")
-                    .selected_text(format!("{:?}", self.bondenum))
-                    .show_ui(ui, |ui| {
-                        changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Unbonded, "Unbonded").changed();
-                        changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
-                        changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
-                        changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Parallel_Linear_Contact_Bond, "Parallel Linear Contact Bonds").changed();
-                    });
-                    if changed_bonds { 
-                        self.changed_collision_settings = true;
-                        self.updateBonds();
-                    }
-
-                    if self.bonds != 0 {
-                        if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=10000000000.0).step_by(0.001).
-                        text("Normal Stiffness")).changed() {
-                            self.changed_collision_settings = true;
-                        };
-                        if self.bonds > 1 {
-                            if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
-                                text("Shear Stiffness")).changed() {
+                        if self.bonds > 2 {
+                            if ui.add(egui::Slider::new(&mut self.bond_rotational_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                                text("Rotational")).changed() {
                                     self.changed_collision_settings = true;
                             };
-                            if self.bonds > 2 {
-                                if ui.add(egui::Slider::new(&mut self.bond_rotational_stiffness, 0.001..=10000000000.0).step_by(0.001).
-                                    text("Rotational Stiffness")).changed() {
-                                        self.changed_collision_settings = true;
-                                };
-                            }
                         }
-                        if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
+                }
+                if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
+                    self.changed_collision_settings = true;
+                }
+                ui.add_enabled_ui(self.bond_tearing, |ui|{
+                    ui.separator();
+                    ui.label("Strength");
+                    if ui.add(egui::Slider::new(&mut self.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
+                        text("Normal")).changed() {
                             self.changed_collision_settings = true;
-                        }
-                        if self.bond_tearing {
-                            if ui.add(egui::Slider::new(&mut self.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
-                                text("Tear Limit")).changed() {
+                    };
+                    if self.bonds > 1 {
+                        if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
+                            text("Shear")).changed() {
+                                self.changed_collision_settings = true;
+                        };
+                        if self.bonds > 2 {
+                            if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=5.0).step_by(0.0001).
+                                text("Rotational")).changed() {
                                     self.changed_collision_settings = true;
                             };
-                            if self.bonds > 1 {
-                                if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
-                                    text("Shear Limit")).changed() {
-                                        self.changed_collision_settings = true;
-                                };
-                                if self.bonds > 2 {
-                                    if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=5.0).step_by(0.0001).
-                                        text("Rotational Limit")).changed() {
-                                            self.changed_collision_settings = true;
-                                    };
-                                }
-                            }
-                            
                         }
                     }
-                    if ui.button("Regenerate Bonds").clicked() {
-                        self.regen_bonds = true;                            
-                    }
-                });
-            }          
-            if self.menu.walls_menu {
-                egui::Window::new("Walls").collapsible(false).auto_sized().show(ctx, |ui| {
-                    if ui.checkbox(&mut self.round_walls, "Round Walls").changed() {
-                        self.changed_collision_settings = true;
-                    }
-                    if self.round_walls {
-                        if ui.add(egui::Slider::new(&mut self.wall_radius, 0.0..=64.0).
-                            text("Radius")).changed() {
-                                self.changed_collision_settings = true;
-                            };
-                    } else {
-
-                        ui.checkbox(&mut self.maintain_ar, "Maintain Aspect Ratio");
-                        let ar = self.hor_bound/self.vert_bound;
-                        if ui.add(egui::Slider::new(&mut self.hor_bound, 0.0..=64.0).
-                            text("Width")).changed() {
-                                self.changed_collision_settings = true;
-                                if self.maintain_ar {
-                                    self.vert_bound = self.hor_bound*1.0/ar;
-                                }
-                            };
-                        if ui.add(egui::Slider::new(&mut self.vert_bound, 0.0..=64.0).
-                            text("Height")).changed() {
-                                self.changed_collision_settings = true;
-                                if self.maintain_ar {
-                                    self.hor_bound = self.vert_bound*ar;
-                                }
-                            };
-                    }
+                    
                 });
             }
-            if self.menu.materials_menu { egui::Window::new("Materials").collapsible(false).auto_sized().show(ctx, |ui| {
-                let materials_count = self.materials.len()/self.material_size;
-                for i in 0..materials_count {
-                    let mat_num = i+1;
-                    egui::CollapsingHeader::new(format!("Material {mat_num}")).show(ui, |ui| {
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=10000000000.0).text("Density")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=10000000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
-                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=10000000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
+            if ui.button("Regenerate Bonds").clicked() {
+                self.regen_bonds = true;                            
+            }
+
+        });
+    }
+
+    fn particle_menu(&mut self, ui: &mut Ui) {
+        let select_all_shortcut =
+            egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::A);
+
+        ui.menu_button("Particles", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.set_min_width(180.0);
+
+            let min_x = 80.0;
+            let min_y = 0.0;
+            ui.add_enabled_ui(false, |ui| {
+
+                ui.add(egui::Button::new("Select")
+                .min_size(Vec2::new(min_x, min_y))
+                .shortcut_text("Click"));
+            });
+            
+            if ui.add(egui::Button::new("Select All")
+                 .min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text(ui.ctx().format_shortcut(&select_all_shortcut)),)
+                 .clicked() {
+                    self.select_all = true;
+                    ui.close_menu();
+                }
+
+            ui.add_enabled_ui(false, |ui| {
+                ui.add(egui::Button::new("Translate")
+                .min_size(Vec2::new(min_x, min_y))
+                .shortcut_text("Click + Drag"));
+            });
+
+            if ui.add(egui::Button::new("Fix")
+                 .min_size(Vec2::new(min_x, min_y))
+                 .shortcut_text("F"),)
+                 .on_hover_text("Fix selected particles.")
+                 .clicked() {
+                    self.fix = true;
+                    ui.close_menu();
+                }
+            
+            if ui.add(egui::Button::new("Drop")
+                .min_size(Vec2::new(min_x, min_y))
+                .shortcut_text("D"),)
+                .on_hover_text("Unfix selected particles.")
+                .clicked() {
+                   self.drop = true;
+                   ui.close_menu();
+               }
+
+            ui.separator();
+            ui.label("Properties");
+
+            ui.horizontal(|inner_ui| {
+                inner_ui.vertical(|inner_ui2| {
+                    inner_ui2.label("Forces");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_x_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_x_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.x_force).speed(0.01));
+                        });
+                        inner_ui3.label("X Force");
                     });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_y_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_y_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.y_force).speed(0.01));
+                        });
+                        inner_ui3.label("Y Force");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_rot_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_rot_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_force).speed(0.01));
+                        });
+                        inner_ui3.label("Rotational Force");
+                    });
+                    inner_ui2.label("Position");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_x_pos, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_x_pos, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.x_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
+                        });
+                        inner_ui3.label("X Position");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_y_pos, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_y_pos, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.y_pos).speed(0.0000001).clamp_range(f32::MIN..=f32::MAX));
+                        });
+                        inner_ui3.label("Y Position");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_rot, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_rot, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.rot).speed(0.0000001).clamp_range(0.0..=6.28318530718));
+                        });
+                        inner_ui3.label("Rotation");
+                    });
+                    inner_ui2.label("Velocity");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_x_vel, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_x_vel, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.x_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                        });
+                        inner_ui3.label("X Velocity");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_y_vel, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_y_vel, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.y_vel).speed(0.001).clamp_range(f32::MIN..=f32::MAX));
+                        });
+                        inner_ui3.label("Y Velocity");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_rot_vel, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_rot_vel, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_vel).speed(0.001).clamp_range(0.0..=6.28318530718));
+                        });
+                        inner_ui3.label("Rotational Velocity");
+                    });
+                    inner_ui2.label("Radius");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_radius, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_radius, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.radius).speed(0.001).clamp_range(0.0..=f32::MAX));
+                        });
+                    });
+                    inner_ui2.label("Fixity");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_x_fixity, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_x_fixity, |inner_ui4| {
+                            if inner_ui4.add(egui::SelectableLabel::new(self.properties.x_fixity, match self.properties.x_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.x_fixity = ! self.properties.x_fixity; };
+                        });
+                        inner_ui3.label("X Fixity");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_y_fixity, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_y_fixity, |inner_ui4| {
+                            if inner_ui4.add(egui::SelectableLabel::new(self.properties.y_fixity, match self.properties.y_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.y_fixity = ! self.properties.y_fixity; };
+                        });
+                        inner_ui3.label("Y Fixity");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_rot_fixity, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_rot_fixity, |inner_ui4| {
+                            if inner_ui4.add(egui::SelectableLabel::new(self.properties.rot_fixity, match self.properties.rot_fixity {true => {"True"}, false => {"False"}})).clicked() { self.properties.rot_fixity = ! self.properties.rot_fixity; };
+                        });
+                        inner_ui3.label("Rotational Fixity");
+                    });
+                    inner_ui2.label("Material");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_material, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_material, |inner_ui4| {
+                            // inner_ui4.add(egui::DragValue::new(&mut self.properties.material).clamp_range(0..=(self.materials.len()/self.material_size - 1)));
+                            inner_ui4.add(egui::Slider::new(&mut self.properties.material, 0..=(self.materials.len()/self.material_size - 1) as i32));
+                        });
+                    });
+                    if inner_ui2.add_enabled(
+                        self.properties.set_material || self.properties.set_x_pos || self.properties.set_y_pos || self.properties.set_rot || self.properties.set_x_vel || self.properties.set_y_vel || self.properties.set_rot_vel || self.properties.set_radius || self.properties.set_rot_fixity || self.properties.set_rot_force || self.properties.set_x_fixity || self.properties.set_x_force || self.properties.set_y_fixity || self.properties.set_y_force,
+                        egui::Button::new("Set Properties")).
+                        clicked() 
+                    {
+                        self.set_properties = !self.set_properties;
+                    }
+                });
+            });
+            //if ui.selectable_label(self.menu.properties_menu, "Properties").clicked() { self.menu.properties_menu = !self.menu.properties_menu; }
+        });
+    }
+
+    fn materials_menu(&mut self, ui: &mut Ui) {
+        ui.menu_button("Materials", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.set_max_width(83.0);
+            
+            let materials_count = self.materials.len()/self.material_size;
+            for i in 0..materials_count {
+                let mat_num = i;
+                ui.menu_button(format!("Material {mat_num}"), |ui| {
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=10000000000.0).text("Density")).changed() { self.materials_changed = true; };
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=10000000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
+                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=10000000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
+                });
+            }
+            if ui.button("Add Material").clicked() {
+                self.materials.resize(self.material_size + self.materials.len(), 0.0);
+                let base = self.materials.len() - 6;
+                self.materials[base]     = rand::random();
+                self.materials[base + 1] = rand::random();
+                self.materials[base + 2] = rand::random();
+                self.materials[base + 3] = self.materials[3];
+                self.materials[base + 4] = self.materials[4];
+                self.materials[base + 5] = self.materials[5];
+                self.materials_changed = true;
+            }
+        });
+    }
+
+    fn data_menu(&mut self, ui: &mut Ui, ctx: &Context) {
+        ui.menu_button("Data", |ui| {
+            ui.style_mut().wrap = Some(false);
+            
+            if ui.selectable_label(self.menu.data_menu, "Data Panel").clicked() { self.menu.data_menu = !self.menu.data_menu; }
+
+            ui.separator();
+            ui.label("Recording");
+
+                if ui.checkbox(&mut self.timed_recording,"Timed").changed() {
+                    self.start_time = self.sim_time;
                 }
-                if ui.button("Add Material").clicked() {
-                    self.materials.resize(self.material_size + self.materials.len(), 0.0);
-                    let base = self.materials.len() - 6;
-                    self.materials[base]     = rand::random();
-                    self.materials[base + 1] = rand::random();
-                    self.materials[base + 2] = rand::random();
-                    self.materials[base + 3] = self.materials[3];
-                    self.materials[base + 4] = self.materials[4];
-                    self.materials[base + 5] = self.materials[5];
-                    self.materials_changed = true;
+                ui.add_enabled(self.timed_recording, egui::DragValue::new(&mut self.recording_duration).speed(0.001).suffix("s"));
+                // });
+                // ui.horizontal_centered(|ui| {
+                    if !(self.recording || self.gather_data) {
+                        if ui.button("Start").clicked() {
+                            if !self.timed_recording {
+                                self.gather_data = true;
+                            } else {
+                                self.recording = true;
+                            }
+                            self.start_time = self.sim_time;
+                        }    
+                    } else {
+                        if ui.button("Stop").clicked() {
+                            self.recording = false;
+                            self.gather_data = false;
+                            // self.start_time = self.sim_time;
+                        }   
+                    }
+                    // });
+                    
+                
+                if ui.button("Export").clicked() {
+                    self.save_data();
                 }
-            });}
+        });
             if self.menu.data_menu {
-                egui::Window::new("Data").collapsible(false).resizable(true).show(ctx, |ui| {
-                    if ui.checkbox(&mut self.gather_data, "Gather Data").changed() {
-                        self.start_time = self.sim_time;
-                    }
+                egui::TopBottomPanel::bottom("data_panel").resizable(true).default_height(300.0).show(ctx, |ui| {                     
+                        // if ui.checkbox(&mut self.gather_data, "Gather Data").changed() {
+                        //     self.start_time = self.sim_time;
+                        // }
+                    let mut reset_button = None;
+                    egui::menu::bar(ui, |ui|{
+
+                    // });
+                    // ui.horizontal_centered(|ui|{
+                        
+                        egui::ComboBox::new("graph_property", "")
+                        .selected_text(format!("{:?}", self.plotted_prop))
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.plotted_prop, Property::X_Position, "X Position");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Y_Position, "Y Position");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
+                            ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Data_1, "Data 1");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Data_2, "Data 2");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Data_3, "Data 3");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
+                            ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
+                        });
+                        reset_button = Some(ui.add(egui::Button::new("Reset View")));
+                    });
                     let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
-                    let button = egui::Button::new("Reset View");
-                    if ui.checkbox(&mut self.timed_recording,"Timed").changed() {
-                        self.start_time = self.sim_time;
-                    }
-                    if self.timed_recording {
-                        ui.add(egui::Slider::new(&mut self.recording_duration, 0.0..=600.0).step_by(0.0001));
-                    }
-                    if ui.button("Record").clicked() {
-                        self.recording = true;
-                        self.start_time = self.sim_time;
-                    }
-                    if ui.button("Export").clicked() {
-                        self.save_data();
-                    }
-                    egui::ComboBox::from_label("Property")
-                            .selected_text(format!("{:?}", self.plotted_prop))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.plotted_prop, Property::X_Position, "X Position");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Y_Position, "Y Position");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
-                                ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Data_1, "Data 1");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Data_2, "Data 2");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Data_3, "Data 3");
-                                ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
-                                ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
-                            });
-                    if ui.add(button).clicked() { plot = plot.reset() }
+                    if reset_button.unwrap().clicked() { plot = plot.reset() }
                     plot.show(ui, |plot_ui| {
                         match self.plotted_prop {
                             Property::X_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_pos_data.to_owned())));},
@@ -794,14 +1054,6 @@ impl Settings {
                     });
                 });
             }
-            if self.menu.save_load_menu {
-                egui::Window::new("Save/Load").collapsible(false).auto_sized().show(ctx, |ui| {
-                    if (ui.button("Load")).clicked() { self.load(); }
-                    if (ui.button("Save")).clicked() { self.save(); }
-                });
-            }
-        }
-        return reset;   
     }
 
     pub fn updateBonds(&mut self) {
@@ -1022,7 +1274,14 @@ impl BondType {
             BondType::Parallel_Linear_Contact_Bond => 3
         }
     }
-
+    pub fn to_string(&self) -> &str {
+        return match *self {
+            BondType::Unbonded                     => &"Unbonded",
+            BondType::Normal_Bonds                 => &"Normal Bonds",
+            BondType::Linear_Contact_Bond          => &"Linear Contact Bonds",
+            BondType::Parallel_Linear_Contact_Bond => &"Linear Parallel Bonds"
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]

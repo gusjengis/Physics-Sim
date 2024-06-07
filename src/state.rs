@@ -240,8 +240,8 @@ impl State {
         let materials = builder.create_vector(&config.prog_settings.materials);
         let wall_settings = schema_generated::Wall_Settings::new(
             config.prog_settings.maintain_ar,
-            config.prog_settings.hor_bound,
-            config.prog_settings.vert_bound,
+            config.prog_settings.hor_bound/2.0,
+            config.prog_settings.vert_bound/2.0,
         );
         let render_settings = schema_generated::Render_Settings::new(
             config.prog_settings.circular_particles,
@@ -344,8 +344,8 @@ impl State {
             let rs = state.settings().unwrap().render_settings();
             // wall settings
             config.prog_settings.maintain_ar = ws.maintain_ar();
-            config.prog_settings.hor_bound  = ws.width();
-            config.prog_settings.vert_bound = ws.height();
+            config.prog_settings.hor_bound  = ws.width()*2.0;
+            config.prog_settings.vert_bound = ws.height()*2.0;
             // render settings
             config.prog_settings.circular_particles = rs.circular_particles();
             config.prog_settings.render_rot         = rs.render_rotation();

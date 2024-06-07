@@ -92,8 +92,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Walls
     let new_pos = positions[id] + del_pos[id];
     if settings.round_bounds == 0 {
-        let yH = settings.vert_bound;
-        let xW = settings.hor_bound;
+        let yH = settings.vert_bound/2.0;
+        let xW = settings.hor_bound/2.0;
 
         if new_pos.y-radii[id] < -yH {
             int_vel.y = -int_vel.y * 0.5;
