@@ -283,6 +283,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 fn distance(a: i32, b: i32) -> f32 {
     return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
+    // return  f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
 }
 
 fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
@@ -295,7 +296,7 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
     let A = 2.0*R;//*t; // cross-sectional area
     let I = 2.0/3.0 * R * R * R;// * t;// moment of inertia
     // let J = 1/2*PI*R*R*R*R; // polar moment, 3D only
-    let normal_displacement = f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
+    let normal_displacement = distance(a,b);
     let normal_force = -normal_stiffness * normal_displacement * A;
 
     let normal = normalize(positions[a] - positions[b]); 
@@ -373,11 +374,8 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
 // }
 
 fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
-    // let normal_displacement = (length((positions[a] - positions[b])) - (radii[a] + radii[b]));
-    let normal_displacement = f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
+    let normal_displacement = distance(a,b);
 
-    // let normal_stiffness = 1.0/(1.0/materials[(material_pointers[a])].normal_stiffness + 1.0/materials[(material_pointers[b])].normal_stiffness);
-    // let shear_stiffness  = 1.0/(1.0/materials[(material_pointers[a])].shear_stiffness  + 1.0/materials[(material_pointers[b])].shear_stiffness);
     let normal_stiffness = 1.0/(1.0/settings.bond_tensile_strength + 1.0/settings.bond_tensile_strength);
     let shear_stiffness  = 1.0/(1.0/settings.bond_shear_strength   + 1.0/settings.bond_shear_strength);
 
@@ -401,7 +399,7 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     data[u32(a)*4u   ] = normal_force;
     data[u32(a)*4u+1u] = contacts[i].tangent_force;
     data[u32(a)*4u+2u] = moment;
-    data[u32(a)*4u+3u] = normal_displacement;//atan2(normal.y, normal.x);
+    data[u32(a)*4u+3u] = normal_displacement;
 
     // TEAR BOND
     var shear_limit  = settings.bond_shear_lim;
@@ -415,10 +413,10 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
 }
 
 fn normal_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
-    let displacement: f32 = -distance(i32(a), b);
+    let displacement: f32 = distance(i32(a), b);
     var force = vec2(0.0, 0.0);
     let spring_force = settings.bond_tensile_strength * displacement;// * abs(displacement);
-    force -= spring_force * normalize(positions[b] - positions[a]) * settings.bond_damping;
+    force += spring_force * normalize(positions[b] - positions[a]) * settings.bond_damping;
 
     if settings.bonds_tear == 1 && spring_force < -settings.bond_force_limit {
         bonds[bonded].index = -bonds[bonded].index;
@@ -429,8 +427,8 @@ fn normal_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
 
 fn linear_model(a: i32, b: i32, i: u32) -> vec3<f32> { //unbonded
     
-    let normal_displacement = f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
-    if normal_displacement > 0.0 {
+    let normal_displacement = min(0.0, distance(a,b));
+    if normal_displacement == 0.0 {
         return vec3(0.0, 0.0, 0.0);
     }
     
