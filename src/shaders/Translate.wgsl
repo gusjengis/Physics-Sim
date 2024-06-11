@@ -2,7 +2,10 @@ struct Input {
     x: f32,
     y: f32,
     aspect: f32,
-    empty: i32
+    empty: i32,
+    timestep: f32,
+    ticks_per_frame: f32,
+    toggle: i32
 }
 
 struct Particle_Settings {
@@ -40,9 +43,16 @@ struct Forces {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
     if click_info[0] == 1 && selections[id] != 0 { 
-        positions[id] = positions[id] + vec2(input.x*input.aspect, input.y);
-        velocities[id] = vec2(0.0, 0.0);//vec2(input.x, input.y)/deltaTime;
-        velocities_buf[id] = vec2(0.0, 0.0);//vec2(input.x, input.y)/deltaTime;
+        let pos_delta = vec2(input.x*input.aspect, input.y);
+        if input.toggle == 0 {
+            positions[id] = positions[id] + pos_delta;
+            velocities[id] = vec2(0.0, 0.0);
+            velocities_buf[id] = vec2(0.0, 0.0);
+        } else {
+            let velocity = pos_delta/(input.timestep*input.ticks_per_frame);
+            velocities[id] = velocity;
+            velocities_buf[id] = velocity;
+        }
         if  !(fixity[id].x_vel   == 1 &&
               fixity[id].y_vel   == 1 &&
               fixity[id].rot_vel == 1)

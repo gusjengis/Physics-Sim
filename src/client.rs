@@ -269,28 +269,8 @@ impl Client {
                 self.cursor_delta = delta;
                 self.cursor_pos = (position.x as i32, position.y as i32);
                 if(self.middle && self.shift){
-                    self.xOff += (delta.0 as f32) as f32;
-                    self.yOff += (delta.1 as f32) as f32;
-                } else if self.middle && !self.shift {
-                    // println!("Drag");
-                    self.wgpu_prog.shader_prog.buffers.drag_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
-                        &[
-                            2.0*(self.canvas.size.width/self.canvas.size.height) as f32 * (delta.0) as f32/self.canvas.size.width as f32 / self.wgpu_config.prog_settings.scale,
-                            -2.0 as f32 * (delta.1) as f32/self.canvas.size.height as f32 / self.wgpu_config.prog_settings.scale,
-                            self.canvas.size.width as f32 / self.canvas.size.height as f32,
-                            bytemuck::cast::<_, f32>(self.cursor_pos.1),
-                        ]
-                    ));
-                    self.wgpu_prog.shader_prog.drag(&mut self.wgpu_config);
-                    self.wgpu_prog.shader_prog.buffers.selectangle_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
-                        &[
-                            bytemuck::cast::<_, f32>(self.click_pos.0),
-                            bytemuck::cast::<_, f32>(self.click_pos.1),
-                            bytemuck::cast::<_, f32>(self.cursor_pos.0 as i32 - self.click_pos.0 as i32),
-                            bytemuck::cast::<_, f32>(self.cursor_pos.1 as i32 - self.click_pos.1 as i32),
-                        ]
-                    ));
-                    self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
+                    self.xOff += (self.cursor_delta.0 as f32);
+                    self.yOff += (self.cursor_delta.1 as f32);
                 }
                 return true;
             },
@@ -633,6 +613,33 @@ impl Client {
         self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
     }
 
+    fn drap_and_selectangle(&mut self) {
+        if self.middle && !self.shift {
+            // println!("Drag");
+            self.wgpu_prog.shader_prog.buffers.drag_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
+                &[
+                    2.0*(self.canvas.size.width/self.canvas.size.height) as f32 * (self.cursor_delta.0) as f32/self.canvas.size.width as f32 / self.wgpu_config.prog_settings.scale,
+                    -2.0 as f32 * (self.cursor_delta.1) as f32/self.canvas.size.height as f32 / self.wgpu_config.prog_settings.scale,
+                    self.canvas.size.width as f32 / self.canvas.size.height as f32,
+                    bytemuck::cast::<_, f32>(self.cursor_pos.1),
+                    self.wgpu_config.prog_settings.timestep,
+                    self.wgpu_config.prog_settings.genPerFrame as f32,
+                    bytemuck::cast::<_, f32>(self.wgpu_config.prog_settings.simulating as i32)
+                ]
+            ));
+            self.wgpu_prog.shader_prog.drag(&mut self.wgpu_config);
+            self.wgpu_prog.shader_prog.buffers.selectangle_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
+                &[
+                    bytemuck::cast::<_, f32>(self.click_pos.0),
+                    bytemuck::cast::<_, f32>(self.click_pos.1),
+                    bytemuck::cast::<_, f32>(self.cursor_pos.0 as i32 - self.click_pos.0 as i32),
+                    bytemuck::cast::<_, f32>(self.cursor_pos.1 as i32 - self.click_pos.1 as i32),
+                ]
+            ));
+            self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
+        }
+    }
+
     fn handle_events(&mut self){
         macro_rules! settings { () => { self.wgpu_config.prog_settings };}
 
@@ -679,6 +686,8 @@ impl Client {
         if settings!().select_all { self.select_all();                                      settings!().select_all = false }
         if settings!().fix        { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config);  settings!().fix        = false }
         if settings!().drop       { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config); settings!().drop       = false }
+
+        self.drap_and_selectangle();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -692,10 +701,10 @@ impl Client {
             settings!().hz = max_framerate;
         }
 
+        self.handle_events();
         self.cursor_delta = (0, 0);
-
         // Compute
-
+        
         if settings!().simulating {
             if settings!().changed_collision_settings {
                 self.wgpu_prog.shader_prog.buffers.collision_settings.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().collison_settings()));
@@ -708,27 +717,25 @@ impl Client {
 
         // UI
         if !self.minimized {
-
+            
             self.platform.update_time((Local::now().timestamp_millis() - self.start_time.timestamp_millis()) as f64 / 1000.0);
             
             let output_frame = self.wgpu_config.surface.get_current_texture().unwrap();
             let output_view = output_frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-
-            self.handle_events();
-
-            // Begin to draw the UI frame.
-            self.platform.begin_frame();
-            let needs_reset = settings!().ui(&self.platform.context(), &self.wgpu_prog.shader_prog.state);
-            if needs_reset {
-                self.reset();
-            }
-            
-            if settings!().materials_changed {
-                self.wgpu_prog.shader_prog.buffers.material_buffer.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().materials));
-            }
-
+        
+        // Begin to draw the UI frame.
+        self.platform.begin_frame();
+        let needs_reset = settings!().ui(&self.platform.context(), &self.wgpu_prog.shader_prog.state);
+        if needs_reset {
+            self.reset();
+        }
+        
+        if settings!().materials_changed {
+            self.wgpu_prog.shader_prog.buffers.material_buffer.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().materials));
+        }
+        
             self.wgpu_prog.dim_uniform.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
                 &[self.wgpu_config.size.width as f32,
                 0.0 as f32, //time as f32, 
