@@ -1100,7 +1100,7 @@ impl Settings {
   
     pub fn load(&mut self) {
         let path = FileDialog::new()
-            .set_location(&self.current_dir)
+            .set_location("")
             .add_filter("Binary File", &["bin"])
             .show_open_single_file()
             .unwrap();
@@ -1116,7 +1116,7 @@ impl Settings {
   
     pub fn save(&mut self) {
         let path = FileDialog::new()
-            .set_location(&self.current_dir)
+            .set_location("")
             .add_filter("Binary File", &["bin"])
             .show_save_single_file()
             .unwrap();
