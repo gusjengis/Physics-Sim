@@ -46,6 +46,7 @@ struct Settings {
     render_grid: i32,
     round_bounds: i32,
     wall_radius: f32,
+    color_code_vel: i32,
 }
 
 struct Bond {

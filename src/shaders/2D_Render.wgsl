@@ -53,6 +53,7 @@ struct VertexOutput {
     @location(5) selected: i32,
     @location(6) w_h: vec2<i32>,
     @location(7) pixel: vec2<f32>,
+    @location(8) vel: vec2<f32>,
 };
 
 struct Settings {
@@ -68,6 +69,7 @@ struct Settings {
     render_grid: i32,
     round_bounds: i32,
     wall_radius: f32,
+    color_code_vel: i32,
 }
 
 struct Bond {
@@ -125,6 +127,7 @@ fn vs_main(
     out.selected = selections[instance];
     out.w_h = vec2(i32(dim.width), i32(dim.height));
     out.pixel = out.clip_position.xy;
+    out.vel = vel[instance];
     return out;
 }
 
@@ -156,6 +159,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if settings.colors == 0 {
         color = vec4(0.05, 0.05, 0.05, 1.0);
     }
+
+    // color code based on velocity
+    if settings.color_code_vel == 1 {
+        // color = vec4(abs(in.vel.x), abs(in.vel.y), abs(1.0 - in.vel.x), color.a);
+        let vel_norm = normalize(in.vel); 
+        let angle = atan2(vel_norm.y, vel_norm.x) + PI;
+        let r = 1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0); 
+        let g = max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0)); 
+        let b = max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0));
+        // let b = ;
+        color = vec4(r, g, b, color.a);
+        // color = vec4(-angle/2.0*PI, angle/2.0*PI, angle/2.0*PI, color.a);
+    }
     
     // cut out wedge for rotation
     let rot_point = vec2(cos(in.rot), sin(in.rot));
@@ -179,7 +195,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 if settings.colors == 0 { 
                     color = vec4(0.05, 0.05, 0.05, 1.0);
                 } else {
-                    color = vec4(in.color.rgb*0.5, color.a);
+                    color = vec4(color.rgb*0.5, color.a);
                 }
             }
         }

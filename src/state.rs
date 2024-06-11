@@ -326,13 +326,13 @@ impl State {
         }
         self.p_count = new_p_count;
         self.pos = State::f32_vec_from_vector(state.pos());
+        self.radii = State::f32_vec_from_vector(state.radii());
         self.vel = State::f32_vec_from_vector(state.vel());
         self.acc = State::f32_vec_from_vector(state.acc());
         self.rot = State::f32_vec_from_vector(state.rot());
         self.rot_vel = State::f32_vec_from_vector(state.rot_vel());
         self.rot_acc = State::f32_vec_from_vector(state.rot_acc());
         self.forces = State::f32_vec_from_vector(state.forces());
-        self.radii = State::f32_vec_from_vector(state.radii());
         self.fixity = State::i32_vec_from_vector(state.fixity());
         self.bonds = State::i32_vec_from_vector(state.bonds());
         self.contacts = State::f32_vec_from_vector(state.contacts());
@@ -369,6 +369,7 @@ impl State {
             config.prog_settings.materials_changed = true;
             config.prog_settings.updateBonds();
         }
+        self.selections = vec![0; self.p_count];
     }
 
     pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64;10]> {

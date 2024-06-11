@@ -472,7 +472,7 @@ impl WGPUComputeProg {
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let grid_info_return = grid_capacity(&config.prog_settings);
         let mut contact_pointers = vec![-1; 1];
-        let mut bp_grid = vec![1; grid_info_return.0 * grid_info_return.2 as usize];
+        let mut bp_grid = vec![1; 1];//grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
             grid_info_return.0,
@@ -755,6 +755,7 @@ impl WGPUComputeProg {
     }
 
     pub fn restore(&mut self, config: &mut WGPUConfig) {
+
         config.prog_settings.set_particles(self.state.p_count);
         self.buffers.pos_buffers.updateBuffer(&config.device, self.state.pos.as_bytes(), 0);
         self.buffers.pos_buffers.updateBuffer(&config.device, self.state.radii.as_bytes(), 1);
@@ -772,6 +773,7 @@ impl WGPUComputeProg {
         // self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 3);
+        self.buffers.selections.updateUniform(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()));
     }
 
     // fn save_state(&self , state: &State) {

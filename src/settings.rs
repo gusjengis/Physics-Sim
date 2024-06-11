@@ -1,5 +1,7 @@
-use std::fmt::Debug;
-use std::fs::File;
+use std::ffi::OsStr;
+use std::str::FromStr;
+use std::{fmt::Debug, io::Read};
+use std::fs::*;
 use std::io::Write;
 use std::path::Path;
 
@@ -138,6 +140,7 @@ pub struct Settings {
     pub scale: f32,
     pub circular_particles: bool,
     pub render_rot: bool,
+    pub color_code_vel: bool,
     pub color_code_rot: bool,
     pub colors: bool,
     pub random_colors: bool,
@@ -148,6 +151,7 @@ pub struct Settings {
     pub materials_changed: bool,
     pub menu: Menu,
     pub current_file: std::path::PathBuf,
+    pub current_dir: std::path::PathBuf,
     pub load: bool,
     pub save: bool,
     pub regen_bonds: bool,
@@ -189,6 +193,7 @@ pub struct Settings {
     pub fix: bool,
     pub drop: bool,
     pub speed_perc: f32,
+    // pub paths: ReadDir,
 }
 
 impl Settings {
@@ -271,6 +276,7 @@ impl Settings {
             scale,
             circular_particles: true,
             render_rot: false,
+            color_code_vel: false,
             color_code_rot: false,
             colors: true,
             random_colors: false,
@@ -281,6 +287,7 @@ impl Settings {
             materials_changed: false,
             menu,
             current_file: std::path::PathBuf::new(),
+            current_dir: std::path::PathBuf::new(),
             load: false,
             save: false,
             regen_bonds: false,
@@ -350,7 +357,8 @@ impl Settings {
             select_all: false,
             fix: false,
             drop: false,
-            speed_perc: 100.0
+            speed_perc: 100.0,
+            // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
         }
     }
 
@@ -407,13 +415,37 @@ impl Settings {
 
             let min_x = 80.0;
             let min_y = 0.0;
-            if ui.add(egui::Button::new("Load")
-                 .min_size(Vec2::new(min_x, min_y))
-                 .shortcut_text(ui.ctx().format_shortcut(&load_shortcut)),)
-                 .clicked() {
-                    self.load();
-                    ui.close_menu();
-            }
+            ui.menu_button("Load", |ui| {
+                let paths = fs::read_dir(self.current_dir.clone());
+                match paths {
+                    Ok(_) => {
+                        for path in paths.unwrap() {
+                            let file = path.unwrap().path();
+                            let extention = file.extension().unwrap().to_str().unwrap();
+                            
+                            if extention.contains("bin") {
+                                if ui.button(format!("{}", file.file_name().unwrap().to_str().unwrap())).clicked() {
+                                    self.current_file = file;
+                                    self.load = true;
+                                };
+                            }
+                        }
+                    },
+                    Err(_) => {ui.label("Invald Directory Path");}
+                }
+                
+                if ui.button("Select Folder").clicked() {
+                    match FileDialog::new()
+                    .set_location(&self.current_dir)
+                    .show_open_single_dir()
+                    .unwrap() {
+                        Some(path) => {
+                                self.current_dir = path.clone();
+                                },
+                                None => {},
+                    };
+                }
+            });
 
             if ui.add(egui::Button::new("Save")
                  .min_size(Vec2::new(min_x, min_y))
@@ -582,6 +614,7 @@ impl Settings {
                 ui.checkbox(&mut self.render_bonds, "Render Bonds");
                 ui.checkbox(&mut self.colors, "Colors");
                 ui.checkbox(&mut self.random_colors, "Random Colors");
+                ui.checkbox(&mut self.color_code_vel, "Color Code Velocity"); 
                 ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
                 // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
             // });
@@ -1064,11 +1097,10 @@ impl Settings {
             BondType::Parallel_Linear_Contact_Bond => { 3 },
         }
     }
-
+  
     pub fn load(&mut self) {
         let path = FileDialog::new()
-            // .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
-            .set_location("~")
+            .set_location(&self.current_dir)
             .add_filter("Binary File", &["bin"])
             .show_open_single_file()
             .unwrap();
@@ -1080,16 +1112,11 @@ impl Settings {
             },
             None => {},
         };
-        
-        // if !self.current_file.exists() {
-        //     self.load = false;
-        // }
     }
-    
+  
     pub fn save(&mut self) {
         let path = FileDialog::new()
-            // .set_location("~/OneDrive/Code/WASM/Engine Programs/Particle-Physics-Sim/saved_states")
-            .set_location("~")
+            .set_location(&self.current_dir)
             .add_filter("Binary File", &["bin"])
             .show_save_single_file()
             .unwrap();
@@ -1097,14 +1124,13 @@ impl Settings {
         match path {
             Some(path) => {
                 self.current_file = path.clone();
+                // let mut ancestors = path.ancestors();
+                // println!("{}", ancestors.next().unwrap().to_str().unwrap());
+                // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
                 self.save = true;
             },
             None => {},
         };
-
-        // if !self.current_file.file_name().is_none() {
-        //     self.save = false;
-        // }
     }
 
     pub fn save_data(&mut self) {
@@ -1199,6 +1225,7 @@ impl Settings {
             self.render_bp_grid as i32,
             self.round_walls as i32,
             self.wall_radius.to_bits() as i32,
+            self.color_code_vel as i32,
         ];
     }
 

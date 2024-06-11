@@ -640,25 +640,7 @@ impl Client {
         }
     }
 
-    fn handle_events(&mut self){
-        macro_rules! settings { () => { self.wgpu_config.prog_settings };}
-
-        //Handle saving/loading
-        if settings!().save && settings!().current_file.file_name().is_some() {
-            settings!().save = false;
-            self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
-            self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config);
-            self.wgpu_prog.shader_prog.state.save_to_file(settings!().current_file.clone());
-        }
-    
-        if settings!().load && settings!().current_file.file_name().is_some() {
-            settings!().load = false;
-            self.wgpu_prog.shader_prog.state.load_from_file(settings!().current_file.clone());
-            self.wgpu_prog.shader_prog.state.load(&mut self.wgpu_config, true);
-            // self.wgpu_config.prog_settings.set_particles(self.wgpu_prog.shader_prog.state.p_count);
-            // self.reset();
-            self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config);
-        }
+    fn handle_events(&mut self){ macro_rules! settings { () => { self.wgpu_config.prog_settings };}
 
         //Bond Regen
         if settings!().regen_bonds {
@@ -678,7 +660,6 @@ impl Client {
         }
 
         if settings!().backup     { self.backup();                                          settings!().backup     = false }
-        if settings!().restore    { self.restore();                                         settings!().restore    = false }
         if settings!().reset      { self.reset();                                           settings!().reset      = false }
         if settings!().zoom_in    { self.zoom_in();                                         settings!().zoom_in    = false }
         if settings!().zoom_out   { self.zoom_out();                                        settings!().zoom_out   = false }
@@ -690,8 +671,8 @@ impl Client {
         self.drap_and_selectangle();
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        macro_rules! settings { () => { self.wgpu_config.prog_settings };}
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> { macro_rules! settings { () => { self.wgpu_config.prog_settings };}
+        self.handle_events();
         let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32/1000.0;
         settings!().maxGenPerFrame = ((1.0/settings!().timestep)/max_framerate).round() as i32;
         if settings!().maxGenPerFrame < settings!().genPerFrame {
@@ -701,7 +682,6 @@ impl Client {
             settings!().hz = max_framerate;
         }
 
-        self.handle_events();
         self.cursor_delta = (0, 0);
         // Compute
         
@@ -714,6 +694,24 @@ impl Client {
             self.generation += settings!().genPerFrame;
             // }
         }
+
+        //Handle saving/loading
+        if settings!().save && settings!().current_file.file_name().is_some() {
+            settings!().save = false;
+            self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config);
+            self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config);
+            self.wgpu_prog.shader_prog.state.save_to_file(settings!().current_file.clone());
+        }
+    
+        if settings!().load && settings!().current_file.file_name().is_some() {
+            self.wgpu_prog.shader_prog.state.load_from_file(settings!().current_file.clone());
+            self.wgpu_prog.shader_prog.state.load(&mut self.wgpu_config, true);
+            self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config);
+            settings!().load = false;
+        }
+
+        if settings!().restore    { self.restore();                                         settings!().restore    = false }
+
 
         // UI
         if !self.minimized {
