@@ -416,12 +416,16 @@ impl Settings {
             let min_x = 80.0;
             let min_y = 0.0;
             ui.menu_button("Load", |ui| {
-                let paths = fs::read_dir(self.current_dir.clone());
+                let mut paths = fs::read_dir(self.current_dir.clone());
                 match paths {
                     Ok(_) => {
                         for path in paths.unwrap() {
                             let file = path.unwrap().path();
-                            let extention = file.extension().unwrap().to_str().unwrap();
+                            let mut extention = "";
+                            match file.extension() {
+                                Some(ext) => {extention = ext.to_str().unwrap();},
+                                None => {continue;}
+                            }
                             
                             if extention.contains("bin") {
                                 if ui.button(format!("{}", file.file_name().unwrap().to_str().unwrap())).clicked() {
@@ -436,7 +440,7 @@ impl Settings {
                 
                 if ui.button("Select Folder").clicked() {
                     match FileDialog::new()
-                    .set_location(&self.current_dir)
+                    //.set_location(&self.current_dir)
                     .show_open_single_dir()
                     .unwrap() {
                         Some(path) => {
@@ -1116,7 +1120,6 @@ impl Settings {
   
     pub fn save(&mut self) {
         let path = FileDialog::new()
-            .set_location("")
             .add_filter("Binary File", &["bin"])
             .show_save_single_file()
             .unwrap();
