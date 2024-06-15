@@ -471,7 +471,6 @@ impl WGPUComputeProg {
         let p_count = setup::p_count(&mut config.prog_settings);
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
         let grid_info_return = grid_capacity(&config.prog_settings);
-        let mut contact_pointers = vec![-1; 1];
         let mut bp_grid = vec![1; 1];//grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
@@ -503,7 +502,7 @@ impl WGPUComputeProg {
             bytemuck::cast_slice(&state.bonds),
             // bytemuck::cast_slice(&state.bond_info),
             bytemuck::cast_slice(&state.contacts),
-            bytemuck::cast_slice(&contact_pointers),
+            bytemuck::cast_slice(&state.contact_pointers),
             bytemuck::cast_slice(&state.material_pointers),
             bytemuck::cast_slice(&bp_grid),
             bytemuck::cast_slice(&grid_info.as_vec()),

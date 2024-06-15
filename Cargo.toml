@@ -31,6 +31,8 @@ cfg-if = "1"
 winit = "0.28.3"
 env_logger = "0.10.0"
 log = "0.4.17"
+serde = "1.0.164"
+serde_json = "1.0.117"
 wgpu = "0.16.1"
 pollster = "0.3"
 async-std = { version = "1.12", features = ["attributes", "tokio1"] }

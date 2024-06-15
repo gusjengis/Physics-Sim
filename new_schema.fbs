@@ -1,0 +1,56 @@
+struct Physics_Settings {
+  timestep: float;
+  gen_per_frame: int;
+  gravity: bool;
+  planet_mode: bool;
+  g_force: float;
+  contact_damping: float;
+  bond: int;
+  bond_stiffness: float;
+  shear_stiffness: float;
+  collisions: bool;
+  friction_coef: float;
+}
+
+struct Render_Settings {
+  circular_particles: bool;
+  render_rotation: bool;
+  render_bonds: bool;
+  colors: bool;
+  random_colors: bool;
+  color_code_rotation: bool;
+}
+
+struct Wall_Settings {
+  maintain_ar: bool;
+  width: float;
+  height: float;
+}
+
+struct Settings {
+  physics_settings: Physics_Settings;
+  render_settings: Render_Settings;
+  wall_settings: Wall_Settings;
+}
+
+table State {
+  particles: int;
+  pos: [float];
+  del_pos: [float];
+  vel: [float];
+  acc: [float];
+  rot: [float];
+  del_rot: [float];
+  rot_vel: [float];
+  rot_acc: [float];
+  forces: [float];
+  radii: [float];
+  fixity: [int];
+  bonds: [int];
+  contacts: [float];
+  material_pointers: [int];
+  materials: [float];
+  settings: Settings;
+}
+
+root_type State;

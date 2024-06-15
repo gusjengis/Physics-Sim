@@ -40,6 +40,7 @@ pub struct Client {
     cursor_pos: (i32, i32),
     click_pos: (i32, i32),
     cursor_delta: (i32, i32),
+    world_delta: (f32, f32),
     minimized: bool,
     HL: bool,
     prevGen: i32,
@@ -107,6 +108,7 @@ impl Client {
             cursor_pos: (0, 0),
             click_pos: (0, 0),
             cursor_delta: (0, 0),
+            world_delta: (0.0, 0.0),
             minimized: false,
             HL: false,
             generation: 0,
@@ -266,12 +268,17 @@ impl Client {
             },
             WindowEvent::CursorMoved { position, .. } => {
                 let delta = (position.x as i32 - self.cursor_pos.0, position.y as i32 - self.cursor_pos.1);
+                let world_delta = self.cursor_del_to_world_delta(delta);
+
                 self.cursor_delta = delta;
                 self.cursor_pos = (position.x as i32, position.y as i32);
                 if(self.middle && self.shift){
-                    self.xOff += (self.cursor_delta.0 as f32);
-                    self.yOff += (self.cursor_delta.1 as f32);
+                    self.xOff += (world_delta.0 as f32);
+                    self.yOff += (world_delta.1 as f32);
                 }
+
+                let ar = self.canvas.size.width as f32/self.canvas.size.height as f32;
+                self.world_delta = (self.world_delta.0 + world_delta.0 / ar, self.world_delta.1 + world_delta.1);
                 return true;
             },
             WindowEvent::KeyboardInput { input, .. } => {
@@ -618,8 +625,8 @@ impl Client {
             // println!("Drag");
             self.wgpu_prog.shader_prog.buffers.drag_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
                 &[
-                    2.0*(self.canvas.size.width/self.canvas.size.height) as f32 * (self.cursor_delta.0) as f32/self.canvas.size.width as f32 / self.wgpu_config.prog_settings.scale,
-                    -2.0 as f32 * (self.cursor_delta.1) as f32/self.canvas.size.height as f32 / self.wgpu_config.prog_settings.scale,
+                    self.world_delta.0,
+                    self.world_delta.1,
                     self.canvas.size.width as f32 / self.canvas.size.height as f32,
                     bytemuck::cast::<_, f32>(self.cursor_pos.1),
                     self.wgpu_config.prog_settings.timestep,
@@ -638,6 +645,27 @@ impl Client {
             ));
             self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
         }
+    }
+
+    fn cursor_del_to_world_delta(&self, cursor_del: (i32, i32)) -> (f32, f32) {
+        let scale = self.wgpu_config.prog_settings.scale;
+        let xOff = self.xOff;
+        let yOff = self.yOff;
+        let w = self.canvas.size.width as f32;
+        let h = self.canvas.size.height as f32;
+
+        let viewport_pos = (2.0 * (cursor_del.0 as f32)/w, -2.0 * (cursor_del.1 as f32)/h);
+        let ar_corrected = (viewport_pos.0 * (w/h), viewport_pos.1);
+        // let translated = ();
+        let scaled = (ar_corrected.0/scale, ar_corrected.1/scale);
+        
+        // let translation = (-self.xOff, self.yOff);
+        // let viewport_translation = ((translation.0 as f32)/w, (translation.1 as f32)/h);
+        // let ar_corrected_translation = (viewport_translation.0 * w/h, viewport_translation.1);
+        // println!("{}, {}", translation.0, translation.1);
+        println!("({}, {})", scaled.0, scaled.1);
+
+        return scaled;
     }
 
     fn handle_events(&mut self){ macro_rules! settings { () => { self.wgpu_config.prog_settings };}
@@ -682,7 +710,8 @@ impl Client {
             settings!().hz = max_framerate;
         }
 
-        self.cursor_delta = (0, 0);
+        self.cursor_delta = ( 0 ,  0 );
+        self.world_delta  = (0.0, 0.0);
         // Compute
         
         if settings!().simulating {

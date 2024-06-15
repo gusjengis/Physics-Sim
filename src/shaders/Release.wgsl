@@ -42,20 +42,19 @@ struct Settings {
     rotation: i32,
     linear_contact_bonds: i32,
     gravity_acc: f32,
-    bond_tensile_strength: f32,
+    bond_normal_stiffness: f32,
     bonds_tear: i32,
-    bond_force_limit: f32,
+    bond_normal_strength: f32,
     contact_damping: f32,
     bond_damping: f32,
     drag: f32,
-    bond_shear_lim: f32,
+    bond_shear_strength: f32,
     verlet: i32,
     dT: f32,
-    bond_shear_strength: f32,
+    bond_shear_stiffness: f32,
     bond_rotational_stiffness: f32,
     bond_rotational_strength: f32
 }
-
 
 @group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> selections: array<i32>;

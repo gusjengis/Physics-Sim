@@ -93,7 +93,8 @@ fn vs_main(
     let scale= dim.scale;
     let xy = 1.0/scale*vec2(in.position.x * aspect, in.position.y);
     let center = scale*vec2(pos_buf[instance].x / aspect, pos_buf[instance].y);
-    let off = vec2(-dim.xOff, dim.yOff)/1000.0/scale;
+    let off = vec2(-dim.xOff, -dim.yOff);
+
     out.clip_position = vec4(in.position, 0.0, 1.0);
     out.position = vec4((xy + off), 0.0, 1.0);
     // out.color = color_buf[instance % u32(settings.colors)];

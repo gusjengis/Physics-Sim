@@ -22,9 +22,10 @@ struct Contact {
     a: i32,
     b: i32,
     tangent_force: f32,
+    bond_tangent_force: f32,
+    theta_b: f32,
     bonded: i32
 };
-
 struct Material {
     red: f32,
     green: f32,
@@ -104,7 +105,7 @@ fn vs_main(
     let scale= dim.scale;
     let xy = 2.0*scale*vec2(in.position.x / aspect, in.position.y);
     let center = scale*vec2(pos_buf[instance].x / aspect, pos_buf[instance].y);
-    let off = vec2(dim.xOff / aspect, -dim.yOff)/1000.0;
+    let off = vec2(dim.xOff/aspect, dim.yOff)*(scale);
     out.clip_position = vec4(xy*radii_buf[instance] + center + off, 0.0, 1.0);
     out.position = in.position;
     // out.color = color_buf[instance % u32(settings.colors)];
@@ -164,12 +165,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if settings.color_code_vel == 1 {
         // color = vec4(abs(in.vel.x), abs(in.vel.y), abs(1.0 - in.vel.x), color.a);
         let vel_norm = normalize(in.vel); 
+        let vel_mag = length(in.vel);
         let angle = atan2(vel_norm.y, vel_norm.x) + PI;
-        let r = 1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0); 
-        let g = max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0)); 
-        let b = max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0));
-        // let b = ;
-        color = vec4(r, g, b, color.a);
+        let r = (1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0)); 
+        let g = (max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0))); 
+        let b = (max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0)));
+        let max_brightness = 1.0/max(max(r, b), g) * min(1.0, vel_mag*vel_mag*vel_mag);
+        
+        color = vec4(max_brightness * vec3(r, g, b), color.a);
         // color = vec4(-angle/2.0*PI, angle/2.0*PI, angle/2.0*PI, color.a);
     }
     
@@ -218,7 +221,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);
                 if dot(dir, normalize(in.position)) > 0.99 {
                     color = vec4(1.0 - displacement, 1.0 + clamp(displacement*0.8, -0.8, 1.0) + 0.2*clamp(displacement, 0.0, 1.0), 1.0 - abs(displacement), 1.0);
-                    if contacts[i].b < 0 {
+                    if contacts[i].a < 0 {
                         color = vec4(1.0, 0.0, 0.0, 1.0);
                     }
                 }

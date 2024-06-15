@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::{fmt::Debug, io::Read};
@@ -7,6 +8,8 @@ use std::path::Path;
 
 use egui::*;
 use std::*;
+use serde::{Serialize, Deserialize};
+use serde_json::*;
 
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
@@ -130,7 +133,7 @@ pub struct Settings {
     pub bondenum: BondType,
     pub bond_tearing: bool,
     pub bond_normal_strength: f32,
-    pub stiffness: f32,
+    pub bond_normal_stiffness: f32,
     pub collisions: bool,
     pub friction: bool,
     pub friction_coefficient: f32,
@@ -164,7 +167,7 @@ pub struct Settings {
     pub contact_damping: f32,
     pub bond_damping: f32,
     pub drag: f32,
-    pub bond_shear_strength: f32,
+    pub bond_shear_stiffness: f32,
     pub verlet: bool,
     pub timestep: f32,
     pub maxGenPerFrame: i32,
@@ -179,7 +182,7 @@ pub struct Settings {
     pub round_walls: bool,
     pub wall_friction: f32,
     pub wall_radius: f32,
-    pub bond_shear_stiffness: f32,
+    pub bond_shear_strength: f32,
     pub bond_rotational_stiffness: f32,
     pub bond_rotational_strength: f32,
     pub backup: bool,
@@ -238,7 +241,7 @@ impl Settings {
             speed_menu: false
         };
 
-        Self {
+        let mut settings = Settings {
             genPerFrame: 105,
             particles,
             workgroups,
@@ -266,7 +269,7 @@ impl Settings {
             bondenum: BondType::Unbonded,
             bond_tearing: false,
             bond_normal_strength: 0.5,
-            stiffness: 10.0,
+            bond_normal_stiffness: 10.0,
             collisions: true,
             friction: true,
             friction_coefficient: 0.5,
@@ -329,7 +332,7 @@ impl Settings {
             contact_damping: 0.2,
             bond_damping: 0.2,
             drag: 1.0,
-            bond_shear_strength: 0.5,
+            bond_shear_stiffness: 0.5,
             verlet: true,
             timestep: 1.0/12600.0,//0.0000390625,
             maxGenPerFrame: 213,
@@ -344,7 +347,7 @@ impl Settings {
             round_walls: false,
             wall_friction: 0.0,
             wall_radius: 1.0,
-            bond_shear_stiffness: 10.0,
+            bond_shear_strength: 10.0,
             bond_rotational_stiffness: 0.001,
             bond_rotational_strength: 0.5,
             backup: false,
@@ -359,7 +362,9 @@ impl Settings {
             drop: false,
             speed_perc: 100.0,
             // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
-        }
+        };
+        settings.load_memory();
+        return settings;
     }
 
     pub fn set_particles(&mut self, particles: usize) {
@@ -445,6 +450,7 @@ impl Settings {
                     .unwrap() {
                         Some(path) => {
                                 self.current_dir = path.clone();
+                                self.update_memory();
                                 },
                                 None => {},
                     };
@@ -618,7 +624,7 @@ impl Settings {
                 ui.checkbox(&mut self.render_bonds, "Render Bonds");
                 ui.checkbox(&mut self.colors, "Colors");
                 ui.checkbox(&mut self.random_colors, "Random Colors");
-                ui.checkbox(&mut self.color_code_vel, "Color Code Velocity"); 
+                ui.checkbox(&mut self.color_code_vel, "Color Code Direction"); 
                 ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
                 // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
             // });
@@ -757,21 +763,15 @@ impl Settings {
             if self.bonds != 0 {
                 ui.separator();
                 ui.label("Stiffness");
-                if ui.add(egui::Slider::new(&mut self.stiffness, 0.001..=10000000000.0).step_by(0.001).
+                if ui.add(egui::Slider::new(&mut self.bond_normal_stiffness, 0.001..=10000000000.0).step_by(0.001).
                     text("Normal")).changed() {
                         self.changed_collision_settings = true;
                     };
                     if self.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                        if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.001..=10000000000.0).step_by(0.001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
-                        if self.bonds > 2 {
-                            if ui.add(egui::Slider::new(&mut self.bond_rotational_stiffness, 0.001..=10000000000.0).step_by(0.001).
-                                text("Rotational")).changed() {
-                                    self.changed_collision_settings = true;
-                            };
-                        }
                 }
                 if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
                     self.changed_collision_settings = true;
@@ -784,12 +784,12 @@ impl Settings {
                             self.changed_collision_settings = true;
                     };
                     if self.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
+                        if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.0..=5.0).step_by(0.0001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
                         if self.bonds > 2 {
-                            if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=5.0).step_by(0.0001).
+                            if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=PI*2.0).step_by(0.0001).
                                 text("Rotational")).changed() {
                                     self.changed_collision_settings = true;
                             };
@@ -1182,6 +1182,38 @@ impl Settings {
         }
     }
 
+    pub fn update_memory(&mut self){
+        let memory = Memory {
+            current_dir: self.current_dir.clone()
+        };
+        
+        let json_string = serde_json::to_string(&memory).unwrap();
+        
+        match fs::write("memory.json", json_string) {
+            Ok(_) => {},
+            Err(_) => {println!("Err: Failed to update memory.");}
+        }
+    }
+
+    pub fn load_memory(&mut self) {
+        match fs::read_to_string("memory.json") {
+            Ok(json_string) => {
+                match serde_json::from_str::<Memory>(&json_string) {
+                    Ok(loaded_memory) => {
+                        self.current_dir = loaded_memory.current_dir;
+                        println!("Memory loaded successfully.");
+                    }
+                    Err(_) => {
+                        println!("Err: Failed to deserialize memory.");
+                    }
+                }
+            }
+            Err(_) => {
+                println!("Err: Failed to read memory file.");
+            }
+        }
+    }
+
     pub fn collison_settings(&mut self) -> Vec<f32> {
         self.changed_collision_settings = false;
         return vec![
@@ -1199,16 +1231,16 @@ impl Settings {
             bytemuck::cast(self.rotation as i32),
             bytemuck::cast(self.linear_contact_bonds as i32),
             self.gravity_acceleration,
-            self.stiffness,
+            self.bond_normal_stiffness,
             bytemuck::cast(self.bond_tearing as i32),
             self.bond_normal_strength,
             self.contact_damping,
             self.bond_damping,
             self.drag,
-            self.bond_shear_strength,
+            self.bond_shear_stiffness,
             bytemuck::cast(self.verlet as i32),
             self.timestep,
-            self.bond_shear_stiffness,
+            self.bond_shear_strength,
             self.bond_rotational_stiffness,
             self.bond_rotational_strength
         ];
@@ -1223,7 +1255,7 @@ impl Settings {
             (self.bonds != 0 && self.render_bonds) as i32,
             self.hor_bound.to_bits() as i32,
             self.vert_bound.to_bits() as i32,
-            self.stiffness.to_bits() as i32,
+            self.bond_normal_stiffness.to_bits() as i32,
             self.random_colors as i32,
             self.render_bp_grid as i32,
             self.round_walls as i32,
@@ -1327,4 +1359,9 @@ pub enum Property {
     Data_3,
     Data_4,
     FPS,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Memory {
+    pub current_dir: std::path::PathBuf,
 }

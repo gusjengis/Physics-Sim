@@ -112,7 +112,7 @@ impl WGPUConfig {
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
-                features: wgpu::Features::VERTEX_WRITABLE_STORAGE,// | wgpu::Features::SHADER_F64,
+                features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
                 limits: limits,
                 label: None,
             },
