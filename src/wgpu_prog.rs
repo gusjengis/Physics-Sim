@@ -802,6 +802,7 @@ impl WGPUComputeProg {
         // self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 3);
+        self.buffers.data_buffer.updateUniform(&config.device, bytemuck::cast_slice(self.state.data.as_slice()));
         self.buffers.selections.updateUniform(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()));
     }
 

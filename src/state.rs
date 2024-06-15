@@ -328,9 +328,6 @@ impl State {
     pub fn load(&mut self, config: &mut WGPUConfig, init: bool) {
         let state = schema_generated::root_as_state(self.flatbuffer.as_slice()).unwrap();
         let new_p_count = state.particles() as usize;
-        if self.p_count != new_p_count {
-            self.selections  = vec![0; new_p_count];
-        }
         self.p_count = new_p_count;
         self.pos = State::f32_vec_from_vector(state.pos());
         self.radii = State::f32_vec_from_vector(state.radii());
@@ -377,9 +374,11 @@ impl State {
             config.prog_settings.updateBonds();
         }
         self.selections = vec![0; self.p_count];
+        self.data = vec![0.0; 4*self.p_count];
     }
 
     pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64;10]> {
+
         let mut sums = [0.0; 10];
         let mut count = 0;
         for i in 0..self.selections.len() {
