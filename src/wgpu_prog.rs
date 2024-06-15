@@ -555,10 +555,16 @@ impl WGPUComputeProg {
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Broad_Phase.wgsl").into()),
         });
         // println!("3");
-        let compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
         });
+        if config.prog_settings.use_f64 {
+            compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
+            });
+        }
         // println!("4");
         let selectangle_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -750,7 +756,31 @@ impl WGPUComputeProg {
     pub fn update_state(&mut self, config: &mut WGPUConfig) {
         
         self.state.update_state(config, &mut self.buffers);
+    }
 
+    pub fn update_shaders(&mut self, config: &mut WGPUConfig) {
+        let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
+        });
+        if config.prog_settings.use_f64 {
+            compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
+            });
+        }
+        let compute_pipeline_layout2 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Collision compute"),
+            bind_group_layouts: &[&self.buffers.pos_buffers.bind_group_layout, &self.buffers.mov_buffers.bind_group_layout, &self.buffers.contact_buffers.bind_group_layout, &self.buffers.collision_settings.bind_group_layout, &self.buffers.material_buffer.bind_group_layout, &self.buffers.data_buffer.bind_group_layout],
+            push_constant_ranges: &[]
+        });
+
+        self.compute_pipeline2 = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&compute_pipeline_layout2),
+            module: &compute_shader2,
+            entry_point: "main",
+        });
     }
 
     pub fn restore(&mut self, config: &mut WGPUConfig) {

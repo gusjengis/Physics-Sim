@@ -196,6 +196,9 @@ pub struct Settings {
     pub fix: bool,
     pub drop: bool,
     pub speed_perc: f32,
+    pub f64_support: bool,
+    pub use_f64: bool,
+    pub update_shaders: bool,
     // pub paths: ReadDir,
 }
 
@@ -361,6 +364,9 @@ impl Settings {
             fix: false,
             drop: false,
             speed_perc: 100.0,
+            f64_support: false,
+            use_f64: false,
+            update_shaders: false,
             // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
         };
         settings.load_memory();
@@ -681,6 +687,17 @@ impl Settings {
                 self.timestep = 1.0/(((1.0/self.timestep as f32)/120.0).ceil()*120.0); 
                 self.changed_collision_settings = true;
             }
+            ui.add_enabled_ui(self.f64_support, |ui| {
+                if self.f64_support {
+                    if ui.checkbox(&mut self.use_f64, "64-bit precision").on_hover_text("Use f64s to calculate distance between particles.").clicked() {
+                        self.update_shaders = true;
+                    }
+                } else {
+                    if ui.checkbox(&mut self.use_f64, "64-bit precision").on_hover_text("Not supported by your GPU.").clicked() {
+                        self.update_shaders = true;
+                    }
+                }
+            });
             ui.separator();
             ui.label("Bounds");
             if ui.checkbox(&mut self.round_walls, "Circular Bounds").changed() {
@@ -1064,10 +1081,10 @@ impl Settings {
                             ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
                             ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
                             ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Data_1, "Data 1");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Data_2, "Data 2");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Data_3, "Data 3");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Normal_Force, "Normal Force");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Shear_Force, "Shear Force");
+                            ui.selectable_value(&mut self.plotted_prop, Property::Moment, "Moment");
+                            // ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
                             ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
                         });
                         reset_button = Some(ui.add(egui::Button::new("Reset View")));
@@ -1082,10 +1099,10 @@ impl Settings {
                             Property::X_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_vel_data.to_owned())));},
                             Property::Y_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_vel_data.to_owned())));},
                             Property::Rotational_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_vel_data.to_owned())));},
-                            Property::Data_1 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));},
-                            Property::Data_2 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
-                            Property::Data_3 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));},
-                            Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
+                            Property::Normal_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));},
+                            Property::Shear_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
+                            Property::Moment => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));},
+                            // Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
                             Property::FPS => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));},
                         }
                     });
@@ -1354,10 +1371,10 @@ pub enum Property {
     Y_Velocity,
     Rotation,
     Rotational_Velocity,
-    Data_1,
-    Data_2,
-    Data_3,
-    Data_4,
+    Normal_Force,
+    Shear_Force,
+    Moment,
+    // Data_4,
     FPS,
 }
 

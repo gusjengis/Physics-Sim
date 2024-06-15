@@ -43,7 +43,7 @@ struct Forces {
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
     if click_info[0] == 1 && selections[id] != 0 { 
-        let pos_delta = vec2(input.x*input.aspect, input.y);
+        let pos_delta = vec2(input.x, input.y);
         if input.toggle == 0 {
             positions[id] = positions[id] + pos_delta;
             velocities[id] = vec2(0.0, 0.0);

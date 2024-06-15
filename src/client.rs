@@ -663,7 +663,7 @@ impl Client {
         // let viewport_translation = ((translation.0 as f32)/w, (translation.1 as f32)/h);
         // let ar_corrected_translation = (viewport_translation.0 * w/h, viewport_translation.1);
         // println!("{}, {}", translation.0, translation.1);
-        println!("({}, {})", scaled.0, scaled.1);
+        // println!("({}, {})", scaled.0, scaled.1);
 
         return scaled;
     }
@@ -687,14 +687,15 @@ impl Client {
             self.wgpu_prog.shader_prog.set_properties(&mut self.wgpu_config);
         }
 
-        if settings!().backup     { self.backup();                                          settings!().backup     = false }
-        if settings!().reset      { self.reset();                                           settings!().reset      = false }
-        if settings!().zoom_in    { self.zoom_in();                                         settings!().zoom_in    = false }
-        if settings!().zoom_out   { self.zoom_out();                                        settings!().zoom_out   = false }
-        if settings!().home       { self.home();                                            settings!().home       = false }
-        if settings!().select_all { self.select_all();                                      settings!().select_all = false }
-        if settings!().fix        { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config);  settings!().fix        = false }
-        if settings!().drop       { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config); settings!().drop       = false }
+        if settings!().backup         { self.backup();                                                    settings!().backup         = false }
+        if settings!().reset          { self.reset();                                                     settings!().reset          = false }
+        if settings!().zoom_in        { self.zoom_in();                                                   settings!().zoom_in        = false }
+        if settings!().zoom_out       { self.zoom_out();                                                  settings!().zoom_out       = false }
+        if settings!().home           { self.home();                                                      settings!().home           = false }
+        if settings!().select_all     { self.select_all();                                                settings!().select_all     = false }
+        if settings!().update_shaders { self.wgpu_prog.shader_prog.update_shaders(&mut self.wgpu_config); settings!().update_shaders = false }
+        if settings!().fix            { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config);            settings!().fix            = false }
+        if settings!().drop           { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config);           settings!().drop           = false }
 
         self.drap_and_selectangle();
     }

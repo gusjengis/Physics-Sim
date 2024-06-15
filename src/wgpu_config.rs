@@ -110,14 +110,39 @@ impl WGPUConfig {
             max_buffer_size: 1 << 28,
         };
 
-        let (device, queue) = adapter.request_device(
+        let result = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
-                limits: limits,
+                limits: limits.clone(),
                 label: None,
             },
             None, // Trace path
-        ).await.unwrap();
+        ).await;
+
+        let mut dev_temp = None;
+        let mut que_temp = None;
+        let mut f64_support = true;
+        match result {
+            Ok((dev, que)) => {dev_temp = Some(dev); que_temp = Some(que)},
+            Err(_) => {
+                println!("Warning: GPU doesn't support f64 compute, this feature will be unavailable.");
+                let temp = adapter.request_device(
+                    &wgpu::DeviceDescriptor {
+                        features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+                        limits: limits.clone(),
+                        label: None,
+                    },
+                    None, // Trace path
+                ).await.unwrap();
+                dev_temp = Some(temp.0);
+                que_temp = Some(temp.1);
+                f64_support = false;
+            }
+        }
+
+        let (device, queue) = (dev_temp.unwrap(), que_temp.unwrap());
+
+        
 
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
@@ -139,10 +164,9 @@ impl WGPUConfig {
         };
         surface.configure(&device, &config);
     
-        let prog_settings = settings::Settings::new(canvas);
- 
+        let mut prog_settings = settings::Settings::new(canvas);
 
-        
+        prog_settings.f64_support = f64_support;
          
         Self {
             instance,

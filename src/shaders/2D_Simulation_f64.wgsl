@@ -286,7 +286,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 fn distance(a: i32, b: i32) -> f32 {
-    return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
+    return  f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
 }
 
 fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
@@ -403,7 +403,7 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     data[u32(a)*4u   ] = normal_force;
     data[u32(a)*4u+1u] = contacts[i].tangent_force;
     data[u32(a)*4u+2u] = moment;
-    // data[u32(a)*4u+3u] = normal_displacement;
+    data[u32(a)*4u+3u] = normal_displacement;
 
     // TEAR BOND
     var shear_limit  = settings.bond_shear_strength;
