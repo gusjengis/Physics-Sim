@@ -66,11 +66,19 @@ struct Settings {
     w: f32,
     h: f32,
     stiffness: f32,
-    random_colors: i32,
     render_grid: i32,
     round_bounds: i32,
     wall_radius: f32,
-    color_code_vel: i32,
+    render_outline: i32,
+    use_part_color: i32,
+    background_r: f32,
+    background_g: f32,
+    background_b: f32,
+    outline_r: f32,
+    outline_g: f32,
+    outline_b: f32,
+    dim_slow_particles: i32,
+    max_brightness_vel: f32
 }
 
 struct Bond {
@@ -109,18 +117,8 @@ fn vs_main(
     out.clip_position = vec4(xy*radii_buf[instance] + center + off, 0.0, 1.0);
     out.position = in.position;
     // out.color = color_buf[instance % u32(settings.colors)];
-    if material_pointers[instance] != -1 { out.color = vec3(materials[(material_pointers[instance])].red, materials[(material_pointers[instance])].green, materials[(material_pointers[instance])].blue); }
-    else { out.color = vec3(1.0, 1.0, 1.0); }
-    if settings.random_colors == 1 {
-        let seed1 = u32(rand(instance, 4294967296.0));
-        let seed2 = u32(rand(seed1, 4294967296.0));
-        let seed3 = u32(rand(seed2, 4294967296.0));
-        out.color = vec3(
-            rand(seed1, 1.0),
-            rand(seed2, 1.0),
-            rand(seed3, 1.0),
-        );
-    }
+
+
     // let rect_off = vec2(-dim.xOff, dim.yOff)/1000.0/scale;
     out.rot = rot_buf[instance];
     out.rot_vel = rot_vel[instance];
@@ -129,6 +127,42 @@ fn vs_main(
     out.w_h = vec2(i32(dim.width), i32(dim.height));
     out.pixel = out.clip_position.xy;
     out.vel = vel[instance];
+
+    if settings.colors == 0 {
+        out.color = vec3(0.05, 0.05, 0.05);
+    } else if settings.colors == 1 && material_pointers[instance] != -1 { 
+        out.color = vec3(
+            srgb_to_linear(materials[(material_pointers[instance])].red),
+            srgb_to_linear(materials[(material_pointers[instance])].green),
+            srgb_to_linear(materials[(material_pointers[instance])].blue)
+        ); 
+    } else if settings.colors == 2 {
+        let seed1 = u32(rand(instance, 4294967296.0));
+        let seed2 = u32(rand(seed1, 4294967296.0));
+        let seed3 = u32(rand(seed2, 4294967296.0));
+        out.color = vec3(
+            rand(seed1, 1.0),
+            rand(seed2, 1.0),
+            rand(seed3, 1.0),
+        );
+    } else if settings.colors == 3 {
+        let vel_norm = normalize(out.vel); 
+        let angle = atan2(vel_norm.y, vel_norm.x) + PI;
+        let r = (1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0)); 
+        let g = (max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0))); 
+        let b = (max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0)));
+        
+        out.color = vec3(r, g, b) * 1.0/max(max(r, b), g);
+    } else { 
+        out.color = vec3(1.0, 1.0, 1.0); 
+    }
+
+    if settings.dim_slow_particles == 1 {
+        let vel_mag = length(out.vel) / settings.max_brightness_vel;
+        let max_brightness = min(1.0, vel_mag*vel_mag*vel_mag);
+        out.color *= max_brightness;
+    }
+
     return out;
 }
 
@@ -156,38 +190,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     var color = vec4(in.color, 1.0);
-    // color = vec4(vel[in.id].x*255.0, vel[in.id].y*255.0, rot_vel[in.id]*255.0, 1.0);
-    if settings.colors == 0 {
-        color = vec4(0.05, 0.05, 0.05, 1.0);
-    }
-
-    // color code based on velocity
-    if settings.color_code_vel == 1 {
-        // color = vec4(abs(in.vel.x), abs(in.vel.y), abs(1.0 - in.vel.x), color.a);
-        let vel_norm = normalize(in.vel); 
-        let vel_mag = length(in.vel);
-        let angle = atan2(vel_norm.y, vel_norm.x) + PI;
-        let r = (1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0)); 
-        let g = (max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0))); 
-        let b = (max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0)));
-        let max_brightness = 1.0/max(max(r, b), g) * min(1.0, vel_mag*vel_mag*vel_mag);
-        
-        color = vec4(max_brightness * vec3(r, g, b), color.a);
-        // color = vec4(-angle/2.0*PI, angle/2.0*PI, angle/2.0*PI, color.a);
-    }
-    
-    // cut out wedge for rotation
-    let rot_point = vec2(cos(in.rot), sin(in.rot));
-    let rot_dot = dot(rot_point, normalize(in.position));
-    if settings.render_rot == 1 {
-        if rot_dot > 0.9 {
-            color = vec4(0.0, 0.0, 0.0, 1.0);
-        }
-    }
 
     // add border/outline
-    if settings.circular_particles == 1 {
-        let border_width = 0.08;
+    let border_width = 0.08;
+    if settings.circular_particles == 1 && (settings.render_outline == 1 || in.selected != 0) {
         if len > 0.5-border_width && len < 0.5 {
             if in.selected != 0 {
                 color = vec4(1.0, 0.8, 0.0, 1.0);
@@ -195,12 +201,28 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                     color = vec4(f32(fixity[in.id].x_vel_2), f32(fixity[in.id].y_vel_2), f32(fixity[in.id].rot_vel_2), 1.0);
                 }
             } else {
-                if settings.colors == 0 { 
-                    color = vec4(0.05, 0.05, 0.05, 1.0);
+                if settings.colors == 0 && settings.use_part_color == 1 { 
+                    
+                } else if settings.use_part_color == 0 {
+                    color = vec4(
+                        srgb_to_linear(settings.outline_r), 
+                        srgb_to_linear(settings.outline_g), 
+                        srgb_to_linear(settings.outline_b),
+                        1.0
+                    );
                 } else {
                     color = vec4(color.rgb*0.5, color.a);
                 }
             }
+        }
+    }
+
+    // cut out wedge for rotation
+    let rot_point = vec2(cos(in.rot), sin(in.rot));
+    let rot_dot = dot(rot_point, normalize(in.position));
+    if settings.render_rot == 1 && !(len > 0.5-border_width && len < 0.5){
+        if rot_dot > 0.9 {
+            color = vec4(0.0, 0.0, 0.0, 1.0);
         }
     }
     

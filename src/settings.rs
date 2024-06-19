@@ -1,5 +1,6 @@
 use std::f32::consts::PI;
 use std::ffi::OsStr;
+use std::ops::RangeInclusive;
 use std::str::FromStr;
 use std::{fmt::Debug, io::Read};
 use std::fs::*;
@@ -7,6 +8,7 @@ use std::io::Write;
 use std::path::Path;
 
 use egui::*;
+use egui::color_picker::Alpha;
 use std::*;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
@@ -143,10 +145,7 @@ pub struct Settings {
     pub scale: f32,
     pub circular_particles: bool,
     pub render_rot: bool,
-    pub color_code_vel: bool,
     pub color_code_rot: bool,
-    pub colors: bool,
-    pub random_colors: bool,
     pub render_bonds: bool,
     pub two_part: bool,
     pub materials: Vec<f32>,
@@ -199,6 +198,13 @@ pub struct Settings {
     pub f64_support: bool,
     pub use_f64: bool,
     pub update_shaders: bool,
+    pub render_outline: bool,
+    pub use_particle_color_outline: bool,
+    pub background_color: [f32; 3],
+    pub outline_color: [f32; 3],
+    pub color_source: ColorSource,
+    pub dim_slow_particles: bool,
+    pub max_brightness_vel: f32
     // pub paths: ReadDir,
 }
 
@@ -282,10 +288,7 @@ impl Settings {
             scale,
             circular_particles: true,
             render_rot: false,
-            color_code_vel: false,
             color_code_rot: false,
-            colors: true,
-            random_colors: false,
             render_bonds: true,
             two_part: false,
             materials,
@@ -367,6 +370,13 @@ impl Settings {
             f64_support: false,
             use_f64: false,
             update_shaders: false,
+            render_outline: true,
+            use_particle_color_outline: true,
+            background_color: [0.0, 0.0, 0.0],
+            outline_color: [0.0, 0.0, 0.0],
+            color_source: ColorSource::Material,
+            dim_slow_particles: false,
+            max_brightness_vel: 1.0,
             // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
         };
         settings.load_memory();
@@ -626,12 +636,61 @@ impl Settings {
             ui.label("Rendering");
             // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
                 ui.checkbox(&mut self.circular_particles, "Circular Particles");
+                ui.checkbox(&mut self.render_outline, "Render Outline");
                 ui.checkbox(&mut self.render_rot, "Render Rotation");
                 ui.checkbox(&mut self.render_bonds, "Render Bonds");
-                ui.checkbox(&mut self.colors, "Colors");
-                ui.checkbox(&mut self.random_colors, "Random Colors");
-                ui.checkbox(&mut self.color_code_vel, "Color Code Direction"); 
-                ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
+                ui.menu_button("Particle Color", |ui| {
+                    ui.label("Color Source:");
+                    // ui.horizontal(|ui|{
+                        ui.menu_button(format!("{}", self.color_source.to_string()), |ui| {
+                            ui.selectable_value(&mut self.color_source, ColorSource::None, "None");
+                            ui.selectable_value(&mut self.color_source, ColorSource::Material, "Material");
+                            ui.selectable_value(&mut self.color_source, ColorSource::Direction, "Direction");
+                            ui.selectable_value(&mut self.color_source, ColorSource::Random, "Random");
+                        });
+                    // });
+                    ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
+                    ui.checkbox(&mut self.dim_slow_particles, "Dim Slow Particles");
+                    // ui.horizontal(|ui|
+                        ui.add_enabled(self.dim_slow_particles, egui::DragValue::new(&mut self.max_brightness_vel).clamp_range(0.0001..=100.0).prefix("Dimming Threshold: ").suffix(" m/s").speed(0.01));
+                    // });
+                    
+                });
+                ui.add_enabled_ui(self.render_outline, |ui|{
+                    ui.menu_button("Outline Color", |ui| {
+                        ui.checkbox(&mut self.use_particle_color_outline, "Use Particle Color");
+                            ui.add_enabled_ui(!self.use_particle_color_outline, |ui|{
+                            let mut color = Color32::from_rgb(
+                                (self.outline_color[0] * 255.0) as u8,
+                                (self.outline_color[1] * 255.0) as u8,
+                                (self.outline_color[2] * 255.0) as u8,
+                            );
+                            egui::color_picker::color_picker_color32(ui, &mut color, Alpha::Opaque);
+                            let color_srgb = color.to_srgba_unmultiplied();
+                            self.outline_color[0] = color_srgb[0] as f32/255.0;
+                            self.outline_color[1] = color_srgb[1] as f32/255.0;
+                            self.outline_color[2] = color_srgb[2] as f32/255.0;
+                            ui.add(egui::Slider::new(&mut self.outline_color[0], 0.0..=1.0));
+                            ui.add(egui::Slider::new(&mut self.outline_color[1], 0.0..=1.0));
+                            ui.add(egui::Slider::new(&mut self.outline_color[2], 0.0..=1.0));
+                        });
+                    });
+                });
+                ui.menu_button("Background Color", |ui| {
+                    let mut color = Color32::from_rgb(
+                            (self.background_color[0] * 255.0) as u8,
+                            (self.background_color[1] * 255.0) as u8,
+                            (self.background_color[2] * 255.0) as u8,
+                    );
+                    egui::color_picker::color_picker_color32(ui, &mut color, Alpha::Opaque);
+                    // let color_srgb = color.to_srgba_unmultiplied();
+                    self.background_color[0] = (color[0] as f32/255.0);
+                    self.background_color[1] = (color[1] as f32/255.0);
+                    self.background_color[2] = (color[2] as f32/255.0); 
+                    ui.add(egui::Slider::new(&mut self.background_color[0], 0.0..=1.0));
+                    ui.add(egui::Slider::new(&mut self.background_color[1], 0.0..=1.0));
+                    ui.add(egui::Slider::new(&mut self.background_color[2], 0.0..=1.0));
+                });
                 // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
             // });
             
@@ -1001,9 +1060,27 @@ impl Settings {
             for i in 0..materials_count {
                 let mat_num = i;
                 ui.menu_button(format!("Material {mat_num}"), |ui| {
-                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
-                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
-                    if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
+                    ui.set_min_width(250.0);
+                    ui.menu_button("Color", |ui| {
+                        let mut color = Color32::from_rgb(
+                                (self.materials[i*self.material_size + 0] * 255.0) as u8,
+                                (self.materials[i*self.material_size + 1] * 255.0) as u8,
+                                (self.materials[i*self.material_size + 2] * 255.0) as u8,
+                        );
+                        let color2 = color.clone();
+                        egui::color_picker::color_picker_color32(ui, &mut color, Alpha::Opaque);
+                        if color.r() != color2.r() || color.g() != color2.g() || color.b() != color2.b() { self.materials_changed = true; }
+                        let color_srgb = color.to_srgba_unmultiplied();
+                        self.materials[i*self.material_size + 0] = color_srgb[0] as f32/255.0;
+                        self.materials[i*self.material_size + 1] = color_srgb[1] as f32/255.0;
+                        self.materials[i*self.material_size + 2] = color_srgb[2] as f32/255.0;
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0)).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0)).changed() { self.materials_changed = true; };
+                        if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0)).changed() { self.materials_changed = true; };
+                    });
+                    // if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 0], 0.0..=1.0).text("Red")).changed() { self.materials_changed = true; };
+                    // if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 1], 0.0..=1.0).text("Green")).changed() { self.materials_changed = true; };
+                    // if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 2], 0.0..=1.0).text("Blue")).changed() { self.materials_changed = true; };
                     if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 3], 0.001..=10000000000.0).text("Density")).changed() { self.materials_changed = true; };
                     if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 4], 0.001..=10000000000.0).text("Normal Stiffness")).changed() { self.materials_changed = true; };
                     if ui.add(egui::Slider::new(&mut self.materials[i*self.material_size + 5], 0.001..=10000000000.0).text("Shear Stiffness")).changed() { self.materials_changed = true; };
@@ -1268,16 +1345,24 @@ impl Settings {
             self.circular_particles as i32,
             self.render_rot as i32,
             self.color_code_rot as i32,
-            self.colors as i32,
+            self.color_source.as_i32(),
             (self.bonds != 0 && self.render_bonds) as i32,
             self.hor_bound.to_bits() as i32,
             self.vert_bound.to_bits() as i32,
             self.bond_normal_stiffness.to_bits() as i32,
-            self.random_colors as i32,
             self.render_bp_grid as i32,
             self.round_walls as i32,
             self.wall_radius.to_bits() as i32,
-            self.color_code_vel as i32,
+            self.render_outline as i32,
+            self.use_particle_color_outline as i32,
+            self.background_color[0].to_bits() as i32,
+            self.background_color[1].to_bits() as i32,
+            self.background_color[2].to_bits() as i32,
+            self.outline_color[0].to_bits() as i32,
+            self.outline_color[1].to_bits() as i32,
+            self.outline_color[2].to_bits() as i32,
+            self.dim_slow_particles as i32,
+            self.max_brightness_vel.to_bits() as i32,
         ];
     }
 
@@ -1381,4 +1466,39 @@ pub enum Property {
 #[derive(Serialize, Deserialize)]
 struct Memory {
     pub current_dir: std::path::PathBuf,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ColorSource {
+    None,
+    Material,
+    Random,
+    Direction
+}
+
+impl ColorSource {
+    pub fn from_i32(num: i32) -> Self {
+        return match num {
+            i32::MIN..=0 => ColorSource::None,
+            1            => ColorSource::Material,
+            2            => ColorSource::Random,
+            3..          => ColorSource::Direction,
+        }
+    }
+    pub fn as_i32(&self) -> i32 {
+        return match *self {
+            ColorSource::None      => 0,
+            ColorSource::Material  => 1,
+            ColorSource::Random    => 2,
+            ColorSource::Direction => 3
+        }
+    }
+    pub fn to_string(&self) -> &str {
+        return match *self {
+            ColorSource::None      => &"None",
+            ColorSource::Material  => &"Material",
+            ColorSource::Random    => &"Random",
+            ColorSource::Direction => &"Direction"
+        }
+    }
 }

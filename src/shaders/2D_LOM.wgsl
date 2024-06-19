@@ -95,45 +95,43 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let yH = settings.vert_bound/2.0;
         let xW = settings.hor_bound/2.0;
 
-        if new_pos.y-radii[id] < -yH {
-            int_vel.y = -int_vel.y * 0.5;
-            positions[id].y += -yH - (new_pos.y-radii[id]);
-                rot_vel[id] = rot_vel[id]*0.9;
-
-        } else if new_pos.y+radii[id] > yH {
-            int_vel.y = -int_vel.y * 0.5;
-            positions[id].y -= (new_pos.y+radii[id]) - yH;
-                rot_vel[id] = rot_vel[id]*0.9;
-
+        if fixity[id].y_vel != 1 {
+            if new_pos.y-radii[id] < -yH {
+                int_vel.y = -int_vel.y * 0.5;
+                positions[id].y += -yH - (new_pos.y-radii[id]);
+                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            } else if new_pos.y+radii[id] > yH {
+                int_vel.y = -int_vel.y * 0.5;
+                positions[id].y -= (new_pos.y+radii[id]) - yH;
+                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            }
         }
-        if new_pos.x-radii[id] < -xW {
-            int_vel.x = -int_vel.x * 0.5;
-            positions[id].x += -xW - (new_pos.x-radii[id]);
-                rot_vel[id] = rot_vel[id]*0.9;
-
-        } else if new_pos.x+radii[id] > xW {
-            int_vel.x = -int_vel.x * 0.5;
-            positions[id].x -= (new_pos.x+radii[id]) - xW;
-                rot_vel[id] = rot_vel[id]*0.9;
-
+        if fixity[id].x_vel != 1 {
+            if new_pos.x-radii[id] < -xW {
+                int_vel.x = -int_vel.x * 0.5;
+                positions[id].x += -xW - (new_pos.x-radii[id]);
+                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            } else if new_pos.x+radii[id] > xW {
+                int_vel.x = -int_vel.x * 0.5;
+                positions[id].x -= (new_pos.x+radii[id]) - xW;
+                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            }
         }
-
     } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
-    // } else if length(positions[id]) + radii[id] > settings.bound_radius { // circular bounds
-
         let norm_pos = normalize(new_pos);
         let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
-        positions[id] = norm_pos * (settings.bound_radius - radii[id]) - del_comp;
         let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
-        int_vel -= comp_v_p * 1.5;
+        if fixity[id].x_vel != 1 {
+            positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
+            int_vel.x -= comp_v_p.x * 1.5;
+        }
+        if fixity[id].y_vel != 1 {
+            positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
+            int_vel.y -= comp_v_p.y * 1.5;
+        }
+        if fixity[id].rot_vel != 1 {
             rot_vel[id] = rot_vel[id]*0.9;
-        // let norm_pos = normalize(positions[id]);
-        // positions[id] = norm_pos * (settings.bound_radius - radii[id]);
-        // let tangent = vec2(-norm_pos.y, norm_pos.x);
-        // let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
-        // int_vel -= comp_v_p * 1.5;// + friction;
-        
-
+        }    
     }
 
     positions[id] += del_pos[id];

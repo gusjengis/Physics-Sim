@@ -8,6 +8,7 @@ use bytemuck::{bytes_of, cast_slice};
 use rand::Rng;
 use crate::settings;
 use crate::settings::BondType;
+use crate::settings::ColorSource;
 use crate::settings::Structure;
 use crate::setup;
 // use crate::
@@ -254,8 +255,8 @@ impl State {
             config.prog_settings.circular_particles,
             config.prog_settings.render_rot,
             config.prog_settings.render_bonds,
-            config.prog_settings.colors,
-            config.prog_settings.random_colors,
+            true,// config.prog_settings.colors,
+            false,//config.prog_settings.random_colors,
             config.prog_settings.color_code_rot,
         );
         let physics_settings = schema_generated::Physics_Settings::new(
@@ -354,8 +355,8 @@ impl State {
             config.prog_settings.circular_particles = rs.circular_particles();
             config.prog_settings.render_rot         = rs.render_rotation();
             config.prog_settings.render_bonds       = rs.render_bonds();
-            config.prog_settings.colors             = rs.colors();
-            config.prog_settings.random_colors      = rs.random_colors();
+            config.prog_settings.color_source       = ColorSource::from_i32(rs.colors() as i32);
+            // config.prog_settings.random_colors      = rs.random_colors();
             config.prog_settings.color_code_rot     = rs.color_code_rotation();
             // physics settings
             config.prog_settings.timestep = ps.timestep();

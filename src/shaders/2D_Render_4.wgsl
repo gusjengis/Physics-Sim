@@ -42,11 +42,17 @@ struct Settings {
     w: f32,
     h: f32,
     stiffness: f32,
-    random_colors: i32,
     render_grid: i32,
     round_bounds: i32,
     wall_radius: f32,
-    color_code_vel: i32,
+    render_outline: i32,
+    use_part_color: i32,
+    background_r: f32,
+    background_g: f32,
+    background_b: f32,
+    outline_r: f32,
+    outline_g: f32,
+    outline_b: f32,
 }
 
 struct Bond {
