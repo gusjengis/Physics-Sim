@@ -42,6 +42,7 @@ pub struct Client {
     cursor_delta: (i32, i32),
     world_delta: (f32, f32),
     minimized: bool,
+    fullscreen: bool,
     HL: bool,
     prevGen: i32,
     generation: i32,
@@ -110,6 +111,7 @@ impl Client {
             cursor_delta: (0, 0),
             world_delta: (0.0, 0.0),
             minimized: false,
+            fullscreen: false,
             HL: false,
             generation: 0,
             xOff: 0.0,
@@ -288,7 +290,12 @@ impl Client {
                         state: ElementState::Pressed,
                         ..
                     } => {
-                            self.canvas.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                            self.fullscreen = !self.fullscreen;
+                            if self.fullscreen {
+                                self.canvas.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                            } else {
+                                self.canvas.window.set_fullscreen(None);
+                            }
                             return true;
                         },
                     KeyboardInput {
