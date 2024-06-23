@@ -1,32 +1,32 @@
 struct Input {
-    set_x_force: i32,
-    set_y_force: i32,
-    set_rot_force: i32,
-    set_material: i32,
-    set_x_fixity: i32,
-    set_y_fixity: i32,
-    set_rot_fixity: i32,
     set_x_pos: i32,
     set_y_pos: i32,
     set_rot: i32,
     set_x_vel: i32,
     set_y_vel: i32,
     set_rot_vel: i32,
+    set_x_force: i32,
+    set_y_force: i32,
+    set_rot_force: i32,
     set_radius: i32,
-    x_force: f32,
-    y_force: f32,
-    rot_force: f32,
-    material: i32,
-    x_fixity: i32,
-    y_fixity: i32,
-    rot_fixity: i32,
+    set_x_fixity: i32,
+    set_y_fixity: i32,
+    set_rot_fixity: i32,
+    set_material: i32,
     x_pos: f32,
     y_pos: f32,
     rot: f32,
     x_vel: f32,
     y_vel: f32,
     rot_vel: f32,
+    x_force: f32,
+    y_force: f32,
+    rot_force: f32,
     radius: f32,
+    x_fixity: i32,
+    y_fixity: i32,
+    rot_fixity: i32,
+    material: i32,
 }
 
 struct Particle_Settings {
@@ -81,7 +81,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         if input.set_rot_force   == 1 { forces[id].rot        = input.rot_force; } 
         if input.set_x_fixity    == 1 { fixity[id].x_vel      = input.x_fixity; fixity[id].x_vel_2 = input.x_fixity; }
         if input.set_y_fixity    == 1 { fixity[id].y_vel      = input.y_fixity; fixity[id].y_vel_2 = input.y_fixity; }
-        if input.set_rot_fixity  == 1 { fixity[id].rot_vel    = input.rot_fixity; fixity[id].rot_vel_2 = input.rot_fixity; rot_vel[id] = 0.0; } 
+        if input.set_rot_fixity  == 1 { fixity[id].rot_vel    = input.rot_fixity; fixity[id].rot_vel_2 = input.rot_fixity; }// rot_vel[id] = 0.0; } 
         if input.set_material    == 1 { material_pointers[id] = input.material; } 
         if input.set_x_fixity    == 1 ||
            input.set_y_fixity    == 1 ||

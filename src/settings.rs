@@ -6,12 +6,13 @@ use std::{fmt::Debug, io::Read};
 use std::fs::*;
 use std::io::Write;
 use std::path::Path;
-
+use crate::scripts::{self, ScriptManager};
 use egui::*;
 use egui::color_picker::Alpha;
 use std::*;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
+use scripts::*;
 
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
@@ -28,6 +29,7 @@ pub struct Menu {
     pub data_menu: bool,
     pub bond_menu: bool,
     pub speed_menu: bool,
+    pub script_menu: bool,
 }
 
 pub struct Properties {
@@ -204,7 +206,9 @@ pub struct Settings {
     pub outline_color: [f32; 3],
     pub color_source: ColorSource,
     pub dim_slow_particles: bool,
-    pub max_brightness_vel: f32
+    pub max_brightness_vel: f32,
+    pub current_script: usize,
+    pub just_set_line: bool
     // pub paths: ReadDir,
 }
 
@@ -247,7 +251,8 @@ impl Settings {
             properties_menu: false,
             data_menu: false,
             bond_menu: false,
-            speed_menu: false
+            speed_menu: false,
+            script_menu: false
         };
 
         let mut settings = Settings {
@@ -272,7 +277,7 @@ impl Settings {
             hor_bound,
             vert_bound,
             gravity: true,
-            planet_mode: false,
+            planet_mode: true,
             gravity_acceleration: 1.0,
             bonds: 0,
             bondenum: BondType::Unbonded,
@@ -377,6 +382,8 @@ impl Settings {
             color_source: ColorSource::Material,
             dim_slow_particles: false,
             max_brightness_vel: 1.0,
+            current_script: 0,
+            just_set_line: false
             // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
         };
         settings.load_memory();
@@ -388,7 +395,7 @@ impl Settings {
         self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
     }
 
-    pub fn ui(&mut self, ctx: &Context, state: &State) -> bool {
+    pub fn ui(&mut self, ctx: &Context, state: &State, script_manager: &mut ScriptManager) -> bool {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
@@ -399,28 +406,32 @@ impl Settings {
         }
         if self.settings_menu {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
-                // ui.heading("Menu");
-                egui::menu::bar(ui, |ui| {
-                    ui.horizontal_centered(|ui| {
-                        self.file_menu(ui);
-                        self.view_menu(ui);
-                        self.state_menu(ui);
-                        self.sim_controls_menu(ui);
-                        self.physics_menu(ui);
-                        self.particle_menu(ui);
-                        self.materials_menu(ui);
-                        self.data_menu(ui, ctx);
-                    });
-                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
-                        let mut fps_perc = max_perc * self.fps/self.hz; 
-                        if !self.simulating {
-                            fps_perc = 0.0;
-                        }
-                        ui.add(egui::Label::new(format!("{:.0}/{:.0}%", fps_perc, max_perc))).on_hover_text("Actual/Target simulation speed.");
+                    // ui.heading("Menu");
+                    egui::menu::bar(ui, |ui| {
+                        ui.horizontal_centered(|ui| {
+                            self.file_menu(ui);
+                            self.view_menu(ui);
+                            self.state_menu(ui);
+                            self.sim_controls_menu(ui);
+                            self.physics_menu(ui);
+                            self.particle_menu(ui);
+                            self.materials_menu(ui);
+                            self.data_menu(ui, ctx);
+                            self.script_menu(ui, ctx);
+                        });
+                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                            let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+                            let mut fps_perc = max_perc * self.fps/self.hz; 
+                            if !self.simulating {
+                                fps_perc = 0.0;
+                            }
+                            ui.add(egui::Label::new(format!("{:.0}/{:.0}%", fps_perc, max_perc))).on_hover_text("Actual/Target simulation speed.");
+                        });
                     });
                 });
-            });
+                self.script_panel(ctx, script_manager);
+            // });
+        
         }
         return reset;   
     }
@@ -429,11 +440,11 @@ impl Settings {
         let load_shortcut =
             egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::O);
         let save_shortcut =
-            egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::S);
+        egui::KeyboardShortcut::new(Modifiers::CTRL, egui::Key::S);
 
         ui.menu_button("File", |ui| {
             ui.style_mut().wrap = Some(false);
-
+            
             let min_x = 80.0;
             let min_y = 0.0;
             ui.menu_button("Load", |ui| {
@@ -636,7 +647,7 @@ impl Settings {
             ui.label("Rendering");
             // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
                 ui.checkbox(&mut self.circular_particles, "Circular Particles");
-                ui.checkbox(&mut self.render_outline, "Render Outline");
+                ui.add_enabled(self.circular_particles, egui::Checkbox::new(&mut self.render_outline, "Render Outline"));
                 ui.checkbox(&mut self.render_rot, "Render Rotation");
                 ui.checkbox(&mut self.render_bonds, "Render Bonds");
                 ui.menu_button("Particle Color", |ui| {
@@ -656,7 +667,7 @@ impl Settings {
                     // });
                     
                 });
-                ui.add_enabled_ui(self.render_outline, |ui|{
+                ui.add_enabled_ui(self.render_outline && self.circular_particles, |ui|{
                     ui.menu_button("Outline Color", |ui| {
                         ui.checkbox(&mut self.use_particle_color_outline, "Use Particle Color");
                             ui.add_enabled_ui(!self.use_particle_color_outline, |ui|{
@@ -935,28 +946,6 @@ impl Settings {
 
             ui.horizontal(|inner_ui| {
                 inner_ui.vertical(|inner_ui2| {
-                    inner_ui2.label("Forces");
-                    inner_ui2.horizontal(|inner_ui3| {
-                        inner_ui3.checkbox(&mut self.properties.set_x_force, "");
-                        inner_ui3.add_enabled_ui(self.properties.set_x_force, |inner_ui4| {
-                            inner_ui4.add(egui::DragValue::new(&mut self.properties.x_force).speed(0.01));
-                        });
-                        inner_ui3.label("X Force");
-                    });
-                    inner_ui2.horizontal(|inner_ui3| {
-                        inner_ui3.checkbox(&mut self.properties.set_y_force, "");
-                        inner_ui3.add_enabled_ui(self.properties.set_y_force, |inner_ui4| {
-                            inner_ui4.add(egui::DragValue::new(&mut self.properties.y_force).speed(0.01));
-                        });
-                        inner_ui3.label("Y Force");
-                    });
-                    inner_ui2.horizontal(|inner_ui3| {
-                        inner_ui3.checkbox(&mut self.properties.set_rot_force, "");
-                        inner_ui3.add_enabled_ui(self.properties.set_rot_force, |inner_ui4| {
-                            inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_force).speed(0.01));
-                        });
-                        inner_ui3.label("Rotational Force");
-                    });
                     inner_ui2.label("Position");
                     inner_ui2.horizontal(|inner_ui3| {
                         inner_ui3.checkbox(&mut self.properties.set_x_pos, "");
@@ -1000,6 +989,28 @@ impl Settings {
                             inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_vel).speed(0.001).clamp_range(0.0..=6.28318530718));
                         });
                         inner_ui3.label("Rotational Velocity");
+                    });
+                    inner_ui2.label("Forces");
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_x_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_x_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.x_force).speed(0.01));
+                        });
+                        inner_ui3.label("X Force");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_y_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_y_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.y_force).speed(0.01));
+                        });
+                        inner_ui3.label("Y Force");
+                    });
+                    inner_ui2.horizontal(|inner_ui3| {
+                        inner_ui3.checkbox(&mut self.properties.set_rot_force, "");
+                        inner_ui3.add_enabled_ui(self.properties.set_rot_force, |inner_ui4| {
+                            inner_ui4.add(egui::DragValue::new(&mut self.properties.rot_force).speed(0.01));
+                        });
+                        inner_ui3.label("Rotational Force");
                     });
                     inner_ui2.label("Radius");
                     inner_ui2.horizontal(|inner_ui3| {
@@ -1187,6 +1198,81 @@ impl Settings {
             }
     }
 
+    fn script_menu(&mut self, ui: &mut Ui, ctx: &Context) {
+        ui.menu_button("Scripts", |ui| {
+            ui.style_mut().wrap = Some(false);
+            
+            if ui.selectable_label(self.menu.script_menu, "Script Panel").clicked() { self.menu.script_menu = !self.menu.script_menu; }
+        });    
+    }
+
+    fn script_panel(&mut self, ctx: &Context, script_manager: &mut ScriptManager) {
+        if self.menu.script_menu {
+            egui::SidePanel::right("script_panel").resizable(true).show(ctx, |ui| {      
+                // egui::menu::bar(ui, |ui|{});
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut script_manager.scripts[self.current_script].name);
+                    if ui.selectable_label(script_manager.executing[self.current_script], "Run").clicked() {
+                        script_manager.executing[self.current_script] = !script_manager.executing[self.current_script];
+                    }
+                });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    for i in 0..script_manager.scripts.len() {
+                        if ui.selectable_label(self.current_script == i, script_manager.scripts[i].name.as_str()).clicked() {
+                            self.current_script = i;
+                        }
+                    }
+                    if ui.button("+").clicked() {
+                        
+                        script_manager.new_script(format!("Script {}", script_manager.scripts.len() + 1).as_str());
+                    }
+
+                }); 
+                ui.separator();
+                ui.heading("Actions");
+                ui.separator();
+                if script_manager.scripts.len() > 0 {
+                    let action_count = script_manager.scripts[self.current_script].actions.len();
+                    for i in 0..action_count {
+                        ui.horizontal(|ui| {
+                            let radio = ui.radio(script_manager.action_indices[self.current_script] == i as i64 - !self.just_set_line as i64, "");
+                            if radio.changed() {
+                                self.just_set_line = false;
+                            }
+                            if radio.clicked() {
+                                self.just_set_line = true;
+                                script_manager.action_indices[self.current_script] = i as i64 - 1;
+                            }
+                            
+                            ui.label(format!("{}", i+1));
+                            let mut changed_action = false; 
+                            egui::ComboBox::new(format!("{}", i).as_str(), "")
+                            .selected_text(format!("{}", script_manager.scripts[self.current_script].actions[i].name.to_string()))
+                            .show_ui(ui, |ui| {
+                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::None, "None").clicked() { changed_action = true; }
+                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Wait, "Wait").clicked() { changed_action = true; }
+                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All").clicked() { changed_action = true; }
+                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties").clicked() { changed_action = true; }
+                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Goto, "Goto").clicked() { changed_action = true; }
+                            });
+                            if changed_action {
+                                script_manager.scripts[self.current_script].actions[i].init_parameters();
+                            }
+                            script_manager.scripts[self.current_script].actions[i].ui(ui, format!("{}:{}", self.current_script, i), (self.materials.len()/self.material_size) as usize, action_count);
+                        });
+                    }
+                }
+                ui.separator();
+                if ui.button("Add Action").clicked() {
+                    script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
+                }       
+            });
+        }
+    }
+
+    // fn action_parameter_ui
+
     pub fn updateBonds(&mut self) {
         self.bonds = match self.bondenum {
             BondType::Unbonded => { 0 },
@@ -1368,34 +1454,34 @@ impl Settings {
 
     pub fn properties(&mut self) -> Vec<f32> {
         return vec![
-            bytemuck::cast(self.properties.set_x_force as i32),
-            bytemuck::cast(self.properties.set_y_force as i32),
-            bytemuck::cast(self.properties.set_rot_force as i32),
-            bytemuck::cast(self.properties.set_material as i32),
-            bytemuck::cast(self.properties.set_x_fixity as i32),
-            bytemuck::cast(self.properties.set_y_fixity as i32),
-            bytemuck::cast(self.properties.set_rot_fixity as i32),
             bytemuck::cast(self.properties.set_x_pos as i32),
             bytemuck::cast(self.properties.set_y_pos as i32),
             bytemuck::cast(self.properties.set_rot as i32),
             bytemuck::cast(self.properties.set_x_vel as i32),
             bytemuck::cast(self.properties.set_y_vel as i32),
             bytemuck::cast(self.properties.set_rot_vel as i32),
+            bytemuck::cast(self.properties.set_x_force as i32),
+            bytemuck::cast(self.properties.set_y_force as i32),
+            bytemuck::cast(self.properties.set_rot_force as i32),
             bytemuck::cast(self.properties.set_radius as i32),
-            self.properties.x_force,
-            self.properties.y_force,
-            self.properties.rot_force,
-            bytemuck::cast(self.properties.material as i32),
-            bytemuck::cast(self.properties.x_fixity as i32),
-            bytemuck::cast(self.properties.y_fixity as i32),
-            bytemuck::cast(self.properties.rot_fixity as i32),
+            bytemuck::cast(self.properties.set_x_fixity as i32),
+            bytemuck::cast(self.properties.set_y_fixity as i32),
+            bytemuck::cast(self.properties.set_rot_fixity as i32),
+            bytemuck::cast(self.properties.set_material as i32),
             self.properties.x_pos,
             self.properties.y_pos,
             self.properties.rot,
             self.properties.x_vel,
             self.properties.y_vel,
             self.properties.rot_vel,
+            self.properties.x_force,
+            self.properties.y_force,
+            self.properties.rot_force,
             self.properties.radius,
+            bytemuck::cast(self.properties.x_fixity as i32),
+            bytemuck::cast(self.properties.y_fixity as i32),
+            bytemuck::cast(self.properties.rot_fixity as i32),
+            bytemuck::cast(self.properties.material as i32),
         ];
     }
 }

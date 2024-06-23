@@ -355,7 +355,7 @@ impl State {
             config.prog_settings.circular_particles = rs.circular_particles();
             config.prog_settings.render_rot         = rs.render_rotation();
             config.prog_settings.render_bonds       = rs.render_bonds();
-            config.prog_settings.color_source       = ColorSource::from_i32(rs.colors() as i32);
+            // config.prog_settings.color_source       = ColorSource::from_i32(rs.colors() as i32);
             // config.prog_settings.random_colors      = rs.random_colors();
             config.prog_settings.color_code_rot     = rs.color_code_rotation();
             // physics settings

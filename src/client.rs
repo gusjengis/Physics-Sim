@@ -1,3 +1,4 @@
+use crate::scripts::ScriptManager;
 use crate::settings::Data;
 use crate::wgpu_prog::WGPUComputeProg;
 use crate::wgpu_structs::DepthBuffer;
@@ -5,6 +6,7 @@ use crate::wgpu_structs::Texture;
 use crate::window_init;
 use crate::wgpu_config::*;
 use crate::wgpu_prog;
+use crate::scripts;
 
 use crate::wgpu_prog::WGPUProg;
 use cgmath::Angle;
@@ -64,6 +66,7 @@ pub struct Client {
     pub platform: Platform,
     egui_rpass: RenderPass,
     data_length_backup: usize,
+    script_manager: ScriptManager,
     // max_framerate: f32,
     // prev_framerate: f32
 }
@@ -132,10 +135,11 @@ impl Client {
             platform,
             egui_rpass,
             data_length_backup: 1,
+            script_manager: ScriptManager::new()
             // max_framerate:  max_framerate,
             // prev_framerate: max_framerate
         };
-        
+        client.script_manager.new_script("Script 1");
         client.resize(client.canvas.size);
         
         // client.wgpu_prog =  WGPUProg::new(&mut client.wgpu_config, (client.canvas.size.width as u32, client.canvas.size.height as u32));
@@ -258,10 +262,7 @@ impl Client {
                 let mut mY = 0.0;
                 match delta {
                     MouseScrollDelta::LineDelta(x, y) => {
-                        mY = *y;
-                        self.wgpu_config.prog_settings.scale = (self.wgpu_config.prog_settings.scale as f32*((2 as f32).powf(mY)));
-                        self.xOff *= ((2 as f32).powf(mY));
-                        self.yOff *= ((2 as f32).powf(mY));
+                        self.zoom(*y);
                     }
                     _ => {}
                 }
@@ -404,7 +405,7 @@ impl Client {
                         state: ElementState::Pressed,
                         ..
                     } => {
-                            self.zoom_in();
+                            self.zoom(1.0);
                             return true;
                         },
                     KeyboardInput {
@@ -412,7 +413,7 @@ impl Client {
                         state: ElementState::Pressed,
                         ..
                     } => {
-                            self.zoom_out();
+                            self.zoom(-1.0);
                             return true;
                         },
                     KeyboardInput {
@@ -496,6 +497,14 @@ impl Client {
                         ..
                     } => {
                             self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config);
+                            return true;
+                        },
+                    KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::T),
+                        state: ElementState::Pressed,
+                        ..
+                    } => {
+                            // crate::scripts::script_test(&mut self.wgpu_prog.shader_prog);
                             return true;
                         },
                     KeyboardInput {
@@ -598,16 +607,11 @@ impl Client {
         self.wgpu_config.prog_settings.data = Data::new();
     }
 
-    fn zoom_in(&mut self){
-        self.wgpu_config.prog_settings.scale = (self.wgpu_config.prog_settings.scale as f32*((2 as f32).powf(1.0)));
-        self.xOff *= ((2 as f32).powf(1.0));
-        self.yOff *= ((2 as f32).powf(1.0));
-    }
-
-    fn zoom_out(&mut self){
-        self.wgpu_config.prog_settings.scale = (self.wgpu_config.prog_settings.scale as f32*((2 as f32).powf(-1.0)));
-        self.xOff *= ((2 as f32).powf(-1.0));
-        self.yOff *= ((2 as f32).powf(-1.0));
+    fn zoom(&mut self, change: f32){
+        
+        self.wgpu_config.prog_settings.scale = (self.wgpu_config.prog_settings.scale as f32*((2 as f32).powf(change)));
+        // self.xOff *= ((2 as f32).powf(change));
+        // self.yOff *= ((2 as f32).powf(change));
     }
 
     fn home(&mut self){
@@ -624,10 +628,10 @@ impl Client {
                 bytemuck::cast::<_, f32>(self.canvas.size.height as i32),
             ]
         ));
-        self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
+        self.wgpu_prog.shader_prog.selectangle(&self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
     }
 
-    fn drap_and_selectangle(&mut self) {
+    fn drag_and_selectangle(&mut self) {
         if self.middle && !self.shift {
             // println!("Drag");
             self.wgpu_prog.shader_prog.buffers.drag_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
@@ -650,7 +654,7 @@ impl Client {
                     bytemuck::cast::<_, f32>(self.cursor_pos.1 as i32 - self.click_pos.1 as i32),
                 ]
             ));
-            self.wgpu_prog.shader_prog.selectangle(&mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
+            self.wgpu_prog.shader_prog.selectangle(&self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
         }
     }
 
@@ -691,24 +695,25 @@ impl Client {
         if settings!().set_properties {
             settings!().set_properties = false;
             self.wgpu_prog.shader_prog.buffers.set_prop_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().properties()));
-            self.wgpu_prog.shader_prog.set_properties(&mut self.wgpu_config);
+            self.wgpu_prog.shader_prog.set_properties(&self.wgpu_config);
         }
 
         if settings!().backup         { self.backup();                                                    settings!().backup         = false }
         if settings!().reset          { self.reset();                                                     settings!().reset          = false }
-        if settings!().zoom_in        { self.zoom_in();                                                   settings!().zoom_in        = false }
-        if settings!().zoom_out       { self.zoom_out();                                                  settings!().zoom_out       = false }
+        if settings!().zoom_in        { self.zoom(1.0);                                                   settings!().zoom_in        = false }
+        if settings!().zoom_out       { self.zoom(-1.0);                                                  settings!().zoom_out       = false }
         if settings!().home           { self.home();                                                      settings!().home           = false }
         if settings!().select_all     { self.select_all();                                                settings!().select_all     = false }
         if settings!().update_shaders { self.wgpu_prog.shader_prog.update_shaders(&mut self.wgpu_config); settings!().update_shaders = false }
         if settings!().fix            { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config);            settings!().fix            = false }
         if settings!().drop           { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config);           settings!().drop           = false }
 
-        self.drap_and_selectangle();
+        self.drag_and_selectangle();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> { macro_rules! settings { () => { self.wgpu_config.prog_settings };}
         self.handle_events();
+        self.script_manager.execute(&mut self.wgpu_prog, &self.wgpu_config, &self.canvas);
         let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32/1000.0;
         settings!().maxGenPerFrame = ((1.0/settings!().timestep)/max_framerate).round() as i32;
         if settings!().maxGenPerFrame < settings!().genPerFrame {
@@ -762,7 +767,7 @@ impl Client {
         
         // Begin to draw the UI frame.
         self.platform.begin_frame();
-        let needs_reset = settings!().ui(&self.platform.context(), &self.wgpu_prog.shader_prog.state);
+        let needs_reset = settings!().ui(&self.platform.context(), &self.wgpu_prog.shader_prog.state, &mut self.script_manager);
         if needs_reset {
             self.reset();
         }

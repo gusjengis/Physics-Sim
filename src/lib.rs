@@ -7,6 +7,7 @@ pub mod wgpu_prog;
 pub mod settings;
 pub mod setup;
 pub mod state;
+pub mod scripts;
 use std::ptr::null;
 use winit::dpi::PhysicalSize;
 use log::*;

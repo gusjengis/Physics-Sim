@@ -4,6 +4,7 @@ use bytemuck::bytes_of;
 use image::EncodableLayout;
 use rand::Rng;
 use wgpu::Device;
+use wgpu::Queue;
 use crate::settings;
 use crate::settings::Structure;
 use crate::setup;
@@ -835,7 +836,7 @@ impl WGPUComputeProg {
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn selectangle(&mut self, config: &mut WGPUConfig, dimensions: (u32, u32)) {
+    pub fn selectangle(&mut self, config: &WGPUConfig, dimensions: (u32, u32)) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -947,7 +948,7 @@ impl WGPUComputeProg {
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn set_properties(&mut self, config: &mut WGPUConfig) {
+    pub fn set_properties(&mut self, config: &WGPUConfig) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
