@@ -45,13 +45,14 @@ pub struct WGPUProg {
     pub clear_color: wgpu::Color,
     pub shader_prog: WGPUComputeProg,
     pub depth_buffer: DepthBuffer,
+    pub render_tex: Texture,
     shader: wgpu::ShaderModule,
 }
 
 impl WGPUProg {
-    pub fn new(config: &mut WGPUConfig, dimensions: (u32, u32)) -> Self {
-        let mut shader_prog = WGPUComputeProg::new(config, dimensions);
-
+    pub fn new(config: &mut WGPUConfig, settings: &mut Settings, dimensions: (u32, u32)) -> Self {
+        let mut shader_prog = WGPUComputeProg::new(config, settings, dimensions);
+        let render_tex = Texture::new_from_dimensions(config, (1, 1), 0, config.config.format);
         let clear_color = wgpu::Color {
             r: 0.0,
             g: 0.0,//0.266,
@@ -83,7 +84,7 @@ impl WGPUProg {
         });
         let dim_contents = &[config.size.width as f32, config.size.height as f32, config.size.width as f32, config.size.height as f32, 0 as f32, 0 as f32, 1 as f32, 0 as f32];
         let dim_uniform = Uniform::new(&config.device, bytemuck::cast_slice(dim_contents), String::from("dimensions"), 0);
-        let ren_set_uniform = Uniform::new(&config.device, bytemuck::cast_slice(&config.prog_settings.render_settings()), String::from("settings"), 0);
+        let ren_set_uniform = Uniform::new(&config.device, bytemuck::cast_slice(&settings.render_settings()), String::from("settings"), 0);
 
         let mut render_pipeline_layout =
         config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -97,6 +98,17 @@ impl WGPUProg {
                 &shader_prog.buffers.material_buffer.bind_group_layout,
                 &shader_prog.buffers.selections.bind_group_layout,
                 &shader_prog.buffers.click_buffer.bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let mut post_processing_render_pipeline_layout =
+        config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Post Processing Render Pipeline Layout"),
+            bind_group_layouts: &[
+                &render_tex.bind_group_layout,
+                &ren_set_uniform.bind_group_layout,
+                &dim_uniform.bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -261,7 +273,7 @@ impl WGPUProg {
 
         let render_pipeline4 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(&post_processing_render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader4,
                 entry_point: "vs_main", // 1.
@@ -271,7 +283,7 @@ impl WGPUProg {
                 module: &shader4,
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState { // 4.
-                    format: wgpu::TextureFormat::Bgra8UnormSrgb,
+                    format: config.config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -288,7 +300,13 @@ impl WGPUProg {
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None, // 1.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                format: DepthBuffer::DEPTH_FORMAT,
+                stencil: wgpu::StencilState::default(), // 2.
+                bias: wgpu::DepthBiasState::default(),
+              }), // 1.
             multisample: wgpu::MultisampleState {
                 count: 1, // 2.
                 mask: !0, // 3.
@@ -327,12 +345,14 @@ impl WGPUProg {
             clear_color,
             shader_prog,
             depth_buffer,
-            shader
+            shader,
+            render_tex
         }
     }
 
     pub fn resize(&mut self, config: &mut WGPUConfig, dimensions: (u32, u32)) {
         self.shader_prog.hit_tex = Texture::new_from_dimensions(config, dimensions, 0, wgpu::TextureFormat::Bgra8Unorm);
+        self.render_tex = Texture::new_from_dimensions(config, dimensions, 0, config.config.format);
     }
 }
 
@@ -445,14 +465,14 @@ pub struct WGPUComputeProg {
 }
 
 pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
-    let width  = settings.hor_bound  * 2.0;
-    let height = settings.vert_bound * 2.0;
-    let     max_rad = settings.max_radius * 2.0;
-    let mut min_rad = settings.min_radius;
-    if !settings.variable_rad { min_rad = settings.max_radius; }
+    let width  = settings.simulation.hor_bound  * 2.0;
+    let height = settings.simulation.vert_bound * 2.0;
+    let     max_rad = settings.setup.max_radius * 2.0;
+    let mut min_rad = settings.setup.min_radius;
+    if !settings.setup.variable_rad { min_rad = settings.setup.max_radius; }
     let w = (width/max_rad).ceil() as i32;
     let h = (height/max_rad).ceil() as i32;
-    let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.particles as i32) + 2;
+    let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.setup.particles as i32) + 2;
     let total_size = w * h * cell_cap;
     // println!("Cell Capacity:   {}", cell_cap);
     // println!("Cell Dimensions: {} x {}", w, h);
@@ -464,14 +484,14 @@ pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, 
 }
 
 impl WGPUComputeProg {
-    pub fn new(config: &mut WGPUConfig, dimensions: (u32, u32)) -> Self {
+    pub fn new(config: &mut WGPUConfig, settings: &mut Settings, dimensions: (u32, u32)) -> Self {
         // Create empty arrays for particle data_buffer
 
-        let state = State::new(config);
+        let state = State::new(config, settings);
 
-        let p_count = setup::p_count(&mut config.prog_settings);
-        // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*config.prog_settings.max_contacts*p_count];
-        let grid_info_return = grid_capacity(&config.prog_settings);
+        let p_count = setup::p_count(settings);
+        // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*settings.max_contacts*p_count];
+        let grid_info_return = grid_capacity(&settings);
         let mut bp_grid = vec![1; 1];//grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
@@ -511,8 +531,8 @@ impl WGPUComputeProg {
         // let contact_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&contacts), "Contact Buffer".to_string(), 0);
         // let bond_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&bonds), "Bond Buffer".to_string(), 0);
         // let bond_info_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.bond_info), "Bond Info Buffer".to_string(), 0);
-        let material_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&config.prog_settings.materials), "Materials".to_string(), 0);
-        let collision_settings = Uniform::new(&config.device, bytemuck::cast_slice(&config.prog_settings.collison_settings()), "Collision Settings".to_string(), 0);
+        let material_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&settings.materials), "Materials".to_string(), 0);
+        let collision_settings = Uniform::new(&config.device, bytemuck::cast_slice(&settings.collison_settings()), "Collision Settings".to_string(), 0);
         
         let click_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&cilck_info), "Color Buffer".to_string(), 0);
         
@@ -560,7 +580,7 @@ impl WGPUComputeProg {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
         });
-        if config.prog_settings.use_f64 {
+        if settings.simulation.use_f64 {
             compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
@@ -754,17 +774,21 @@ impl WGPUComputeProg {
         }
     }
 
-    pub fn update_state(&mut self, config: &mut WGPUConfig) {
+    pub fn update_state(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         
-        self.state.update_state(config, &mut self.buffers);
+        self.state.update_state(config, settings, &mut self.buffers);
     }
 
-    pub fn update_shaders(&mut self, config: &mut WGPUConfig) {
+    pub fn update_selections(&mut self, device: &mut Device, queue: &mut Queue) {
+        self.state.update_selections(device, queue, &mut self.buffers);
+    }
+
+    pub fn update_shaders(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
         });
-        if config.prog_settings.use_f64 {
+        if settings.simulation.use_f64 {
             compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: None,
                 source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
@@ -784,9 +808,9 @@ impl WGPUComputeProg {
         });
     }
 
-    pub fn restore(&mut self, config: &mut WGPUConfig) {
+    pub fn restore(&mut self, config: &mut WGPUConfig, settings: &mut Settings) {
 
-        config.prog_settings.set_particles(self.state.p_count);
+        settings.set_particles(self.state.p_count);
         self.buffers.pos_buffers.updateBuffer(&config.device, self.state.pos.as_bytes(), 0);
         self.buffers.pos_buffers.updateBuffer(&config.device, self.state.radii.as_bytes(), 1);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.vel.as_bytes(), 0);
@@ -813,7 +837,7 @@ impl WGPUComputeProg {
     //     // builder.finish(self.state, None);
     // }
 
-    pub fn click(&mut self, config: &mut WGPUConfig) {
+    pub fn click(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -829,7 +853,7 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.mov_buffers.bind_group, &[]);  
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
@@ -859,7 +883,7 @@ impl WGPUComputeProg {
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn release(&mut self, config: &mut WGPUConfig) {
+    pub fn release(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -876,14 +900,14 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(4, &self.buffers.collision_settings.bind_group, &[]);   
 
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn drag(&mut self, config: &mut WGPUConfig) {
+    pub fn drag(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -899,14 +923,14 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(4, &self.buffers.click_buffer.bind_group, &[]);   
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn fix(&mut self, config: &mut WGPUConfig) {
+    pub fn fix(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -920,14 +944,14 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(2, &self.buffers.click_buffer.bind_group, &[]);   
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn drop(&mut self, config: &mut WGPUConfig) {
+    pub fn drop(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -941,14 +965,14 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(2, &self.buffers.click_buffer.bind_group, &[]);   
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn set_properties(&mut self, config: &WGPUConfig) {
+    pub fn set_properties(&mut self, config: &WGPUConfig, settings: &Settings) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -964,21 +988,21 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(3, &self.buffers.selections.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.set_prop_input.bind_group, &[]);   
 
-            compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             
         }
 
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn compute(&mut self, config: &mut WGPUConfig){
+    pub fn compute(&mut self, config: &mut WGPUConfig, settings: &Settings){
         
 
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
 
-        for i in 0..config.prog_settings.genPerFrame {
+        for i in 0..settings.simulation.genPerFrame {
             // // BROAD PHASE
             // {
             //     let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
@@ -1005,7 +1029,7 @@ impl WGPUComputeProg {
                 compute_pass.set_bind_group(4, &self.buffers.material_buffer.bind_group, &[]);
                 compute_pass.set_bind_group(5, &self.buffers.data_buffer.bind_group, &[]);
 
-                compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
 
             }
 
@@ -1020,7 +1044,7 @@ impl WGPUComputeProg {
                 compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);         
                 compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);   
 
-                compute_pass.dispatch_workgroups(config.prog_settings.workgroups as u32, 1, 1);
+                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
 
             }
         }

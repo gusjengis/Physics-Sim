@@ -26,10 +26,7 @@ struct Settings {
     planet_mode: i32,
     bonds: i32,
     collisions: i32,
-    friction: i32,
     friction_coefficient: f32,
-    rotation: i32,
-    linear_contact_bonds: i32,
     gravity_acc: f32,
     bond_normal_stiffness: f32,
     bonds_tear: i32,
@@ -38,11 +35,12 @@ struct Settings {
     bond_damping: f32,
     drag: f32,
     bond_shear_strength: f32,
-    verlet: i32,
     dT: f32,
     bond_shear_stiffness: f32,
-    bond_rotational_stiffness: f32,
-    bond_rotational_strength: f32
+    gravity_x: f32,
+    gravity_y: f32,
+    mouse_gravity: i32,
+    moment_contribution_factor: f32
 }
 
 

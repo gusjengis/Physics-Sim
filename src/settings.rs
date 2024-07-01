@@ -7,8 +7,10 @@ use std::fs::*;
 use std::io::Write;
 use std::path::Path;
 use crate::scripts::{self, ScriptManager};
+use crate::wgpu_prog::WGPUProg;
 use egui::*;
 use egui::color_picker::Alpha;
+use wgpu::{Device, Queue};
 use std::*;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
@@ -63,6 +65,7 @@ pub struct Properties {
     pub radius: f32,
 }
 
+
 pub struct Data {
     pub x_pos_data: Vec<[f64; 2]>,
     pub y_pos_data: Vec<[f64; 2]>,
@@ -109,13 +112,42 @@ impl Data {
     }
 }
 
-pub struct Settings {
-    pub genPerFrame: i32,
+pub struct View_Settings {
+    pub settings_menu: bool,
+    pub scale: f32,
+    pub circular_particles: bool,
+    pub render_rot: bool,
+    pub render_bonds: bool,
+    pub render_outline: bool,
+    pub render_bp_grid: bool,
+    pub color_code_rot: bool,
+    pub use_particle_color_outline: bool,
+    pub outline_color: [f32; 3],
+    pub background_color: [f32; 3],
+    pub color_source: ColorSource,
+    pub dim_slow_particles: bool,
+    pub max_brightness_vel: f32,
+    pub crt_res: i32,
+    pub grain: bool,
+    pub grain_strength: f32,
+    pub grain_size: i32,
+    pub sobel: bool,
+    pub colored_sobel: bool,
+    pub invert: bool,
+    pub chrom_ab: bool,
+    pub abb_strength: f32,
+    pub data_menu: bool,
+    pub script_menu: bool,
+}
+
+pub struct Setup_Settings {
     pub particles: usize,
     pub workgroups: usize,
     pub workgroup_size: usize,
     pub max_radius: f32,
     pub min_radius: f32,
+    pub variable_rad: bool,
+    pub holeyness: f32,
     pub max_bonds: usize,
     pub max_contacts: usize,
     pub max_h_velocity: f32,
@@ -124,36 +156,51 @@ pub struct Settings {
     pub min_v_velocity: f32,
     pub structure: Structure,
     pub grid_width: f32,
-    pub variable_rad: bool,
-    pub settings_menu: bool,
-    pub holeyness: f32,
-    pub maintain_ar: bool,
+}
+
+pub struct Simulation_Settings {
+    pub timestep: f32,
+    pub genPerFrame: i32,
+    pub maxGenPerFrame: i32,
+    pub auto_width: bool,
     pub hor_bound: f32,
     pub vert_bound: f32,
+    pub maintain_ar: bool,
+    pub round_walls: bool,
+    pub wall_radius: f32,
+    pub use_f64: bool,
+}
+
+pub struct Physics_Settings {
     pub gravity: bool,
-    pub planet_mode: bool,
     pub gravity_acceleration: f32,
+    pub planet_mode: bool,
+    pub mouse_gravity: bool,
+    pub collisions: bool,
+    pub friction_coefficient: f32,
     pub bonds: i32,
     pub bondenum: BondType,
     pub bond_tearing: bool,
-    pub bond_normal_strength: f32,
     pub bond_normal_stiffness: f32,
-    pub collisions: bool,
-    pub friction: bool,
-    pub friction_coefficient: f32,
-    pub rotation: bool,
-    pub linear_contact_bonds: bool,
+    pub bond_shear_stiffness: f32,
+    pub bond_normal_strength: f32,
+    pub bond_shear_strength: f32,
+    pub contact_damping: f32,
+    pub bond_damping: f32,
+    pub drag: f32,
+    pub moment_contribution_factor: f32,
+
+}
+
+pub struct Settings {
+    pub view: View_Settings,
+    pub setup: Setup_Settings,
+    pub simulation: Simulation_Settings,
+    pub physics: Physics_Settings,
     pub changed_collision_settings: bool,
-    pub scale: f32,
-    pub circular_particles: bool,
-    pub render_rot: bool,
-    pub color_code_rot: bool,
-    pub render_bonds: bool,
-    pub two_part: bool,
     pub materials: Vec<f32>,
     pub material_size: usize,
     pub materials_changed: bool,
-    pub menu: Menu,
     pub current_file: std::path::PathBuf,
     pub current_dir: std::path::PathBuf,
     pub load: bool,
@@ -165,27 +212,14 @@ pub struct Settings {
     pub gather_data: bool,
     pub auto_size_plot: bool,
     pub plotted_prop: Property,
-    pub contact_damping: f32,
-    pub bond_damping: f32,
-    pub drag: f32,
-    pub bond_shear_stiffness: f32,
-    pub verlet: bool,
-    pub timestep: f32,
-    pub maxGenPerFrame: i32,
     pub hz: f32,
     pub fps: f32,
-    pub render_bp_grid: bool,
     pub timed_recording: bool,
     pub recording_duration: f32,
     pub start_time: f32,
     pub sim_time: f32,
     pub recording: bool,
-    pub round_walls: bool,
     pub wall_friction: f32,
-    pub wall_radius: f32,
-    pub bond_shear_strength: f32,
-    pub bond_rotational_stiffness: f32,
-    pub bond_rotational_strength: f32,
     pub backup: bool,
     pub restore: bool,
     pub reset: bool,
@@ -198,17 +232,10 @@ pub struct Settings {
     pub drop: bool,
     pub speed_perc: f32,
     pub f64_support: bool,
-    pub use_f64: bool,
     pub update_shaders: bool,
-    pub render_outline: bool,
-    pub use_particle_color_outline: bool,
-    pub background_color: [f32; 3],
-    pub outline_color: [f32; 3],
-    pub color_source: ColorSource,
-    pub dim_slow_particles: bool,
-    pub max_brightness_vel: f32,
     pub current_script: usize,
-    pub just_set_line: bool
+    pub just_set_line: bool,
+    pub world_pos: (f32, f32),
     // pub paths: ReadDir,
 }
 
@@ -216,16 +243,12 @@ impl Settings {
     pub fn new(canvas: &Canvas) -> Self {
         let particles = 256;
         let workgroup_size = 256;
-        let workgroups = (particles as f32/workgroup_size as f32).ceil() as usize;
         //particle settings
         let max_radius = 0.025;
         let holeyness = 1.7;
-        let min_radius = max_radius/holeyness;
         let max_bonds = 6;
-        let max_contacts = max_bonds + 8;
         let vert_bound = 2.0;
         let hor_bound = vert_bound*1.333;
-        let scale = 2.0/vert_bound;
         let materials = vec![
             1.0,
             1.0,
@@ -240,66 +263,86 @@ impl Settings {
             100.0,
             50.0
         ];
-        let material_size = 6;//materials.len();
-        let menu = Menu {
-            render_settings: false,
-            materials_menu: false,
-            setup_menu: false,
-            physics_menu: false,
-            walls_menu: false,
-            save_load_menu: false,
-            properties_menu: false,
-            data_menu: false,
-            bond_menu: false,
-            speed_menu: false,
-            script_menu: false
-        };
-
         let mut settings = Settings {
-            genPerFrame: 105,
-            particles,
-            workgroups,
-            workgroup_size,
-            max_radius,
-            min_radius,
-            max_bonds,
-            max_contacts,
-            max_h_velocity: 0.0,
-            min_h_velocity: 0.0,
-            max_v_velocity: 0.0,
-            min_v_velocity: 0.0,
-            structure: Structure::Grid,
-            grid_width: 32.0,
-            variable_rad: false,
-            settings_menu: true,
-            holeyness,
-            maintain_ar: true,
-            hor_bound,
-            vert_bound,
-            gravity: true,
-            planet_mode: true,
-            gravity_acceleration: 1.0,
-            bonds: 0,
-            bondenum: BondType::Unbonded,
-            bond_tearing: false,
-            bond_normal_strength: 0.5,
-            bond_normal_stiffness: 10.0,
-            collisions: true,
-            friction: true,
-            friction_coefficient: 0.5,
-            rotation: true,
-            linear_contact_bonds: true,
+            view: View_Settings { 
+                settings_menu: true,
+                scale: 2.0/vert_bound,
+                circular_particles: true,
+                render_rot: false,
+                render_bonds: true,
+                render_outline: true,
+                render_bp_grid: false,
+                color_code_rot: false,
+                use_particle_color_outline: true,
+                outline_color: [0.0, 0.0, 0.0],
+                background_color: [0.0, 0.0, 0.0],
+                color_source: ColorSource::Material,
+                dim_slow_particles: false,
+                max_brightness_vel: 1.0,
+                crt_res: 1,
+                grain: false,
+                grain_strength: 0.005,
+                grain_size: 1,
+                sobel: false,
+                colored_sobel: false,
+                invert: false,
+                chrom_ab: false,
+                abb_strength: 0.005,
+                data_menu: false,
+                script_menu: false
+            },
+            setup: Setup_Settings { 
+                particles,
+                workgroups: (particles as f32/workgroup_size as f32).ceil() as usize,
+                workgroup_size,
+                max_radius,
+                min_radius: max_radius/holeyness,
+                variable_rad: false,
+                holeyness,
+                max_bonds,
+                max_contacts: max_bonds + 8,
+                max_h_velocity: 0.0,
+                min_h_velocity: 0.0,
+                max_v_velocity: 0.0,
+                min_v_velocity: 0.0,
+                structure: Structure::Grid,
+                grid_width: 32.0,
+            },
+            simulation: Simulation_Settings { 
+                timestep: 1.0/12600.0,
+                genPerFrame: 105,
+                maxGenPerFrame: 213,
+                auto_width: true,
+                hor_bound,
+                vert_bound,
+                maintain_ar: true,
+                round_walls: false,
+                wall_radius: 1.0,
+                use_f64: false
+            },
+            physics: Physics_Settings { 
+                gravity: true,
+                gravity_acceleration: 1.0, 
+                planet_mode: true,
+                mouse_gravity: false,
+                collisions: true, 
+                friction_coefficient: 0.5, 
+                bonds: 0, 
+                bondenum: BondType::Unbonded, 
+                bond_tearing: false, 
+                bond_normal_stiffness: 10.0, 
+                bond_shear_stiffness: 10.0, 
+                bond_normal_strength: 0.5, 
+                bond_shear_strength: 0.5, 
+                contact_damping: 0.2,
+                bond_damping: 0.2,
+                drag: 1.0,
+                moment_contribution_factor: 1.0  
+            },
             changed_collision_settings: false,
-            scale,
-            circular_particles: true,
-            render_rot: false,
-            color_code_rot: false,
-            render_bonds: true,
-            two_part: false,
             materials,
-            material_size,
+            material_size: 6,
             materials_changed: false,
-            menu,
             current_file: std::path::PathBuf::new(),
             current_dir: std::path::PathBuf::new(),
             load: false,
@@ -340,27 +383,14 @@ impl Settings {
             gather_data: false,
             auto_size_plot: true,
             plotted_prop: Property::Y_Position,
-            contact_damping: 0.2,
-            bond_damping: 0.2,
-            drag: 1.0,
-            bond_shear_stiffness: 0.5,
-            verlet: true,
-            timestep: 1.0/12600.0,//0.0000390625,
-            maxGenPerFrame: 213,
             hz: 120.0,
             fps: 120.0,
-            render_bp_grid: false,
             timed_recording: false,
             recording_duration: 0.0025,
             start_time: 0.0,
             sim_time: 0.0,
             recording: false,
-            round_walls: false,
             wall_friction: 0.0,
-            wall_radius: 1.0,
-            bond_shear_strength: 10.0,
-            bond_rotational_stiffness: 0.001,
-            bond_rotational_strength: 0.5,
             backup: false,
             restore: false,
             reset: false,
@@ -373,29 +403,28 @@ impl Settings {
             drop: false,
             speed_perc: 100.0,
             f64_support: false,
-            use_f64: false,
             update_shaders: false,
-            render_outline: true,
-            use_particle_color_outline: true,
-            background_color: [0.0, 0.0, 0.0],
-            outline_color: [0.0, 0.0, 0.0],
-            color_source: ColorSource::Material,
-            dim_slow_particles: false,
-            max_brightness_vel: 1.0,
             current_script: 0,
-            just_set_line: false
-            // paths: fs::read_dir(std::path::PathBuf::new()).unwrap()
+            just_set_line: false,
+            world_pos: (0.0, 0.0),
         };
         settings.load_memory();
         return settings;
     }
 
     pub fn set_particles(&mut self, particles: usize) {
-        self.particles = particles;
-        self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
+        self.setup.particles = particles;
+        self.setup.workgroups = (self.setup.particles as f32/self.setup.workgroup_size as f32).ceil() as usize;
     }
 
-    pub fn ui(&mut self, ctx: &Context, state: &State, script_manager: &mut ScriptManager) -> bool {
+    pub fn update_world_pos(&mut self, world_pos: (f32, f32)) {
+        self.world_pos = world_pos;
+        if self.physics.planet_mode {
+            self.changed_collision_settings = true;
+        }
+    }
+
+    pub fn ui(&mut self, ctx: &Context, prog: &mut WGPUProg, script_manager: &mut ScriptManager, device: &mut Device, queue: &mut Queue, window_size: (u32, u32)) -> bool {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
@@ -404,7 +433,7 @@ impl Settings {
             self.gather_data = false;
             self.recording = false;
         }
-        if self.settings_menu {
+        if self.view.settings_menu {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
                     // ui.heading("Menu");
                     egui::menu::bar(ui, |ui| {
@@ -420,7 +449,7 @@ impl Settings {
                             self.script_menu(ui, ctx);
                         });
                         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            let max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+                            let max_perc = self.simulation.genPerFrame as f32/self.simulation.maxGenPerFrame as f32 * 100.0;
                             let mut fps_perc = max_perc * self.fps/self.hz; 
                             if !self.simulating {
                                 fps_perc = 0.0;
@@ -429,9 +458,13 @@ impl Settings {
                         });
                     });
                 });
-                self.script_panel(ctx, script_manager);
+                self.script_panel(ctx, script_manager, prog, device, queue);
             // });
         
+        }
+        if self.simulation.auto_width {
+            self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
+            self.changed_collision_settings = true;
         }
         return reset;   
     }
@@ -533,38 +566,49 @@ impl Settings {
             }
             ui.separator();
             ui.label("Setup");
-            if !self.two_part { if ui.add(egui::Slider::new(&mut self.particles, 1..=self.workgroup_size*200).
+                if ui.add(egui::Slider::new(&mut self.setup.particles, 1..=self.setup.workgroup_size*200).
                 text("Particles").
                 step_by(1.0)).changed() {
-                    self.workgroups = (self.particles as f32/self.workgroup_size as f32).ceil() as usize;
-                    self.grid_width = self.grid_width.min(self.particles as f32);
+                    self.setup.workgroups = (self.setup.particles as f32/self.setup.workgroup_size as f32).ceil() as usize;
+                    self.setup.grid_width = self.setup.grid_width.min(self.setup.particles as f32);
                     self.reset = true;
-                };}
-                if !self.two_part { if self.structure == Structure::Grid {
-                    if ui.add(egui::Slider::new(&mut self.grid_width, 1.0..=self.particles as f32).
+                };
+                    if self.setup.structure == Structure::Grid {
+                    if ui.add(egui::Slider::new(&mut self.setup.grid_width, 1.0..=self.setup.particles as f32).
                     text("Grid Width").step_by(0.01)
                     .logarithmic(true)).changed() {
                         self.reset = true;
                     };
                 }
-                if ui.checkbox(&mut self.variable_rad, "Random Radius").changed() {
+                
+                if ui.checkbox(&mut self.setup.variable_rad, "Random Radius").changed() {
                     self.reset = true;
                 }
-                if self.variable_rad {
-                    match self.structure {
+
+                if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.000000001..=10.0).step_by(0.001)).changed() {
+                    self.reset = true;
+                }
+                // ui.add_enabled_ui(self.setup.variable_rad, |ui| {
+                //     if ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.000000001..=10.0).step_by(0.001)).changed() {
+                //         self.reset = true;
+                //     }
+                // });
+
+                if self.setup.variable_rad {
+                    match self.setup.structure {
                         Structure::Grid => {
-                            if ui.add(egui::Slider::new(&mut self.holeyness, 1.0..=10.0).
+                            if ui.add(egui::Slider::new(&mut self.setup.holeyness, 1.0..=10.0).
                             text("Holeyness")).changed() {
-                                self.min_radius = self.max_radius/self.holeyness;
+                                self.setup.min_radius = self.setup.max_radius/self.setup.holeyness;
                                 self.reset = true;
                             };
                         },
                         _ => {
-                            if ui.add(egui::Slider::new(&mut self.max_radius, 0.0001..=0.5).
+                            if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.0001..=0.5).
                             text("Max Radius")).changed() {
                                 self.reset = true;
                             };
-                            if ui.add(egui::Slider::new(&mut self.min_radius, 0.0001..=0.5).
+                            if ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.0001..=0.5).
                             text("Min Radius")).changed() {
                                 self.reset = true;
                             };
@@ -572,35 +616,35 @@ impl Settings {
                     }
                 }
                 egui::CollapsingHeader::new("Initial Velocities").show(ui, |ui| {
-                    if ui.add(egui::Slider::new(&mut self.max_h_velocity, -10.0..=10.0).
+                    if ui.add(egui::Slider::new(&mut self.setup.max_h_velocity, -10.0..=10.0).
                     text("Max xV")).changed() {
-                        if self.max_h_velocity < self.min_h_velocity {
-                            self.min_h_velocity = self.max_h_velocity;
+                        if self.setup.max_h_velocity < self.setup.min_h_velocity {
+                            self.setup.min_h_velocity = self.setup.max_h_velocity;
                         }
                         self.reset = true;
                     };
-                    if ui.add(egui::Slider::new(&mut self.min_h_velocity, -10.0..=10.0).
+                    if ui.add(egui::Slider::new(&mut self.setup.min_h_velocity, -10.0..=10.0).
                     text("Min xV")).changed() {
-                        if self.max_h_velocity < self.min_h_velocity {
-                            self.max_h_velocity = self.min_h_velocity;
+                        if self.setup.max_h_velocity < self.setup.min_h_velocity {
+                            self.setup.max_h_velocity = self.setup.min_h_velocity;
                         }
                         self.reset = true;
                     };
-                    if ui.add(egui::Slider::new(&mut self.max_v_velocity, -10.0..=10.0).
+                    if ui.add(egui::Slider::new(&mut self.setup.max_v_velocity, -10.0..=10.0).
                     text("Max yV")).changed() {
-                        if self.max_v_velocity < self.min_v_velocity {
-                            self.min_v_velocity = self.max_v_velocity;
+                        if self.setup.max_v_velocity < self.setup.min_v_velocity {
+                            self.setup.min_v_velocity = self.setup.max_v_velocity;
                         }
                         self.reset = true;
                     };
-                    if ui.add(egui::Slider::new(&mut self.min_v_velocity, -10.0..=10.0).
+                    if ui.add(egui::Slider::new(&mut self.setup.min_v_velocity, -10.0..=10.0).
                     text("Min yV")).changed() {
-                        if self.max_v_velocity < self.min_v_velocity {
-                            self.max_v_velocity = self.min_v_velocity;
+                        if self.setup.max_v_velocity < self.setup.min_v_velocity {
+                            self.setup.max_v_velocity = self.setup.min_v_velocity;
                         }
                         self.reset = true;
                     };
-                });}
+                });
             });
     }
 
@@ -634,6 +678,10 @@ impl Settings {
                     // ui.close_menu();
             }
 
+            if ui.button("Fit Bounds").clicked() {
+                self.view.scale = 2.0/self.simulation.vert_bound;
+            }
+
 
             if ui.add(egui::Button::new("Home").min_size(Vec2::new(min_x, 0.0))
                  .shortcut_text(ui.ctx().format_shortcut(&home_shortcut)),)
@@ -646,61 +694,93 @@ impl Settings {
             ui.separator();
             ui.label("Rendering");
             // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
-                ui.checkbox(&mut self.circular_particles, "Circular Particles");
-                ui.add_enabled(self.circular_particles, egui::Checkbox::new(&mut self.render_outline, "Render Outline"));
-                ui.checkbox(&mut self.render_rot, "Render Rotation");
-                ui.checkbox(&mut self.render_bonds, "Render Bonds");
+                ui.checkbox(&mut self.view.circular_particles, "Circular Particles");
+                ui.add_enabled(self.view.circular_particles, egui::Checkbox::new(&mut self.view.render_outline, "Render Outline"));
+                ui.checkbox(&mut self.view.render_rot, "Render Rotation");
+                ui.checkbox(&mut self.view.render_bonds, "Render Bonds");
                 ui.menu_button("Particle Color", |ui| {
                     ui.label("Color Source:");
                     // ui.horizontal(|ui|{
-                        ui.menu_button(format!("{}", self.color_source.to_string()), |ui| {
-                            ui.selectable_value(&mut self.color_source, ColorSource::None, "None");
-                            ui.selectable_value(&mut self.color_source, ColorSource::Material, "Material");
-                            ui.selectable_value(&mut self.color_source, ColorSource::Direction, "Direction");
-                            ui.selectable_value(&mut self.color_source, ColorSource::Random, "Random");
+                        ui.menu_button(format!("{}", self.view.color_source.to_string()), |ui| {
+                            ui.selectable_value(&mut self.view.color_source, ColorSource::None, "None");
+                            ui.selectable_value(&mut self.view.color_source, ColorSource::Material, "Material");
+                            ui.selectable_value(&mut self.view.color_source, ColorSource::Direction, "Direction");
+                            ui.selectable_value(&mut self.view.color_source, ColorSource::Random, "Random");
                         });
                     // });
-                    ui.checkbox(&mut self.color_code_rot, "Color Code Rotation"); 
-                    ui.checkbox(&mut self.dim_slow_particles, "Dim Slow Particles");
+                    ui.checkbox(&mut self.view.color_code_rot, "Color Code Rotation"); 
+                    ui.checkbox(&mut self.view.dim_slow_particles, "Dim Slow Particles");
                     // ui.horizontal(|ui|
-                        ui.add_enabled(self.dim_slow_particles, egui::DragValue::new(&mut self.max_brightness_vel).clamp_range(0.0001..=100.0).prefix("Dimming Threshold: ").suffix(" m/s").speed(0.01));
+                        ui.add_enabled(self.view.dim_slow_particles, egui::DragValue::new(&mut self.view.max_brightness_vel).clamp_range(0.0001..=100.0).prefix("Dimming Threshold: ").suffix(" m/s").speed(0.01));
                     // });
                     
                 });
-                ui.add_enabled_ui(self.render_outline && self.circular_particles, |ui|{
+                ui.add_enabled_ui(self.view.render_outline && self.view.circular_particles, |ui|{
                     ui.menu_button("Outline Color", |ui| {
-                        ui.checkbox(&mut self.use_particle_color_outline, "Use Particle Color");
-                            ui.add_enabled_ui(!self.use_particle_color_outline, |ui|{
+                        ui.checkbox(&mut self.view.use_particle_color_outline, "Use Particle Color");
+                            ui.add_enabled_ui(!self.view.use_particle_color_outline, |ui|{
                             let mut color = Color32::from_rgb(
-                                (self.outline_color[0] * 255.0) as u8,
-                                (self.outline_color[1] * 255.0) as u8,
-                                (self.outline_color[2] * 255.0) as u8,
+                                (self.view.outline_color[0] * 255.0) as u8,
+                                (self.view.outline_color[1] * 255.0) as u8,
+                                (self.view.outline_color[2] * 255.0) as u8,
                             );
                             egui::color_picker::color_picker_color32(ui, &mut color, Alpha::Opaque);
                             let color_srgb = color.to_srgba_unmultiplied();
-                            self.outline_color[0] = color_srgb[0] as f32/255.0;
-                            self.outline_color[1] = color_srgb[1] as f32/255.0;
-                            self.outline_color[2] = color_srgb[2] as f32/255.0;
-                            ui.add(egui::Slider::new(&mut self.outline_color[0], 0.0..=1.0));
-                            ui.add(egui::Slider::new(&mut self.outline_color[1], 0.0..=1.0));
-                            ui.add(egui::Slider::new(&mut self.outline_color[2], 0.0..=1.0));
+                            self.view.outline_color[0] = color_srgb[0] as f32/255.0;
+                            self.view.outline_color[1] = color_srgb[1] as f32/255.0;
+                            self.view.outline_color[2] = color_srgb[2] as f32/255.0;
+                            ui.add(egui::Slider::new(&mut self.view.outline_color[0], 0.0..=1.0));
+                            ui.add(egui::Slider::new(&mut self.view.outline_color[1], 0.0..=1.0));
+                            ui.add(egui::Slider::new(&mut self.view.outline_color[2], 0.0..=1.0));
                         });
                     });
                 });
                 ui.menu_button("Background Color", |ui| {
                     let mut color = Color32::from_rgb(
-                            (self.background_color[0] * 255.0) as u8,
-                            (self.background_color[1] * 255.0) as u8,
-                            (self.background_color[2] * 255.0) as u8,
+                            (self.view.background_color[0] * 255.0) as u8,
+                            (self.view.background_color[1] * 255.0) as u8,
+                            (self.view.background_color[2] * 255.0) as u8,
                     );
                     egui::color_picker::color_picker_color32(ui, &mut color, Alpha::Opaque);
                     // let color_srgb = color.to_srgba_unmultiplied();
-                    self.background_color[0] = (color[0] as f32/255.0);
-                    self.background_color[1] = (color[1] as f32/255.0);
-                    self.background_color[2] = (color[2] as f32/255.0); 
-                    ui.add(egui::Slider::new(&mut self.background_color[0], 0.0..=1.0));
-                    ui.add(egui::Slider::new(&mut self.background_color[1], 0.0..=1.0));
-                    ui.add(egui::Slider::new(&mut self.background_color[2], 0.0..=1.0));
+                    self.view.background_color[0] = (color[0] as f32/255.0);
+                    self.view.background_color[1] = (color[1] as f32/255.0);
+                    self.view.background_color[2] = (color[2] as f32/255.0); 
+                    ui.add(egui::Slider::new(&mut self.view.background_color[0], 0.0..=1.0));
+                    ui.add(egui::Slider::new(&mut self.view.background_color[1], 0.0..=1.0));
+                    ui.add(egui::Slider::new(&mut self.view.background_color[2], 0.0..=1.0));
+                });
+                ui.menu_button("Post Processing", |ui| {
+                    // ui.label("CRT Effect");
+                    // ui.separator();
+                    ui.checkbox(&mut self.view.sobel, "Sobel Filter");
+                    ui.add_enabled(self.view.sobel, egui::Checkbox::new(&mut self.view.colored_sobel, "Colored Sobel"));
+                    ui.checkbox(&mut self.view.invert, "Invert Colors");                    
+                    // ui.horizontal(|ui|{
+                    //     ui.label("Render every");
+                    //     ui.add(DragValue::new(&mut self.view.crt_res).clamp_range(1..=16));
+                    //     ui.label("lines.");
+                    // });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.view.grain, "");
+                        ui.add_enabled_ui(self.view.grain, |ui|{
+                            ui.menu_button("Grain", |ui|{
+                                ui.label("Size:");
+                                ui.add(DragValue::new(&mut self.view.grain_size).suffix("px").clamp_range(1..=8));
+                                ui.label("Strength:");
+                                ui.add(DragValue::new(&mut self.view.grain_strength).clamp_range(0.0..=1.0).speed(0.001));
+                            });
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        ui.checkbox(&mut self.view.chrom_ab, "");
+                        ui.add_enabled_ui(self.view.chrom_ab, |ui|{
+                            ui.menu_button("Chromatic Aberation", |ui|{
+                                ui.label("Offset Strength:");
+                                    ui.add(DragValue::new(&mut self.view.abb_strength).clamp_range(0.0..=0.25).speed(0.001));
+                            });
+                        });
+                    });
                 });
                 // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
             // });
@@ -725,74 +805,75 @@ impl Settings {
                 self.simulating = !self.simulating;
             }
             ui.separator();
-            ui.label(format!("Speed | {} ticks/frame", self.genPerFrame));
+            ui.label(format!("Speed | {} ticks/frame", self.simulation.genPerFrame));
             // ui.menu_button("Speed", |ui| {
-            let mut max_perc = self.genPerFrame as f32/self.maxGenPerFrame as f32 * 100.0;
+            let mut max_perc = self.simulation.genPerFrame as f32/self.simulation.maxGenPerFrame as f32 * 100.0;
             if self.speed_perc != max_perc {
                 self.speed_perc = max_perc;
             }
-            if ui.add(egui::Slider::new(&mut self.speed_perc, 1.0/self.maxGenPerFrame as f32..=100.0).custom_formatter(|n, _| {
+            if ui.add(egui::Slider::new(&mut self.speed_perc, 1.0/self.simulation.maxGenPerFrame as f32..=100.0).custom_formatter(|n, _| {
                 let n = n as i32;
                 format!("{n}%")
             })).changed() {
-                self.genPerFrame = 1.max((self.speed_perc/100.0 * self.maxGenPerFrame as f32) as i32);
+                self.simulation.genPerFrame = 1.max((self.speed_perc/100.0 * self.simulation.maxGenPerFrame as f32) as i32);
             };//.logarithmic(true);//.text(format!("Ticks/Frame ({:.0}/{:.0}%)", fps_perc, max_perc)).text_color(Color32::from_rgb((255.0*(1.0 - (self.fps/self.hz).clamp(0.0, 1.0))) as u8, (255.0*(self.fps/self.hz).clamp(0.0, 1.0)) as u8, 0)));
                 
             if ui.add(egui::Button::new("Speed Up").min_size(Vec2::new(min_x, 0.0))
                  .shortcut_text("Right Arrow"),)
                  .on_hover_text("Increase ticks/frame.")
                  .clicked() {
-                    self.genPerFrame = self.maxGenPerFrame.min(self.genPerFrame + 1);
+                    self.simulation.genPerFrame = self.simulation.maxGenPerFrame.min(self.simulation.genPerFrame + 1);
             }
 
             if ui.add(egui::Button::new("Slow Down").min_size(Vec2::new(min_x, 0.0))
             .shortcut_text("Left Arrow"),)
             .on_hover_text("Decrease ticks/frame.")
             .clicked() {
-               self.genPerFrame = 1.max(self.genPerFrame - 1);
+               self.simulation.genPerFrame = 1.max(self.simulation.genPerFrame - 1);
             }
             ui.separator();
-            ui.label(format!("Quality | {} ticks/s", (1.0/self.timestep).round() as i32));
-            if ui.add(egui::Slider::new(&mut self.timestep, 0.0000000001..=1.0/self.hz).logarithmic(true)).changed() {
-                self.timestep = 1.0/(((1.0/self.timestep as f32)/120.0).ceil()*120.0); 
+            ui.label(format!("Quality | {} ticks/s", (1.0/self.simulation.timestep).round() as i32));
+            if ui.add(egui::Slider::new(&mut self.simulation.timestep, 0.0000000001..=1.0/self.hz).logarithmic(true)).changed() {
+                self.simulation.timestep = 1.0/(((1.0/self.simulation.timestep as f32)/120.0).ceil()*120.0); 
                 self.changed_collision_settings = true;
             }
             ui.add_enabled_ui(self.f64_support, |ui| {
                 if self.f64_support {
-                    if ui.checkbox(&mut self.use_f64, "64-bit precision").on_hover_text("Use f64s to calculate distance between particles.").clicked() {
+                    if ui.checkbox(&mut self.simulation.use_f64, "64-bit precision").on_hover_text("Use f64s to calculate distance between particles.").clicked() {
                         self.update_shaders = true;
                     }
                 } else {
-                    if ui.checkbox(&mut self.use_f64, "64-bit precision").on_hover_text("Not supported by your GPU.").clicked() {
+                    if ui.checkbox(&mut self.simulation.use_f64, "64-bit precision").on_hover_text("Not supported by your GPU.").clicked() {
                         self.update_shaders = true;
                     }
                 }
             });
             ui.separator();
             ui.label("Bounds");
-            if ui.checkbox(&mut self.round_walls, "Circular Bounds").changed() {
+            if ui.checkbox(&mut self.simulation.round_walls, "Circular Bounds").changed() {
                 self.changed_collision_settings = true;
             }
-            if self.round_walls {
-                if ui.add(egui::Slider::new(&mut self.wall_radius, 0.0..=64.0).
+            if self.simulation.round_walls {
+                if ui.add(egui::Slider::new(&mut self.simulation.wall_radius, 0.0..=64.0).
                     text("Radius")).changed() {
                         self.changed_collision_settings = true;
                     }
             } else {
-                ui.checkbox(&mut self.maintain_ar, "Maintain Aspect Ratio");
-                let ar = self.hor_bound/self.vert_bound;
-                if ui.add(egui::Slider::new(&mut self.hor_bound, 0.0..=64.0).
+                let ar = self.simulation.hor_bound/self.simulation.vert_bound;
+                ui.checkbox(&mut self.simulation.auto_width, "Auto Width");
+                ui.add_enabled(!self.simulation.auto_width, egui::Checkbox::new(&mut self.simulation.maintain_ar, "Maintain Aspect Ratio"));
+                if ui.add_enabled(!self.simulation.auto_width, egui::Slider::new(&mut self.simulation.hor_bound, 0.0..=64.0).
                     text("Width")).changed() {
                         self.changed_collision_settings = true;
-                        if self.maintain_ar {
-                            self.vert_bound = self.hor_bound*1.0/ar;
+                        if self.simulation.maintain_ar || self.simulation.auto_width {
+                            self.simulation.vert_bound = self.simulation.hor_bound*1.0/ar;
                         }
                 }
-                if ui.add(egui::Slider::new(&mut self.vert_bound, 0.0..=64.0).
+                if ui.add(egui::Slider::new(&mut self.simulation.vert_bound, 0.0..=64.0).
                     text("Height")).changed() {
                         self.changed_collision_settings = true;
-                        if self.maintain_ar {
-                            self.hor_bound = self.vert_bound*ar;
+                        if self.simulation.maintain_ar || self.simulation.auto_width {
+                            self.simulation.hor_bound = self.simulation.vert_bound*ar;
                         }
                 }
             }
@@ -801,45 +882,50 @@ impl Settings {
 
     fn physics_menu(&mut self, ui: &mut Ui) {            
         let min_y = 0.0;
-        let mut min_x = match self.bondenum {
+        let mut min_x = match self.physics.bondenum {
             BondType::Unbonded => 0.0,
             BondType::Normal_Bonds => 200.0,
             BondType::Linear_Contact_Bond => 200.0,
-            BondType::Parallel_Linear_Contact_Bond => 220.0,
+            BondType::Parallel_Linear_Contact_Bond => 320.0,
         };
         ui.menu_button("Physics", |ui| {
             ui.style_mut().wrap = Some(false);
             ui.set_min_width(min_x);
-            if ui.checkbox(&mut self.gravity, "Gravity").changed() {
+            if ui.checkbox(&mut self.physics.gravity, "Gravity").changed() {
                 self.changed_collision_settings = true;
             }
-            ui.add_enabled_ui(self.gravity, |ui|{
-                if ui.checkbox(&mut self.planet_mode, "Planet Mode").changed() {
+            ui.add_enabled_ui(self.physics.gravity, |ui|{
+                if ui.checkbox(&mut self.physics.planet_mode, "Planet Mode").changed() {
                     self.changed_collision_settings = true;
                 }
+                ui.add_enabled_ui(self.physics.planet_mode, |ui| {
+                    if ui.checkbox(&mut self.physics.mouse_gravity, "Mouse Gravity").changed() {
+                        self.changed_collision_settings = true;
+                    }
+                });
                 ui.label("G Force");
-                if ui.add(egui::Slider::new(&mut self.gravity_acceleration, -100.0..=100.0).step_by(0.1)).changed() {
+                if ui.add(egui::Slider::new(&mut self.physics.gravity_acceleration, -100.0..=100.0).step_by(0.1)).changed() {
                     self.changed_collision_settings = true;
                 }
             });
             ui.separator();
-            if ui.checkbox(&mut self.collisions, "Collisions").changed() {
+            if ui.checkbox(&mut self.physics.collisions, "Collisions").changed() {
                 self.changed_collision_settings = true;
             }
-            ui.add_enabled_ui(self.collisions, |ui|{
+            ui.add_enabled_ui(self.physics.collisions, |ui|{
                 ui.label("Friction Coefficient");
-                if ui.add(egui::Slider::new(&mut self.friction_coefficient, 0.0..=1.0)).changed() {
+                if ui.add(egui::Slider::new(&mut self.physics.friction_coefficient, 0.0..=1.0)).changed() {
                     self.changed_collision_settings = true;
                 }
             });
             ui.separator();
             let mut changed_bonds = false;
 
-            ui.menu_button(format!("{}", self.bondenum.to_string()), |ui| {
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Unbonded, "Unbonded").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.bondenum, BondType::Parallel_Linear_Contact_Bond, "Linear Parallel Bonds").changed();
+            ui.menu_button(format!("{}", self.physics.bondenum.to_string()), |ui| {
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Unbonded, "Unbonded").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
+                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Parallel_Linear_Contact_Bond, "Linear Parallel Bonds").changed();
             });
 
             if changed_bonds { 
@@ -847,40 +933,40 @@ impl Settings {
                 self.updateBonds();
             }
 
-            if self.bonds != 0 {
+            if self.physics.bonds != 0 {
                 ui.separator();
                 ui.label("Stiffness");
-                if ui.add(egui::Slider::new(&mut self.bond_normal_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                if ui.add(egui::Slider::new(&mut self.physics.bond_normal_stiffness, 0.001..=10000000000.0).step_by(0.001).
                     text("Normal")).changed() {
                         self.changed_collision_settings = true;
                     };
-                    if self.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.bond_shear_strength, 0.001..=10000000000.0).step_by(0.001).
+                    if self.physics.bonds > 1 {
+                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
                 }
-                if ui.checkbox(&mut self.bond_tearing, "Bond Tearing").changed() {
+                if ui.checkbox(&mut self.physics.bond_tearing, "Bond Tearing").changed() {
                     self.changed_collision_settings = true;
                 }
-                ui.add_enabled_ui(self.bond_tearing, |ui|{
+                ui.add_enabled_ui(self.physics.bond_tearing, |ui|{
                     ui.separator();
                     ui.label("Strength");
-                    if ui.add(egui::Slider::new(&mut self.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
+                    if ui.add(egui::Slider::new(&mut self.physics.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
                         text("Normal")).changed() {
                             self.changed_collision_settings = true;
                     };
-                    if self.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.bond_shear_stiffness, 0.0..=5.0).step_by(0.0001).
+                    if self.physics.bonds > 1 {
+                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
-                        if self.bonds > 2 {
-                            if ui.add(egui::Slider::new(&mut self.bond_rotational_strength, 0.0..=PI*2.0).step_by(0.0001).
-                                text("Rotational")).changed() {
-                                    self.changed_collision_settings = true;
-                            };
-                        }
+                    }
+                    if self.physics.bonds > 2 {
+                        if ui.add(egui::Slider::new(&mut self.physics.moment_contribution_factor, 0.0..=1.0).step_by(0.0001).
+                            text("Moment Contribution Factor")).changed() {
+                                self.changed_collision_settings = true;
+                        };
                     }
                     
                 });
@@ -1115,7 +1201,7 @@ impl Settings {
         ui.menu_button("Data", |ui| {
             ui.style_mut().wrap = Some(false);
             
-            if ui.selectable_label(self.menu.data_menu, "Data Panel").clicked() { self.menu.data_menu = !self.menu.data_menu; }
+            if ui.selectable_label(self.view.data_menu, "Data Panel").clicked() { self.view.data_menu = !self.view.data_menu; }
 
             ui.separator();
             ui.label("Recording");
@@ -1149,71 +1235,92 @@ impl Settings {
                     self.save_data();
                 }
         });
-            if self.menu.data_menu {
-                egui::TopBottomPanel::bottom("data_panel").resizable(true).default_height(300.0).show(ctx, |ui| {                     
-                        // if ui.checkbox(&mut self.gather_data, "Gather Data").changed() {
-                        //     self.start_time = self.sim_time;
-                        // }
-                    let mut reset_button = None;
-                    egui::menu::bar(ui, |ui|{
+        if self.view.data_menu {
+            egui::TopBottomPanel::bottom("data_panel").resizable(true).default_height(300.0).show(ctx, |ui| {                     
+                    // if ui.checkbox(&mut self.gather_data, "Gather Data").changed() {
+                    //     self.start_time = self.sim_time;
+                    // }
+                let mut reset_button = None;
+                egui::menu::bar(ui, |ui|{
 
-                    // });
-                    // ui.horizontal_centered(|ui|{
-                        
-                        egui::ComboBox::new("graph_property", "")
-                        .selected_text(format!("{:?}", self.plotted_prop))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.plotted_prop, Property::X_Position, "X Position");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Y_Position, "Y Position");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
-                            ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Normal_Force, "Normal Force");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Shear_Force, "Shear Force");
-                            ui.selectable_value(&mut self.plotted_prop, Property::Moment, "Moment");
-                            // ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
-                            ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
-                        });
-                        reset_button = Some(ui.add(egui::Button::new("Reset View")));
+                // });
+                // ui.horizontal_centered(|ui|{
+                    
+                    egui::ComboBox::new("graph_property", "")
+                    .selected_text(format!("{:?}", self.plotted_prop))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.plotted_prop, Property::X_Position, "X Position");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Y_Position, "Y Position");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Rotation, "Rotation");
+                        ui.selectable_value(&mut self.plotted_prop, Property::X_Velocity, "X Velocity");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Y_Velocity, "Y Velocity");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Rotational_Velocity, "Rotational Velocity");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Normal_Force, "Normal Force");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Shear_Force, "Shear Force");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Moment, "Moment");
+                        // ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
+                        ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
                     });
-                    let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
-                    if reset_button.unwrap().clicked() { plot = plot.reset() }
-                    plot.show(ui, |plot_ui| {
-                        match self.plotted_prop {
-                            Property::X_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_pos_data.to_owned())));},
-                            Property::Y_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_pos_data.to_owned())));},
-                            Property::Rotation => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_data.to_owned())));},
-                            Property::X_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_vel_data.to_owned())));},
-                            Property::Y_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_vel_data.to_owned())));},
-                            Property::Rotational_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_vel_data.to_owned())));},
-                            Property::Normal_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));},
-                            Property::Shear_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
-                            Property::Moment => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));},
-                            // Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
-                            Property::FPS => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));},
-                        }
-                    });
+                    reset_button = Some(ui.add(egui::Button::new("Reset View")));
                 });
-            }
+                let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
+                if reset_button.unwrap().clicked() { plot = plot.reset() }
+                plot.show(ui, |plot_ui| {
+                    match self.plotted_prop {
+                        Property::X_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_pos_data.to_owned())));},
+                        Property::Y_Position => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_pos_data.to_owned())));},
+                        Property::Rotation => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_data.to_owned())));},
+                        Property::X_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_vel_data.to_owned())));},
+                        Property::Y_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_vel_data.to_owned())));},
+                        Property::Rotational_Velocity => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_vel_data.to_owned())));},
+                        Property::Normal_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));},
+                        Property::Shear_Force => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));},
+                        Property::Moment => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));},
+                        // Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
+                        Property::FPS => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));},
+                    }
+                });
+            });
+        }
     }
 
     fn script_menu(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.menu_button("Scripts", |ui| {
             ui.style_mut().wrap = Some(false);
             
-            if ui.selectable_label(self.menu.script_menu, "Script Panel").clicked() { self.menu.script_menu = !self.menu.script_menu; }
+            if ui.selectable_label(self.view.script_menu, "Script Panel").clicked() { self.view.script_menu = !self.view.script_menu; }
         });    
     }
 
-    fn script_panel(&mut self, ctx: &Context, script_manager: &mut ScriptManager) {
-        if self.menu.script_menu {
+    fn script_panel(&mut self, ctx: &Context, script_manager: &mut ScriptManager, prog: &mut WGPUProg, device: &mut Device, queue: &mut Queue) {
+        if self.view.script_menu {
             egui::SidePanel::right("script_panel").resizable(true).show(ctx, |ui| {      
                 // egui::menu::bar(ui, |ui|{});
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut script_manager.scripts[self.current_script].name);
-                    if ui.selectable_label(script_manager.executing[self.current_script], "Run").clicked() {
-                        script_manager.executing[self.current_script] = !script_manager.executing[self.current_script];
+                    let delete_button =  ui.button("Delete");
+                    if delete_button.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(format!("{}_delete", self.current_script).into()));
+                    }
+                    // if script_manager.delete_window[self.current_script] {
+                        egui::popup_below_widget(ui, format!("{}_delete", self.current_script).into(), &delete_button, |ui2| {
+                            // ui2.set_min_width(100.0);
+                            // ui2.label(format!("Delete {}?", script_manager.scripts[self.current_script].name));
+                            ui2.horizontal(|ui3|{
+                                if ui3.button("Delete").clicked() {
+                                    script_manager.delete_script(self.current_script);
+                                    if self.current_script == script_manager.scripts.len() {
+                                        self.current_script -= 1;
+                                    }
+                                }
+                                if ui3.button("Cancel").clicked() {
+                                    ui.memory_mut(|mem| mem.toggle_popup(format!("{}_delete", self.current_script).into()));
+                                }
+                            });
+                        });
+                    // }
+                    if ui.selectable_label(script_manager.threads[self.current_script].executing, "Run").clicked() {
+                        script_manager.toggle_execution(self.current_script);
                     }
                 });
                 ui.separator();
@@ -1226,47 +1333,64 @@ impl Settings {
                     if ui.button("+").clicked() {
                         
                         script_manager.new_script(format!("Script {}", script_manager.scripts.len() + 1).as_str());
+                        self.current_script = script_manager.scripts.len() - 1;
                     }
 
-                }); 
+                });
                 ui.separator();
                 ui.heading("Actions");
                 ui.separator();
-                if script_manager.scripts.len() > 0 {
-                    let action_count = script_manager.scripts[self.current_script].actions.len();
-                    for i in 0..action_count {
-                        ui.horizontal(|ui| {
-                            let radio = ui.radio(script_manager.action_indices[self.current_script] == i as i64 - !self.just_set_line as i64, "");
-                            if radio.changed() {
-                                self.just_set_line = false;
-                            }
-                            if radio.clicked() {
-                                self.just_set_line = true;
-                                script_manager.action_indices[self.current_script] = i as i64 - 1;
-                            }
-                            
-                            ui.label(format!("{}", i+1));
-                            let mut changed_action = false; 
-                            egui::ComboBox::new(format!("{}", i).as_str(), "")
-                            .selected_text(format!("{}", script_manager.scripts[self.current_script].actions[i].name.to_string()))
-                            .show_ui(ui, |ui| {
-                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::None, "None").clicked() { changed_action = true; }
-                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Wait, "Wait").clicked() { changed_action = true; }
-                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All").clicked() { changed_action = true; }
-                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties").clicked() { changed_action = true; }
-                                if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Goto, "Goto").clicked() { changed_action = true; }
+                egui::ScrollArea::new([false, true]).show(ui, |ui|{
+                    if script_manager.scripts.len() > 0 {
+                        let mut i = 0;
+                        while i < script_manager.scripts[self.current_script].actions.len() {
+                            ui.horizontal(|ui| {
+                                let current_digits = ((i+1)        as f32).log(10.0) as i32;
+                                let max_digits     = (script_manager.scripts[self.current_script].actions.len() as f32).log(10.0) as i32;
+                                let spaces = (max_digits - current_digits) * 2;
+                                let mut space_string = format!("");
+                                for j in 0..spaces { space_string.push(' '); }
+                                ui.label(format!("{space_string}{}", i+1));            
+                                let mut changed_action = false; 
+                                let action_index = i;
+                                egui::ComboBox::new(format!("{}", i).as_str(), "")
+                                .selected_text(format!("{}", script_manager.scripts[self.current_script].actions[action_index].name.to_string()))
+                                .show_ui(ui, |ui| {
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::None, "None").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Simulate, "Simulate").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Wait, "Wait").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select, "Select").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Goto, "Goto").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Backup, "Backup").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Restore, "Restore").clicked() { changed_action = true; }
+                                    if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Call_Script, "Call Script").clicked() { changed_action = true; }
+                                });
+                                if changed_action {
+                                    script_manager.scripts[self.current_script].actions[i].init_parameters(self.setup.particles);
+                                }
+                                let mut script_names = vec![];
+                                for script in &script_manager.scripts {
+                                    script_names.push(script.name.clone());
+                                }
+                                let action_count = script_manager.scripts[self.current_script].actions.len();
+                                script_manager.scripts[self.current_script].actions[action_index].ui(ui, format!("{}:{}", self.current_script, i), (self.materials.len()/self.material_size) as usize, action_count, prog, device, queue, script_names);
+                                ui.with_layout(egui::Layout::right_to_left(Align::RIGHT), |ui| {
+
+                                    if ui.button("X").clicked() {
+                                        script_manager.scripts[self.current_script].delete_action(i);
+                                    }
+                                });
                             });
-                            if changed_action {
-                                script_manager.scripts[self.current_script].actions[i].init_parameters();
-                            }
-                            script_manager.scripts[self.current_script].actions[i].ui(ui, format!("{}:{}", self.current_script, i), (self.materials.len()/self.material_size) as usize, action_count);
-                        });
+                            i += 1;
+                        }
                     }
-                }
-                ui.separator();
-                if ui.button("Add Action").clicked() {
-                    script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
-                }       
+                    ui.separator();
+                    if ui.button("Add Action").clicked() {
+                        script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
+                    }   
+                });
             });
         }
     }
@@ -1274,7 +1398,7 @@ impl Settings {
     // fn action_parameter_ui
 
     pub fn updateBonds(&mut self) {
-        self.bonds = match self.bondenum {
+        self.physics.bonds = match self.physics.bondenum {
             BondType::Unbonded => { 0 },
             BondType::Normal_Bonds => { 1 },
             BondType::Linear_Contact_Bond => { 2 },
@@ -1397,58 +1521,64 @@ impl Settings {
     pub fn collison_settings(&mut self) -> Vec<f32> {
         self.changed_collision_settings = false;
         return vec![
-            self.hor_bound,
-            self.vert_bound,
-            bytemuck::cast(self.round_walls as i32),
-            self.wall_radius,
+            self.simulation.hor_bound,
+            self.simulation.vert_bound,
+            bytemuck::cast(self.simulation.round_walls as i32),
+            self.simulation.wall_radius,
             self.wall_friction,
-            bytemuck::cast(self.gravity as i32),
-            bytemuck::cast(self.planet_mode as i32),
-            bytemuck::cast(self.bonds),
-            bytemuck::cast(self.collisions as i32),
-            bytemuck::cast(self.friction as i32),
-            self.friction_coefficient,
-            bytemuck::cast(self.rotation as i32),
-            bytemuck::cast(self.linear_contact_bonds as i32),
-            self.gravity_acceleration,
-            self.bond_normal_stiffness,
-            bytemuck::cast(self.bond_tearing as i32),
-            self.bond_normal_strength,
-            self.contact_damping,
-            self.bond_damping,
-            self.drag,
-            self.bond_shear_stiffness,
-            bytemuck::cast(self.verlet as i32),
-            self.timestep,
-            self.bond_shear_strength,
-            self.bond_rotational_stiffness,
-            self.bond_rotational_strength
+            bytemuck::cast(self.physics.gravity as i32),
+            bytemuck::cast(self.physics.planet_mode as i32),
+            bytemuck::cast(self.physics.bonds),
+            bytemuck::cast(self.physics.collisions as i32),
+            self.physics.friction_coefficient,
+            self.physics.gravity_acceleration,
+            self.physics.bond_normal_stiffness,
+            bytemuck::cast(self.physics.bond_tearing as i32),
+            self.physics.bond_normal_strength,
+            self.physics.contact_damping,
+            self.physics.bond_damping,
+            self.physics.drag,
+            self.physics.bond_shear_strength,
+            self.simulation.timestep,
+            self.physics.bond_shear_stiffness,
+            self.world_pos.0,
+            self.world_pos.1,
+            bytemuck::cast(self.physics.mouse_gravity as i32),
+            self.physics.moment_contribution_factor
         ];
     }
 
     pub fn render_settings(&mut self) -> Vec<i32> {
         return vec![
-            self.circular_particles as i32,
-            self.render_rot as i32,
-            self.color_code_rot as i32,
-            self.color_source.as_i32(),
-            (self.bonds != 0 && self.render_bonds) as i32,
-            self.hor_bound.to_bits() as i32,
-            self.vert_bound.to_bits() as i32,
-            self.bond_normal_stiffness.to_bits() as i32,
-            self.render_bp_grid as i32,
-            self.round_walls as i32,
-            self.wall_radius.to_bits() as i32,
-            self.render_outline as i32,
-            self.use_particle_color_outline as i32,
-            self.background_color[0].to_bits() as i32,
-            self.background_color[1].to_bits() as i32,
-            self.background_color[2].to_bits() as i32,
-            self.outline_color[0].to_bits() as i32,
-            self.outline_color[1].to_bits() as i32,
-            self.outline_color[2].to_bits() as i32,
-            self.dim_slow_particles as i32,
-            self.max_brightness_vel.to_bits() as i32,
+            self.view.circular_particles as i32,
+            self.view.render_rot as i32,
+            self.view.color_code_rot as i32,
+            self.view.color_source.as_i32(),
+            (self.physics.bonds != 0 && self.view.render_bonds) as i32,
+            self.simulation.hor_bound.to_bits() as i32,
+            self.simulation.vert_bound.to_bits() as i32,
+            self.physics.bond_normal_stiffness.to_bits() as i32,
+            self.view.render_bp_grid as i32,
+            self.simulation.round_walls as i32,
+            self.simulation.wall_radius.to_bits() as i32,
+            self.view.render_outline as i32,
+            self.view.use_particle_color_outline as i32,
+            self.view.background_color[0].to_bits() as i32,
+            self.view.background_color[1].to_bits() as i32,
+            self.view.background_color[2].to_bits() as i32,
+            self.view.outline_color[0].to_bits() as i32,
+            self.view.outline_color[1].to_bits() as i32,
+            self.view.outline_color[2].to_bits() as i32,
+            self.view.dim_slow_particles as i32,
+            self.view.max_brightness_vel.to_bits() as i32,
+            self.view.crt_res,
+            self.view.grain as i32,
+            self.view.grain_strength.to_bits() as i32,
+            self.view.grain_size,
+            self.view.sobel as i32 + self.view.colored_sobel as i32 * 2,
+            self.view.invert as i32,
+            self.view.chrom_ab as i32,
+            self.view.abb_strength.to_bits() as i32
         ];
     }
 

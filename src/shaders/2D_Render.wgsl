@@ -9,7 +9,8 @@ struct Dimensions {
     scale: f32, dark: f32,
     x: i32, y: i32,
     rW: i32, rH: i32,
-    pressed: i32
+    pressed: i32,
+    timestamp: i32
 }
 
 struct Camera {
@@ -78,9 +79,16 @@ struct Settings {
     outline_g: f32,
     outline_b: f32,
     dim_slow_particles: i32,
-    max_brightness_vel: f32
+    max_brightness_vel: f32,
+    crt_res: i32,
+    grain: i32,
+    grain_strength: f32,
+    grain_size: i32,
+    sobel: i32,
+    invert: i32,
+    chrom_ab: i32,
+    abb_strength: f32
 }
-
 struct Bond {
     index: i32,
     angle: f32,
@@ -162,7 +170,6 @@ fn vs_main(
         let max_brightness = min(1.0, vel_mag*vel_mag*vel_mag);
         out.color *= max_brightness;
     }
-
     return out;
 }
 

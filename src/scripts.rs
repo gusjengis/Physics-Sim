@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 use std::{str::FromStr, vec};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
-use crate::settings::Properties;
+use crate::settings::{Properties, Settings, Data};
 use chrono::Local;
 use egui::Ui;
 use serde_json::*;
@@ -10,8 +10,209 @@ use wgpu::{Device, Queue};
 
 use crate::{client::Client, wgpu_prog::{WGPUProg, WGPUComputeProg}};
 
-static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-// #[derive(Serialize, Deserialize)]
+pub struct ScriptManager {
+    pub scripts: Vec<Script>,
+    pub threads: Vec<Thread>,
+}
+
+impl ScriptManager {
+    pub fn new() -> Self {
+        let mut script_manager = Self {
+            scripts: vec![],
+            threads: vec![],
+        };
+        script_manager.new_script("Script 1");
+        return script_manager;
+    }
+
+    fn init_script(&mut self){
+        self.threads.push(Thread::new(self.scripts.len() - 1));
+    }
+
+    pub fn push_script(&mut self, script: Script) {
+        self.scripts.push(script);
+        self.init_script();
+    }
+
+    pub fn new_script(&mut self, name: &str) {
+        self.scripts.push(
+            Script::new(name)
+        );
+        self.init_script();
+    }
+
+    pub fn delete_script(&mut self, script_index: usize) {
+        for thread in &mut self.threads {
+            if !thread.stack.is_empty() {
+                for i in 0..thread.stack.len() {
+                    if thread.stack[i].0 == script_index {
+                        thread.executing = false;
+                        thread.stack = vec![];
+                    }
+                }
+            }
+        }
+        self.scripts.remove(script_index);
+        self.threads.remove(script_index);
+        if self.scripts.is_empty() {
+            self.new_script("Script 1");
+        } else {
+            for script in &mut self.scripts {
+                for i in 0..script.actions.len() {
+                    match script.actions[i].name {
+                        Command::Call_Script => { if script.actions[i].parameters[0].as_i32() as usize == script_index { script.actions[i].name = Command::None; script.actions[i].init_parameters(0)}},
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+    }
+
+    pub fn toggle_execution(&mut self, script_index: usize){
+        if !self.scripts[script_index].actions.is_empty() {
+            self.threads[script_index].toggle_execution(script_index);
+        }
+    }
+
+    pub fn push_action(&mut self, script_index: usize, action: Action){
+        self.scripts[script_index].push_action(action);
+    }
+
+    pub fn execute(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
+        for thread in &mut self.threads {
+            thread.execute(&self.scripts, prog, config, settings, canvas);
+        }
+    }
+}
+
+pub struct Thread {
+    pub stack: Vec<(usize, i64)>,
+    pub executing: bool,
+    pub wait_timestamp: i64,
+}
+
+impl Thread {
+    pub fn new(script_index: usize) -> Self {
+        Self {
+            stack:          vec![],
+            executing:      false,
+            wait_timestamp: 0,
+        }
+    }
+
+    pub fn toggle_execution(&mut self, script_index: usize) {
+        self.executing = !self.executing;
+        if self.stack.is_empty() {
+            self.stack.push((script_index, -1));
+        }
+    }
+
+    pub fn script(&self) -> usize { self.stack.last().unwrap().0 }
+    pub fn action(&self) -> i64   { self.stack.last().unwrap().1 }
+    pub fn set_action(&mut self, action: i64) {
+        let stack_index = self.stack.len() - 1;
+        self.stack[stack_index] = (self.stack[stack_index].0, action);
+    }
+    pub fn inc_action(&mut self, scripts: &Vec<Script>) -> (usize, i64) {
+        let stack_index = self.stack.len() - 1;
+        self.stack[stack_index] = (self.stack[stack_index].0, self.stack[stack_index].1 + 1);
+        let res = (self.stack.last().unwrap()).clone();
+        if res.1 as usize == scripts[res.0].actions.len() - 1 {
+            self.stack.pop();
+        }
+        return res;
+    }
+
+    pub fn execute(&mut self, scripts: &Vec<Script>, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
+        while !self.stack.is_empty() && self.executing && Local::now().timestamp_millis() > self.wait_timestamp {
+            // print!("[");
+            // for i in 0..self.stack.len() {
+            //     print!("({}, {}) ", self.stack[i].0, self.stack[i].1);
+            // }
+            // println!("]");
+            if self.action() < scripts[self.script()].actions.len() as i64 - 1 {
+                let script_action = self.inc_action(scripts);
+                self.execute_action(scripts, script_action.1 as usize, script_action.0, prog, config, settings, canvas);
+                if self.stack.is_empty() {
+                    self.executing = false;
+                }
+            }
+        }
+    }
+
+    fn execute_action(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas){
+        match scripts[script_index].actions[action_index].name {
+            Command::None => {},
+            Command::Wait => { self.wait(scripts[script_index].actions[action_index].parameters[0].to_string(), script_index); }//f64::from_str(action.parameters.as_str()).unwrap(), script_index); }
+            Command::Select_All => { self.select_all(prog, config, canvas); }
+            Command::Set_Properties => { let mut params = vec![]; for i in 0..scripts[script_index].actions[action_index].parameters.len() { params.push(scripts[script_index].actions[action_index].parameters[i].as_f32()); } self.set_properties(prog, config, settings, params); }
+            Command::Goto => { self.goto(script_index, scripts[script_index].actions[action_index].parameters[0].as_i32()); }
+            Command::Select => { self.select(scripts[script_index].actions[action_index].parameters[0].as_i32_vec(), &config, prog); },
+            Command::Simulate => {self.set_simulation(scripts[script_index].actions[action_index].parameters[0].truthy(), settings); }
+            Command::Backup => { self.backup(prog, config, settings); }
+            Command::Restore => { self.restore(prog, config, settings); }
+            Command::Call_Script => { self.call_script(scripts, action_index, script_index); }
+        }
+    }
+
+    fn wait(&mut self, duration_string: String, script_index: usize) {
+        let duration = f64::from_str(duration_string.as_str()).unwrap();
+        self.wait_timestamp = Local::now().timestamp_millis() + (duration * 1000.0) as i64;
+    }
+
+    fn select_all(&mut self, prog: &mut WGPUProg, config: &WGPUConfig, canvas: &Canvas) {
+        prog.shader_prog.buffers.selectangle_input.updateUniform(&config.device, bytemuck::cast_slice(
+            &[
+                bytemuck::cast::<_, f32>(0 as i32),
+                bytemuck::cast::<_, f32>(0 as i32),
+                bytemuck::cast::<_, f32>(canvas.size.width as i32),
+                bytemuck::cast::<_, f32>(canvas.size.height as i32),
+            ]
+        ));
+        prog.shader_prog.selectangle(config, (canvas.size.width, canvas.size.height));
+    }
+
+    fn set_properties(&self, prog: &mut WGPUProg, config: &WGPUConfig, settings: &mut Settings, properties: Vec<f32>) {
+        prog.shader_prog.buffers.set_prop_input.updateUniform(&config.device, bytemuck::cast_slice(&properties));
+        prog.shader_prog.set_properties(config, settings);
+    }
+
+    fn goto(&mut self, script_index: usize, line: i32){
+        if self.stack.is_empty() {
+            self.stack.push((script_index, (line - 2) as i64))
+        } else {
+            self.set_action((line - 2) as i64);
+        }
+    }
+
+    fn select(&mut self, selections: Vec<i32>, config: &WGPUConfig, prog: &mut WGPUProg){
+        prog.shader_prog.buffers.selections.updateUniform(&config.device, bytemuck::cast_slice(selections.as_slice()));
+
+    }
+
+    fn set_simulation(&self, simulating: bool, settings: &mut Settings) {
+        settings.simulating = simulating;
+    }
+
+    fn backup(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings) {
+        prog.shader_prog.update_state(config, settings);
+        prog.shader_prog.state.save(config, settings);
+    }
+
+    fn restore(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings) {
+        prog.shader_prog.state.load(config, settings, false);
+        prog.shader_prog.restore(config, settings);
+        settings.data = Data::new();
+    }
+
+    fn call_script(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize) {
+        let called_script = scripts[script_index].actions[action_index].parameters[0].as_i32() as usize;
+        self.stack.push((called_script, -1));
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct Script {
     pub name: String,
     pub actions: Vec<Action>
@@ -29,182 +230,115 @@ impl Script {
         self.actions.push(action);
     }
 
-    // pub fn get_action(&self, index: usize) -> Action {
-    //     return self.actions[index].clone();
-    // }
-    // pub fn from_json(json: &str) -> Self {
-    //     return serde_json::from_str(json).unwrap();
-    // }
-
-    // pub fn to_json(&self) -> String {
-    //     return serde_json::to_string(&self).unwrap();
-    // }   
-}
-
-pub struct ScriptManager {
-    pub scripts: Vec<Script>,
-    pub action_indices: Vec<i64>,
-    pub executing: Vec<bool>,
-    pub wait_timestamps: Vec<i64>,
-}
-
-impl ScriptManager {
-    pub fn new() -> Self {
-        Self {
-            scripts: vec![],
-            action_indices: vec![],
-            executing: vec![],
-            wait_timestamps: vec![]
+    pub fn from_json(json: &str) -> Self { return serde_json::from_str(json).unwrap(); }
+    pub fn to_json(&self) -> String { return serde_json::to_string(&self).unwrap(); }
+    pub fn to_string(&self) -> String {
+        let mut string = format!("");
+        for action in &self.actions {
+            string.push_str(action.to_string().as_str());
+            string.push('\n');
         }
+        return string;
     }
-
-    fn init_script(&mut self){
-        self.action_indices.push(-1);
-        self.executing.push(false);
-        self.wait_timestamps.push(0);
-    }
-    pub fn push_script(&mut self, script: Script) {
-        self.scripts.push(script);
-        self.init_script();
-    }
-
-    pub fn new_script(&mut self, name: &str) {
-        self.scripts.push(
-            Script::new(name)
-        );
-        self.init_script();
-    }
-
-    pub fn toggle_execution(&mut self, script_index: usize){
-        self.executing[script_index] = !self.executing[script_index];
-    }
-
-    pub fn push_action(&mut self, script_index: usize, action: Action){
-        self.scripts[script_index].push_action(action);
-    }
-
-    pub fn execute(&mut self, prog: &mut WGPUProg, config: &WGPUConfig, canvas: &Canvas) {
-        for i in 0..self.scripts.len() {
-            while self.executing[i] && Local::now().timestamp_millis() > self.wait_timestamps[i] {
-                if self.action_indices[i] < self.scripts[i].actions.len() as i64 - 1 {
-                    self.action_indices[i] += 1;
-                    self.execute_action(self.action_indices[i] as usize, i, prog, config, canvas);
-                } else {
-                    self.executing[i] = false;
-                    self.action_indices[i] = -1;
-                
-                }
+    pub fn delete_action(&mut self, action_index: usize){
+        self.actions.remove(action_index);
+        for i in action_index..self.actions.len() {
+            match self.actions[i].name {
+                Command::Goto => { self.actions[i].parameters[0] = Parameter::Integer(format!("Line"), (self.actions[i].parameters[0].as_i32() - 1));}
+                _ => {}
             }
         }
     }
+    // pub fn from_string(&self) -> String {
 
-    fn execute_action(&mut self, action_index: usize, script_index: usize, prog: &mut WGPUProg, config: &WGPUConfig, canvas: &Canvas){
-        match self.scripts[script_index].actions[action_index].name {
-            Command::None => {},
-            Command::Wait => { self.wait(self.scripts[script_index].actions[action_index].parameters[0].to_string(), script_index); }//f64::from_str(action.parameters.as_str()).unwrap(), script_index); }
-            Command::Select_All => { self.select_all(prog, config, canvas); }
-            Command::Set_Properties => { let mut params = vec![]; for i in 0..self.scripts[script_index].actions[action_index].parameters.len() { params.push(self.scripts[script_index].actions[action_index].parameters[i].as_f32()); } self.set_properties(prog, config, params); }
-            Command::Goto => { self.goto(script_index, self.scripts[script_index].actions[action_index].parameters[0].as_i32());}
-        }
-    }
-
-    fn wait(&mut self, duration_string: String, script_index: usize) {
-        let duration = f64::from_str(duration_string.as_str()).unwrap();
-        self.wait_timestamps[script_index] = Local::now().timestamp_millis() + (duration * 1000.0) as i64;
-    }
-
-    fn select_all(&mut self, prog: &mut WGPUProg, config: &WGPUConfig, canvas: &Canvas) {
-        prog.shader_prog.buffers.selectangle_input.updateUniform(&config.device, bytemuck::cast_slice(
-            &[
-                bytemuck::cast::<_, f32>(0 as i32),
-                bytemuck::cast::<_, f32>(0 as i32),
-                bytemuck::cast::<_, f32>(canvas.size.width as i32),
-                bytemuck::cast::<_, f32>(canvas.size.height as i32),
-            ]
-        ));
-        prog.shader_prog.selectangle(config, (canvas.size.width, canvas.size.height));
-    }
-
-    fn set_properties(&self, prog: &mut WGPUProg, config: &WGPUConfig, properties: Vec<f32>) {
-        prog.shader_prog.buffers.set_prop_input.updateUniform(&config.device, bytemuck::cast_slice(&properties));
-        prog.shader_prog.set_properties(config);
-    }
-
-    fn goto(&mut self, script_index: usize, line: i32){
-        self.action_indices[script_index] = (line - 2) as i64;
-    }
-
-    // fn backup(&mut self, prog: &mut WGPUProg){
-    //    prog.shader_prog.update_state(&mut self.wgpu_config);
-    //    prog.shader_prog.state.save(&mut self.wgpu_config);
-    // }
-
-    // fn restore(&mut self, prog: &mut WGPUProg,){
-    //    prog.shader_prog.state.load(&mut self.wgpu_config, false);
-    //    prog.shader_prog.restore(&mut self.wgpu_config);
-    //     self.wgpu_config.prog_settings.data = Data::new();
     // }
 }
 
-// #[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 // #[derive(Clone)]
 pub struct Action {
     pub name: Command,
-    pub parameters: Vec<Box<dyn Parameter>>,
+    pub parameters: Vec<Parameter>,
 }
 
 impl Action {
-    pub fn new(name: Command, parameters: Vec<Box<dyn Parameter>>) -> Self {
+    pub fn new(name: Command, parameters: Vec<Parameter>) -> Self {
         Self {
             name,
             parameters: parameters
         }
     }
 
-    pub fn init_parameters(&mut self) {
+    pub fn to_string(&self) -> String {
+        let mut string = self.name.to_string();
+        string.push('(');
+        let mut index = 0;
+        for param in &self.parameters {
+            if index > 0 {
+                string.push(',');
+            }
+            string.push_str(param.to_string().as_str());
+            index += 1;
+        }
+        string.push(')');
+        return string;
+    }
+
+    pub fn init_parameters(&mut self, particle_count: usize) {
         match self.name {
             Command::None => { self.parameters = vec![]; },
             Command::Wait => { self.parameters = vec![
-                Box::new(Float::new(0.0))
+                Parameter::Float(format!("Duration"), 0.0)
             ]; },
             Command::Select_All => { self.parameters = vec![]; },
             Command::Set_Properties => { self.parameters = vec![
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Float::new(0.0)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Boolean::new(false)),
-                Box::new(Integer::new(0)),
+                Parameter::Boolean(format!("Set X Position"), false),
+                Parameter::Boolean(format!("Set Y Position"), false),
+                Parameter::Boolean(format!("Set Rotation"), false),
+                Parameter::Boolean(format!("Set X Velocity"), false),
+                Parameter::Boolean(format!("Set Y Velocity"), false),
+                Parameter::Boolean(format!("Set Rotational Velocity"), false),
+                Parameter::Boolean(format!("Set X Force"), false),
+                Parameter::Boolean(format!("Set Y Force"), false),
+                Parameter::Boolean(format!("Set Rotational Force"), false),
+                Parameter::Boolean(format!("Set Radius"), false),
+                Parameter::Boolean(format!("Set X Fixity"), false),
+                Parameter::Boolean(format!("Set Y Fixity"), false),
+                Parameter::Boolean(format!("Set Rotational Fixity"), false),
+                Parameter::Boolean(format!("Set Material"), false),
+                Parameter::Float(format!("X Position"), 0.0),
+                Parameter::Float(format!("Y Postition"), 0.0),
+                Parameter::Float(format!("Rotation"), 0.0),
+                Parameter::Float(format!("X Velocity"), 0.0),
+                Parameter::Float(format!("Y Velocity"), 0.0),
+                Parameter::Float(format!("Rotational Velocity"), 0.0),
+                Parameter::Float(format!("X Force"), 0.0),
+                Parameter::Float(format!("Y Force"), 0.0),
+                Parameter::Float(format!("Rotational Force"), 0.0),
+                Parameter::Float(format!("Radius"), 0.0),
+                Parameter::Boolean(format!("X Fixity"), false),
+                Parameter::Boolean(format!("Y Fixity"), false),
+                Parameter::Boolean(format!("Rotational Fixity"), false),
+                Parameter::Integer(format!("Material"), 0),
             ]; },
             Command::Goto => {self.parameters = vec![
-                Box::new(Integer::new(0))
+                Parameter::Integer(format!("Line"), 0)
             ];},
+            Command::Select => {self.parameters = vec![
+                Parameter::List(format!("Particle ID's"), vec![0; particle_count])
+            ];},
+            Command::Simulate => {self.parameters = vec![
+                Parameter::Boolean(format!("Simulating"), false)
+            ];},
+            Command::Backup => {self.parameters = vec![]; },
+            Command::Restore => {self.parameters = vec![]; },
+            Command::Call_Script => {self.parameters = vec![
+                Parameter::Integer(format!("Script_Index"), 0)
+            ]}
         }
     }
 
-    pub fn ui(&mut self, ui: &mut Ui, id: String, mat_count: usize, action_count: usize) {
+    pub fn ui(&mut self, ui: &mut Ui, id: String, mat_count: usize, action_count: usize, prog: &mut WGPUProg, device: &mut Device, queue: &mut Queue, script_names: Vec<String>) {
         match self.name {
             Command::None => {},
             Command::Wait => {ui.label("Duration: "); self.parameters[0].ui(ui, "s", true, Some(0.0..=f64::MAX));}
@@ -230,12 +364,36 @@ impl Action {
                     ui.horizontal(|ui| {self.parameters[11].ui(ui, "", true, None); let enabled = self.parameters[11].truthy(); self.parameters[25].ui(ui, "", enabled, None); ui.label("Y Fixity"); });
                     ui.horizontal(|ui| {self.parameters[12].ui(ui, "", true, None); let enabled = self.parameters[12].truthy(); self.parameters[26].ui(ui, "", enabled, None); ui.label("Rotational Fixity"); });
                     ui.label("Material");
-                    ui.horizontal(|ui| {self.parameters[13].ui(ui, "", true, None); let enabled = self.parameters[13].truthy(); self.parameters[27].ui(ui, "", enabled, Some(0.0..=(mat_count as f64 - 1.0) )); ui.label("Material"); });
+                    ui.horizontal(|ui| {self.parameters[13].ui(ui, "", true, None); let enabled = self.parameters[13].truthy(); ui.add(egui::Slider::new(self.parameters[27].as_i32_ref().unwrap(), 0..=mat_count as i32 - 1))});
                 });
             },
             Command::Goto => {
                 self.parameters[0].ui(ui, "", true, Some(1.0..=action_count as f64));
             },
+            Command::Select => {
+                if ui.button("Set").clicked() {
+                    prog.shader_prog.update_selections(device, queue);
+                    self.parameters[0].set_list(prog.shader_prog.state.selections.clone());
+                    // self.parameters[0].set_list()
+                }
+                if ui.button("Restore").clicked() {
+                    prog.shader_prog.buffers.selections.updateUniform(&device, bytemuck::cast_slice(self.parameters[0].as_i32_vec().as_slice()));
+                }
+            }
+            Command::Simulate => {
+                self.parameters[0].ui(ui,"", true, None);
+            }
+            Command::Backup => {},
+            Command::Restore => {},
+            Command::Call_Script => {
+                egui::ComboBox::new(id, "Script")
+                .selected_text(format!("{}", script_names[self.parameters[0].as_i32() as usize]))
+                .show_ui(ui, |ui|{
+                    for i in 0..script_names.len() {
+                        if ui.selectable_label(self.parameters[0].as_i32() == i as i32, script_names[i].clone()).clicked() { self.parameters[0] = Parameter::Integer(format!("Script_Index"), i as i32); }
+                    }
+                });
+            }
         }
     }
 
@@ -256,14 +414,20 @@ impl Action {
 //     manager.execute(prog);
 // }
 
-// #[derive(Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+// #[derive(Clone, PartialEq)]
 pub enum Command {
     None,
     Wait,
     Select_All,
     Set_Properties,
-    Goto
+    Goto,
+    Select,
+    Simulate,
+    Backup,
+    Restore,
+    Call_Script
+    // Record
 }
 
 impl Command {
@@ -274,92 +438,101 @@ impl Command {
             Command::Select_All => { String::from_str("Select All").unwrap() }
             Command::Set_Properties => { String::from_str("Set Properties").unwrap() }
             Command::Goto => { String::from_str("Goto").unwrap() }
+            Command::Select => { String::from_str("Select").unwrap() }
+            Command::Simulate => { String::from_str("Simulate").unwrap() }
+            Command::Backup => { String::from_str("Backup").unwrap() }
+            Command::Restore => { String::from_str("Restore").unwrap() }
+            Command::Call_Script => { String::from_str("Call Script").unwrap() }
         }
     }
 }
 
 //Parameters
-pub trait Parameter {
-    fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>);
-    fn to_string(&self) -> String;
-    fn truthy(&self) -> bool;
-    fn as_f32(&self) -> f32;
-    fn as_i32(&self) -> i32;
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum Parameter {
+    Float(String, f32),
+    Integer(String, i32),
+    Boolean(String, bool),
+    List(String, Vec<i32>),
 }
 
-// #[derive(Clone)]
-pub struct Float {
-    pub value: f32
-}
-pub struct Integer {
-    pub value: i32
-}
-pub struct Boolean {
-    pub value: bool
-}
-
-impl Float { 
-    pub fn new(value: f32) -> Self {
-        Self {
-            value
-        }
-    }
-}
-
-impl Integer { 
-    pub fn new(value: i32) -> Self {
-        Self {
-            value
-        }
-    }
-}
-
-impl Boolean { 
-    pub fn new(value: bool) -> Self {
-        Self {
-            value
-        }
-    }
-}
-
-impl Parameter for Float {
+impl Parameter {
     fn to_string(&self) -> String {
-        return self.value.to_string();
+        match self {
+            Parameter::Float(_, value)   => { return value.to_string(); }
+            Parameter::Integer(_, value) => { return value.to_string(); }
+            Parameter::Boolean(_, value) => { return value.to_string(); }
+            Parameter::List(_, value) => {
+                let mut res = format!("");
+                for num in value {
+                    res.push_str(num.to_string().as_str());
+                    res.push(',');
+                }
+                return res;
+            }
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>) {
-        ui.add_enabled(enabled, egui::DragValue::new(&mut self.value).clamp_range(range.unwrap()).suffix(label));
+        match self {
+            Parameter::Float(_, value)   => { ui.add_enabled(enabled, egui::DragValue::new(&mut *value).clamp_range(range.unwrap()).suffix(label)); }
+            Parameter::Integer(_, value) => { ui.add_enabled(enabled, egui::DragValue::new(&mut *value).clamp_range(range.unwrap()).suffix(label)); }
+            Parameter::Boolean(_, value) => { ui.add_enabled(enabled, egui::Checkbox::new(&mut *value, label)); }
+            Parameter::List(_, _) => {}
+        }
     }
 
-    fn truthy(&self) -> bool { true }
-    fn as_f32(&self) -> f32 { self.value }
-    fn as_i32(&self) -> i32 { bytemuck::cast(self.value) }
-}
-
-impl Parameter for Integer {
-    fn to_string(&self) -> String {
-        return self.value.to_string();
+    fn truthy(&self) -> bool {
+        match self {
+            Parameter::Float(_, value)   => { true }
+            Parameter::Integer(_, value) => { true }
+            Parameter::Boolean(_, value) => { *value }
+            Parameter::List(_, value) => { value.len() != 0 }
+        }
     }
 
-    fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>) {
-        ui.add_enabled(enabled, egui::DragValue::new(&mut self.value).clamp_range(range.unwrap()).suffix(label));
+    fn as_f32(&self) -> f32 {
+        match self {
+            Parameter::Float(_, value)   => { *value }
+            Parameter::Integer(_, value) => { bytemuck::cast(*value) }
+            Parameter::Boolean(_, value) => { bytemuck::cast(*value as i32) }
+            Parameter::List(_, _) => { -1.0 }
+        }
     }
 
-    fn truthy(&self) -> bool { true }
-    fn as_f32(&self) -> f32 { bytemuck::cast(self.value) }
-    fn as_i32(&self) -> i32 { self.value }
-}
-
-impl Parameter for Boolean {
-    fn to_string(&self) -> String {
-        return self.value.to_string();
+    fn as_i32(&self) -> i32 {
+        match self {
+            Parameter::Float(_, value)   => { bytemuck::cast(*value) }
+            Parameter::Integer(_, value) => { *value }
+            Parameter::Boolean(_, value) => { *value as i32 }
+            Parameter::List(_, _) => { -1 }
+        }
     }
 
-    fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>) {
-        ui.add_enabled(enabled, egui::Checkbox::new(&mut self.value, label));
+    fn as_i32_vec(&self) -> Vec<i32> {
+        match self {
+            Parameter::Float(_, value)   => { vec![*value as i32; 1] }
+            Parameter::Integer(_, value) => { vec![*value; 1] }
+            Parameter::Boolean(_, value) => { vec![1; 1] }
+            Parameter::List(_, value) => { (*value.clone()).to_vec() }
+        }
     }
 
-    fn truthy(&self) -> bool { self.value }
-    fn as_f32(&self) -> f32 { bytemuck::cast(self.value as i32) }
-    fn as_i32(&self) -> i32 { self.value as i32 }
-}
+    fn set_list(&mut self, list: Vec<i32>) {
+        match self {
+            Parameter::Float(_, _) => {},
+            Parameter::Integer(_, _) => {},
+            Parameter::Boolean(_, _) => {},
+            Parameter::List(_, value) => { *value = list; },
+        }
+    }
+
+    fn as_i32_ref(&mut self) -> Option<&mut i32> {
+        match self {
+            Parameter::Float(_, _) => { None },
+            Parameter::Integer(_, value) => { Some(&mut *value) },
+            Parameter::Boolean(_, _) => { None },
+            Parameter::List(_, _) => { None },
+        }
+    }
+ }

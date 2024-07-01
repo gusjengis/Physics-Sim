@@ -41,10 +41,7 @@ struct Settings {
     planet_mode: i32,
     bonds: i32,
     collisions: i32,
-    friction: i32,
     friction_coefficient: f32,
-    rotation: i32,
-    linear_contact_bonds: i32,
     gravity_acc: f32,
     bond_normal_stiffness: f32,
     bonds_tear: i32,
@@ -53,11 +50,12 @@ struct Settings {
     bond_damping: f32,
     drag: f32,
     bond_shear_strength: f32,
-    verlet: i32,
     dT: f32,
     bond_shear_stiffness: f32,
-    bond_rotational_stiffness: f32,
-    bond_rotational_strength: f32
+    gravity_x: f32,
+    gravity_y: f32,
+    mouse_gravity: i32,
+    moment_contribution_factor: f32
 }
 
 struct Material {
@@ -296,7 +294,7 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
     let lambda = 0.5; // make parameter 
     let R = lambda * min(radii[a], radii[b]); // bond radius
     let t = 1.0; // "beam" thickness
-    let A = 2.0*R;//*t; // cross-sectional area
+    let A = 2.0*R*t; // cross-sectional area
     let I = 2.0/3.0 * R * R * R;// * t;// moment of inertia
     // let J = 1/2*PI*R*R*R*R; // polar moment, 3D only
     let normal_displacement = distance(a,b);
@@ -328,8 +326,8 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
     // TEAR BOND
     var normal_limit = settings.bond_normal_strength;
     var shear_limit  = settings.bond_shear_strength;
-    var rotation_limit = settings.bond_rotational_strength;
-    if settings.bonds_tear == 1 && (normal_force < -normal_limit || abs(contacts[i].tangent_force) > shear_limit || abs(contacts[i].theta_b) > rotation_limit){// * I * -normal_stiffness
+    let normal_and_moment = normal_force; 
+    if settings.bonds_tear == 1 && normal_force/A + settings.moment_contribution_factor*(abs(moment)*R) > normal_limit && abs(contacts[i].bond_tangent_force/A) > shear_limit {
         bonds[bonded].index = -bonds[bonded].index;
         contacts[i].bonded = -1;
     }
@@ -364,10 +362,6 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     var friction_limit = abs(normal_force)*settings.friction_coefficient;
     contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent*shear_stiffness, -friction_limit, friction_limit);
     var moment = -(radii[a])*contacts[i].tangent_force;
-    if contacts[i].bonded >= 0 && settings.bonds == 3 {
-        moment = 0.0;
-        contacts[i].tangent_force = 0.0;
-    }
     let force  = settings.contact_damping * (normal*normal_force + tangent*contacts[i].tangent_force);
     data[u32(a)*4u   ] += normal_force;
     data[u32(a)*4u+1u] += contacts[i].tangent_force;
@@ -443,7 +437,11 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
     // data[id*4u+2u] = net_moment;
     // gravity
     if settings.gravity == 1 && settings.planet_mode == 1  {
-        let delta = (vec2(0.0, 0.0) - positions[id]);
+        var center_of_gravity = vec2(0.0, 0.0);
+        if settings.mouse_gravity == 1 {
+            center_of_gravity = vec2(settings.gravity_x, settings.gravity_y);
+        }
+        let delta = (center_of_gravity - positions[id]);
         if delta.x != 0.0 || delta.y != 0.0 {
             accelerations[id] += delta/length(delta) * 9.81 * settings.gravity_acc;
         }

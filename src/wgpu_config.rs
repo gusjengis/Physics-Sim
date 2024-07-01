@@ -13,8 +13,8 @@ pub struct WGPUConfig {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub size: winit::dpi::PhysicalSize<u32>,
-    pub prog_settings: settings::Settings,
-    pub surface_format: wgpu::TextureFormat
+    pub surface_format: wgpu::TextureFormat,
+    pub f64_support: bool,
     // dim_uniform: Uniform,
     // cursor_uniform: Uniform,
 
@@ -163,10 +163,6 @@ impl WGPUConfig {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-    
-        let mut prog_settings = settings::Settings::new(canvas);
-
-        prog_settings.f64_support = f64_support;
          
         Self {
             instance,
@@ -176,8 +172,8 @@ impl WGPUConfig {
             queue,
             config,
             size,
-            prog_settings,
-            surface_format
+            surface_format,
+            f64_support
         }
     }
 }

@@ -6,9 +6,12 @@ use std::path::PathBuf;
 
 use bytemuck::{bytes_of, cast_slice};
 use rand::Rng;
+use wgpu::Device;
+use wgpu::Queue;
 use crate::settings;
 use crate::settings::BondType;
 use crate::settings::ColorSource;
+use crate::settings::Settings;
 use crate::settings::Structure;
 use crate::setup;
 // use crate::
@@ -51,9 +54,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(config: &mut WGPUConfig) -> Self {
+    pub fn new(config: &mut WGPUConfig, settings: &mut Settings) -> Self {
         // Create empty arrays for particle data
-        let p_count = setup::p_count(&mut config.prog_settings);
+        let p_count = setup::p_count(settings);
         let mut pos = vec![0.0 as f32; p_count*2];
         let mut vel = vec![0.0 as f32; p_count*2];
         let mut acc = vec![0.0 as f32; p_count*2];
@@ -67,12 +70,12 @@ impl State {
         // let mut bond_info = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
         let mut selections = vec![0; p_count];
-        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*config.prog_settings.max_contacts*p_count];
-        let mut contact_pointers = vec![-1; config.prog_settings.max_contacts*p_count];
+        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*settings.setup.max_contacts*p_count];
+        let mut contact_pointers = vec![-1; settings.setup.max_contacts*p_count];
         let mut data = vec![0.0; p_count * 4];
         let flatbuffer = vec![0 as u8; 1];
         // Setup initial state
-        setup::grid(&mut config.prog_settings, &mut pos, &mut vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
+        setup::grid(settings, &mut pos, &mut vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
 
         let mut state = State {
             p_count,
@@ -95,8 +98,8 @@ impl State {
             grid:  vec![0; 1]
         };
 
-        state.regen_bonds(config);
-        state.save(config);
+        state.regen_bonds(config, settings);
+        state.save(config, settings);
 
         return state;
     }
@@ -150,11 +153,11 @@ impl State {
         } 
     }
 
-    pub fn regen_bonds(&mut self, config: &mut WGPUConfig) {
+    pub fn regen_bonds(&mut self, config: &mut WGPUConfig, settings: &Settings) {
 
-        let MAX_BONDS = config.prog_settings.max_bonds;
+        let MAX_BONDS = settings.setup.max_bonds;
         let mut bonds = vec![-1; self.p_count*MAX_BONDS*3];
-        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*config.prog_settings.max_contacts*self.p_count];
+        let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*settings.setup.max_contacts*self.p_count];
         let mut found_bonds = true;
         let mut bond_index = 0;
         for i in 0..self.p_count {
@@ -178,7 +181,7 @@ impl State {
                             // println!("{}, {}, {}", bonds[(i*MAX_BONDS+col_num)*3], angle, magnitude);
 
                             // CREATE CONTACTS
-                            for k in config.prog_settings.max_contacts*i..config.prog_settings.max_contacts*(i+1) {
+                            for k in settings.setup.max_contacts*i..settings.setup.max_contacts*(i+1) {
                                 // println!("{}", bytemuck::cast::<f32, i32>(contacts[4*k]));
                                 if bytemuck::cast::<f32, i32>(contacts[6*k]) == -1 {
                                     contacts[6*k] = bytemuck::cast(i as i32);    //a
@@ -191,7 +194,7 @@ impl State {
                                 }
                             }
 
-                            for k in config.prog_settings.max_contacts*j..config.prog_settings.max_contacts*(j+1) {
+                            for k in settings.setup.max_contacts*j..settings.setup.max_contacts*(j+1) {
                                 if bytemuck::cast::<f32, i32>(contacts[6*k]) == -1 {
                                     contacts[6*k] = bytemuck::cast(j as i32);
                                     contacts[6*k+1] = bytemuck::cast(i as i32);
@@ -230,7 +233,7 @@ impl State {
         self.contacts  = contacts;
     }
 
-    pub fn save(&mut self, config: &mut WGPUConfig) {
+    pub fn save(&mut self, config: &mut WGPUConfig, settings: &Settings) {
         let mut builder = flatbuffers::FlatBufferBuilder::new();
 
         let pos = builder.create_vector(&self.pos);
@@ -245,31 +248,31 @@ impl State {
         let bonds = builder.create_vector(&self.bonds);
         let contacts = builder.create_vector(&self.contacts);
         let material_pointers = builder.create_vector(&self.material_pointers);
-        let materials = builder.create_vector(&config.prog_settings.materials);
+        let materials = builder.create_vector(&settings.materials);
         let wall_settings = schema_generated::Wall_Settings::new(
-            config.prog_settings.maintain_ar,
-            config.prog_settings.hor_bound/2.0,
-            config.prog_settings.vert_bound/2.0,
+            settings.simulation.maintain_ar,
+            settings.simulation.hor_bound/2.0,
+            settings.simulation.vert_bound/2.0,
         );
         let render_settings = schema_generated::Render_Settings::new(
-            config.prog_settings.circular_particles,
-            config.prog_settings.render_rot,
-            config.prog_settings.render_bonds,
-            true,// config.prog_settings.colors,
-            false,//config.prog_settings.random_colors,
-            config.prog_settings.color_code_rot,
+            settings.view.circular_particles,
+            settings.view.render_rot,
+            settings.view.render_bonds,
+            true,// settings.view.colors,
+            false,//settings.view.random_colors,
+            settings.view.color_code_rot,
         );
         let physics_settings = schema_generated::Physics_Settings::new(
-            config.prog_settings.timestep,
-            config.prog_settings.genPerFrame,
-            config.prog_settings.gravity,
-            config.prog_settings.planet_mode,
-            config.prog_settings.gravity_acceleration,
-            config.prog_settings.contact_damping,
-            config.prog_settings.bondenum.as_i32(),
-            config.prog_settings.bond_normal_stiffness,
-            config.prog_settings.collisions,
-            config.prog_settings.friction_coefficient,
+            settings.simulation.timestep,
+            settings.simulation.genPerFrame,
+            settings.physics.gravity,
+            settings.physics.planet_mode,
+            settings.physics.gravity_acceleration,
+            settings.physics.contact_damping,
+            settings.physics.bondenum.as_i32(),
+            settings.physics.bond_normal_stiffness,
+            settings.physics.collisions,
+            settings.physics.friction_coefficient,
         );
         let settings = schema_generated::Settings::new(
             &physics_settings,
@@ -326,7 +329,7 @@ impl State {
         return (min, max);
     }
 
-    pub fn load(&mut self, config: &mut WGPUConfig, init: bool) {
+    pub fn load(&mut self, config: &mut WGPUConfig, settings: &mut Settings, init: bool) {
         let state = schema_generated::root_as_state(self.flatbuffer.as_slice()).unwrap();
         let new_p_count = state.particles() as usize;
         self.p_count = new_p_count;
@@ -343,36 +346,36 @@ impl State {
         self.contacts = State::f32_vec_from_vector(state.contacts());
         self.material_pointers = State::i32_vec_from_vector(state.material_pointers());
         if init {
-            config.prog_settings.materials = State::f32_vec_from_vector(state.materials());
+            settings.materials = State::f32_vec_from_vector(state.materials());
             let ws = state.settings().unwrap().wall_settings();
             let ps = state.settings().unwrap().physics_settings();
             let rs = state.settings().unwrap().render_settings();
             // wall settings
-            config.prog_settings.maintain_ar = ws.maintain_ar();
-            config.prog_settings.hor_bound  = ws.width()*2.0;
-            config.prog_settings.vert_bound = ws.height()*2.0;
+            settings.simulation.maintain_ar = ws.maintain_ar();
+            settings.simulation.hor_bound  = ws.width()*2.0;
+            settings.simulation.vert_bound = ws.height()*2.0;
             // render settings
-            config.prog_settings.circular_particles = rs.circular_particles();
-            config.prog_settings.render_rot         = rs.render_rotation();
-            config.prog_settings.render_bonds       = rs.render_bonds();
-            // config.prog_settings.color_source       = ColorSource::from_i32(rs.colors() as i32);
-            // config.prog_settings.random_colors      = rs.random_colors();
-            config.prog_settings.color_code_rot     = rs.color_code_rotation();
+            settings.view.circular_particles = rs.circular_particles();
+            settings.view.render_rot         = rs.render_rotation();
+            settings.view.render_bonds       = rs.render_bonds();
+            // settings.view.color_source       = ColorSource::from_i32(rs.colors() as i32);
+            // settings.view.random_colors      = rs.random_colors();
+            settings.view.color_code_rot     = rs.color_code_rotation();
             // physics settings
-            config.prog_settings.timestep = ps.timestep();
-            config.prog_settings.genPerFrame = ps.gen_per_frame();
-            config.prog_settings.gravity = ps.gravity();
-            config.prog_settings.planet_mode = ps.planet_mode();
-            config.prog_settings.gravity_acceleration = ps.g_force();
-            config.prog_settings.contact_damping = ps.contact_damping();
-            config.prog_settings.bondenum = BondType::from_i32(ps.bond());
-            config.prog_settings.bond_normal_stiffness = ps.bond_stiffness();
-            config.prog_settings.collisions = ps.collisions();
-            config.prog_settings.friction_coefficient = ps.friction_coef();
+            settings.simulation.timestep = ps.timestep();
+            settings.simulation.genPerFrame = ps.gen_per_frame();
+            settings.physics.gravity = ps.gravity();
+            settings.physics.planet_mode = ps.planet_mode();
+            settings.physics.gravity_acceleration = ps.g_force();
+            settings.physics.contact_damping = ps.contact_damping();
+            settings.physics.bondenum = BondType::from_i32(ps.bond());
+            settings.physics.bond_normal_stiffness = ps.bond_stiffness();
+            settings.physics.collisions = ps.collisions();
+            settings.physics.friction_coefficient = ps.friction_coef();
             // set update flags
-            config.prog_settings.changed_collision_settings = true;
-            config.prog_settings.materials_changed = true;
-            config.prog_settings.updateBonds();
+            settings.changed_collision_settings = true;
+            settings.materials_changed = true;
+            settings.updateBonds();
         }
         self.selections = vec![0; self.p_count];
         self.data = vec![0.0; 4*self.p_count];
@@ -429,36 +432,41 @@ impl State {
         return i32_slice.to_vec();
     }
 
-    pub fn update_state(&mut self, config: &mut WGPUConfig, buffers: &mut BufferContainer) {
+    pub fn update_state(&mut self, config: &mut WGPUConfig, settings: &Settings, buffers: &mut BufferContainer) {
 
-        self.p_count = config.prog_settings.particles;
-        State::update_f32(config, &mut self.pos, &mut buffers.pos_buffers.buffers[0]);
-        State::update_f32(config, &mut self.radii, &mut buffers.pos_buffers.buffers[1]);
-        State::update_f32(config, &mut self.vel, &mut buffers.mov_buffers.buffers[0]);
-        State::update_f32(config, &mut self.acc, &mut buffers.mov_buffers.buffers[1]);
-        State::update_f32(config, &mut self.rot, &mut buffers.mov_buffers.buffers[2]);
-        State::update_f32(config, &mut self.rot_vel, &mut buffers.mov_buffers.buffers[3]);
-        State::update_f32(config, &mut self.rot_acc, &mut buffers.mov_buffers.buffers[4]);
-        State::update_i32(config, &mut self.fixity, &mut buffers.mov_buffers.buffers[6]);
-        State::update_f32(config, &mut self.forces, &mut buffers.mov_buffers.buffers[7]);
-        State::update_i32(config, &mut self.bonds, &mut buffers.contact_buffers.buffers[0]);
-        // State::update_i32(config, &mut self.bond_info, &mut buffers.contact_buffers.buffers[1]);
-        State::update_f32(config, &mut self.contacts, &mut buffers.contact_buffers.buffers[1]);
-        State::update_i32(config, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
-        State::update_i32(config, &mut self.selections, &mut buffers.selections.buffer);
-        State::update_f32(config, &mut self.data, &mut buffers.data_buffer.buffer);
-        // State::update_i32(config, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
+        self.p_count = settings.setup.particles;
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.pos, &mut buffers.pos_buffers.buffers[0]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.radii, &mut buffers.pos_buffers.buffers[1]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.vel, &mut buffers.mov_buffers.buffers[0]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.acc, &mut buffers.mov_buffers.buffers[1]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.rot, &mut buffers.mov_buffers.buffers[2]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.rot_vel, &mut buffers.mov_buffers.buffers[3]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.rot_acc, &mut buffers.mov_buffers.buffers[4]);
+        State::update_i32(&mut config.device, &mut config.queue, &mut self.fixity, &mut buffers.mov_buffers.buffers[6]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.forces, &mut buffers.mov_buffers.buffers[7]);
+        State::update_i32(&mut config.device, &mut config.queue, &mut self.bonds, &mut buffers.contact_buffers.buffers[0]);
+        // State::update_i32(&mut config.device, &mut config.queue, &mut self.bond_info, &mut buffers.contact_buffers.buffers[1]);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.contacts, &mut buffers.contact_buffers.buffers[1]);
+        State::update_i32(&mut config.device, &mut config.queue, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
+        State::update_i32(&mut config.device, &mut config.queue, &mut self.selections, &mut buffers.selections.buffer);
+        State::update_f32(&mut config.device, &mut config.queue, &mut self.data, &mut buffers.data_buffer.buffer);
+        // State::update_i32(config.device, config.queue, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
         // for n in self.grid.iter() {
         //     println!("{}", n);
 
         // }
     }
 
-    pub fn update_i32(config: &mut WGPUConfig, vector: &mut Vec<i32>, buffer: &mut wgpu::Buffer) {
+    pub fn update_selections(&mut self, device: &mut Device, queue: &mut Queue, buffers: &mut BufferContainer) {
+        State::update_i32(device, queue, &mut self.selections, &mut buffers.selections.buffer);
+    }
+
+
+    pub fn update_i32(device: &mut Device, queue: &mut Queue, vector: &mut Vec<i32>, buffer: &mut wgpu::Buffer) {
         
         let buffer_size = (buffer.size());// as usize * mem::size_of::<i32>()) as u64;
 
-        let staging_buffer = config.device.create_buffer(&wgpu::BufferDescriptor {
+        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             label: None,
@@ -466,13 +474,13 @@ impl State {
         });
         
         // Create a command encoder
-        let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         
         // Copy from the GPU buffer to the staging buffer
         encoder.copy_buffer_to_buffer(&buffer, 0, &staging_buffer, 0, buffer_size);
         
         // Submit the commands to the queue
-        config.queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish()));
         
         // Requesting to map the buffer for reading
         let buffer_slice = staging_buffer.slice(..); // Get a slice of the buffer
@@ -491,7 +499,7 @@ impl State {
         }); // buffer_size is the size of the buffer
         
         // Poll the device in a loop or in an event-driven manner
-        config.device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::Maintain::Wait);
         
         // Once the buffer is mapped, get the mapped range
         {
@@ -509,11 +517,11 @@ impl State {
 
     }
 
-    pub fn update_f32(config: &mut WGPUConfig, vector: &mut Vec<f32>, buffer: &mut wgpu::Buffer) {
+    pub fn update_f32(device: &mut Device, queue: &mut Queue, vector: &mut Vec<f32>, buffer: &mut wgpu::Buffer) {
         
         let buffer_size = (buffer.size());// as usize * mem::size_of::<f32>()) as u64;
 
-        let staging_buffer = config.device.create_buffer(&wgpu::BufferDescriptor {
+        let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             label: None,
@@ -521,13 +529,13 @@ impl State {
         });
         
         // Create a command encoder
-        let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         
         // Copy from the GPU buffer to the staging buffer
         encoder.copy_buffer_to_buffer(&buffer, 0, &staging_buffer, 0, buffer_size);
         
         // Submit the commands to the queue
-        config.queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish()));
         
         // Requesting to map the buffer for reading
         let buffer_slice = staging_buffer.slice(..); // Get a slice of the buffer
@@ -546,7 +554,7 @@ impl State {
         }); // buffer_size is the size of the buffer
         
         // Poll the device in a loop or in an event-driven manner
-        config.device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::Maintain::Wait);
         
         // Once the buffer is mapped, get the mapped range
         {
