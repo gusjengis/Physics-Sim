@@ -218,8 +218,10 @@ impl Client {
                     0.0 as f32, //time as f32, 
                     self.wgpu_config.size.height as f32,
                     self.temp,
-                    self.xOff as f32 + self.post_ui_x_off(),
-                    self.yOff as f32 + self.post_ui_y_off(),
+                    self.xOff as f32,
+                    self.yOff as f32,
+                    self.post_ui_x_off(),
+                    self.post_ui_y_off(),
                     self.post_ui_scale(),
                     self.dark as f32,
                     bytemuck::cast(self.click_pos.0),
@@ -297,7 +299,7 @@ impl Client {
                 let world_delta = self.cursor_del_to_world_delta(delta);
                 self.cursor_delta = delta;
                 self.cursor_pos = (position.x as i32, position.y as i32);
-                self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos));
+                self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos), (self.post_ui_x_off(), self.post_ui_y_off()));
                 if(self.middle && self.shift){
                     self.xOff += (world_delta.0 as f32);
                     self.yOff += (world_delta.1 as f32);
@@ -699,8 +701,9 @@ impl Client {
         let scale = self.post_ui_scale();
         let xOff = self.xOff;
         let yOff = self.yOff;
-        let w = self.canvas.size.width as f32;
-        let h = self.canvas.size.height as f32;
+        let scale_factor = self.canvas.window.scale_factor() as f32;
+        let w = self.canvas.size.width as f32 / scale_factor;
+        let h = self.canvas.size.height as f32 / scale_factor;
 
         let viewport_pos = (2.0 * (pos.0 as f32 - w/2.0)/w, -2.0 * (pos.1 as f32 - h/2.0)/h);
         let ar_corrected = (viewport_pos.0 * (w/h), viewport_pos.1);
@@ -743,25 +746,27 @@ impl Client {
     }
 
     fn post_ui_x_off(&self) -> f32 {
-        let center = self.canvas.size.width as f32 / 2.0;
-        let left = self.available_rect.left();
-        let right = self.available_rect.right();
-        let new_center = (right - left)/2.0;
+        let scale_factor = self.canvas.window.scale_factor() as f32;
+        let center = self.canvas.size.width as f32 / (2.0);
+        let left = self.available_rect.left() * scale_factor;
+        let right = self.available_rect.right() * scale_factor;
+        let new_center = (right - left)/2.0 + left;
         let world_offset = self.cursor_del_to_world_delta(((new_center - center) as i32, 0));
         return world_offset.0 as f32;
     }
 
     fn post_ui_y_off(&self) -> f32 {
-        let center = self.canvas.size.height as f32 / 2.0;
-        let top = self.available_rect.top();
-        let bottom = self.available_rect.bottom();
-        let new_center = (bottom - top)/2.0 + top;
+        let scale_factor = self.canvas.window.scale_factor() as f32;
+        let center = self.canvas.size.height as f32 / (2.0);
+        let top = self.available_rect.top() * scale_factor;
+        let bottom = self.available_rect.bottom() * scale_factor;
+        let new_center = ((bottom - top)/2.0 + top);
         let world_offset = self.cursor_del_to_world_delta((0, (new_center - center) as i32));
         return world_offset.1 as f32;
     }
 
     fn post_ui_scale(&self) -> f32 {
-        return self.settings.view.scale * self.available_rect.height()/self.canvas.size.height as f32;
+        return self.canvas.window.scale_factor() as f32 * self.settings.view.scale * self.available_rect.height()/self.canvas.size.height as f32;
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> { macro_rules! settings { () => { self.settings };}
@@ -820,16 +825,17 @@ impl Client {
         
         // Begin to draw the UI frame.
         // if self.platform
+        let scale_factor = self.canvas.window.scale_factor() as f32;
         self.platform.raw_input_mut().screen_rect = Some(
             egui::Rect::from_min_size(
                 egui::Pos2::new(0.0, 0.0), 
                 egui::Vec2::new(
-                    self.canvas.size.width as f32, 
-                    self.canvas.size.height as f32)
+                    self.canvas.size.width as f32 / scale_factor, 
+                    self.canvas.size.height as f32 / scale_factor)
                 )
         );
         self.platform.begin_frame();
-        let needs_reset = settings!().ui(&self.platform.context(), &mut self.wgpu_prog, &mut self.script_manager, &mut self.wgpu_config.device, &mut self.wgpu_config.queue, (self.canvas.size.width, self.canvas.size.height));
+        let needs_reset = settings!().ui(&self.platform.context(), &mut self.wgpu_prog, &mut self.script_manager, &mut self.wgpu_config, (self.canvas.size.width, self.canvas.size.height));
         self.available_rect = self.platform.context().available_rect();
         if needs_reset {
             self.reset();
@@ -840,20 +846,22 @@ impl Client {
         }
         
             self.wgpu_prog.dim_uniform.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
-                &[self.wgpu_config.size.width as f32,
-                0.0 as f32, //time as f32, 
-                self.wgpu_config.size.height as f32,
-                self.temp,
-                self.xOff as f32 + self.post_ui_x_off(),
-                self.yOff as f32 + self.post_ui_y_off(),
-                self.post_ui_scale(),
-                self.dark as f32,
-                bytemuck::cast(self.click_pos.0),
-                bytemuck::cast(self.click_pos.1),
-                bytemuck::cast(self.cursor_pos.0 - self.click_pos.0),
-                bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
-                bytemuck::cast((self.middle && !self.shift) as i32),
-                bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32)
+                &[  self.wgpu_config.size.width as f32,
+                    0.0 as f32, //time as f32, 
+                    self.wgpu_config.size.height as f32,
+                    self.temp,
+                    self.xOff as f32,
+                    self.yOff as f32,
+                    self.post_ui_x_off(),
+                    self.post_ui_y_off(),
+                    self.post_ui_scale(),
+                    self.dark as f32,
+                    bytemuck::cast(self.click_pos.0),
+                    bytemuck::cast(self.click_pos.1),
+                    bytemuck::cast(self.cursor_pos.0 - self.click_pos.0),
+                    bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
+                    bytemuck::cast((self.middle && !self.shift) as i32),
+                    bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32)
                 ]
             ));   
             
@@ -888,7 +896,7 @@ impl Client {
                     }),
                 });
 
-                render_pass2.set_pipeline(&self.wgpu_prog.render_pipeline2);
+                render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
                 render_pass2.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
                 render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                 // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
@@ -919,7 +927,7 @@ impl Client {
                     depth_stencil_attachment: None,
                 });
 
-                render_pass3.set_pipeline(&self.wgpu_prog.render_pipeline3);
+                render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
                 render_pass3.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
                 render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                 render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
@@ -957,7 +965,7 @@ impl Client {
                     }),
                 });
 
-                render_pass.set_pipeline(&self.wgpu_prog.render_pipeline);
+                render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0]);
                 render_pass.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
                 render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                 // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
@@ -996,7 +1004,7 @@ impl Client {
                     }),
                 });
 
-                render_pass4.set_pipeline(&self.wgpu_prog.render_pipeline4);
+                render_pass4.set_pipeline(&self.wgpu_prog.render_pipelines[3]);
                 render_pass4.set_bind_group(0, &self.wgpu_prog.render_tex.diffuse_bind_group, &[]);
                 render_pass4.set_bind_group(1, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
                 render_pass4.set_bind_group(2, &self.wgpu_prog.dim_uniform.bind_group, &[]);

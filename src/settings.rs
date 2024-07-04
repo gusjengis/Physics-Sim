@@ -7,6 +7,7 @@ use std::fs::*;
 use std::io::Write;
 use std::path::Path;
 use crate::scripts::{self, ScriptManager};
+use crate::wgpu_config::WGPUConfig;
 use crate::wgpu_prog::WGPUProg;
 use egui::*;
 use egui::color_picker::Alpha;
@@ -138,6 +139,7 @@ pub struct View_Settings {
     pub abb_strength: f32,
     pub data_menu: bool,
     pub script_menu: bool,
+    pub code_editor: bool,
 }
 
 pub struct Setup_Settings {
@@ -156,6 +158,7 @@ pub struct Setup_Settings {
     pub min_v_velocity: f32,
     pub structure: Structure,
     pub grid_width: f32,
+    pub hex_grid: bool,
 }
 
 pub struct Simulation_Settings {
@@ -236,6 +239,7 @@ pub struct Settings {
     pub current_script: usize,
     pub just_set_line: bool,
     pub world_pos: (f32, f32),
+    pub curr_shader: usize,
     // pub paths: ReadDir,
 }
 
@@ -289,7 +293,8 @@ impl Settings {
                 chrom_ab: false,
                 abb_strength: 0.005,
                 data_menu: false,
-                script_menu: false
+                script_menu: false,
+                code_editor: false,
             },
             setup: Setup_Settings { 
                 particles,
@@ -307,6 +312,7 @@ impl Settings {
                 min_v_velocity: 0.0,
                 structure: Structure::Grid,
                 grid_width: 32.0,
+                hex_grid: false,
             },
             simulation: Simulation_Settings { 
                 timestep: 1.0/12600.0,
@@ -407,6 +413,7 @@ impl Settings {
             current_script: 0,
             just_set_line: false,
             world_pos: (0.0, 0.0),
+            curr_shader: 0
         };
         settings.load_memory();
         return settings;
@@ -417,14 +424,14 @@ impl Settings {
         self.setup.workgroups = (self.setup.particles as f32/self.setup.workgroup_size as f32).ceil() as usize;
     }
 
-    pub fn update_world_pos(&mut self, world_pos: (f32, f32)) {
-        self.world_pos = world_pos;
+    pub fn update_world_pos(&mut self, world_pos: (f32, f32), ui_off: (f32, f32)) {
+        self.world_pos = (world_pos.0 - ui_off.0, world_pos.1 - ui_off.1);
         if self.physics.planet_mode {
             self.changed_collision_settings = true;
         }
     }
 
-    pub fn ui(&mut self, ctx: &Context, prog: &mut WGPUProg, script_manager: &mut ScriptManager, device: &mut Device, queue: &mut Queue, window_size: (u32, u32)) -> bool {
+    pub fn ui(&mut self, ctx: &Context, prog: &mut WGPUProg, script_manager: &mut ScriptManager, config: &mut WGPUConfig, window_size: (u32, u32)) -> bool {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
@@ -435,37 +442,37 @@ impl Settings {
         }
         if self.view.settings_menu {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
-                    // ui.heading("Menu");
-                    egui::menu::bar(ui, |ui| {
-                        ui.horizontal_centered(|ui| {
-                            self.file_menu(ui);
-                            self.view_menu(ui);
-                            self.state_menu(ui);
-                            self.sim_controls_menu(ui);
-                            self.physics_menu(ui);
-                            self.particle_menu(ui);
-                            self.materials_menu(ui);
-                            self.data_menu(ui, ctx);
-                            self.script_menu(ui, ctx);
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            let max_perc = self.simulation.genPerFrame as f32/self.simulation.maxGenPerFrame as f32 * 100.0;
-                            let mut fps_perc = max_perc * self.fps/self.hz; 
-                            if !self.simulating {
-                                fps_perc = 0.0;
-                            }
-                            ui.add(egui::Label::new(format!("{:.0}/{:.0}%", fps_perc, max_perc))).on_hover_text("Actual/Target simulation speed.");
-                        });
+                // ui.heading("Menu");
+                egui::menu::bar(ui, |ui| {
+                    ui.horizontal_centered(|ui| {
+                        self.file_menu(ui);
+                        self.view_menu(ui);
+                        self.state_menu(ui);
+                        self.sim_controls_menu(ui);
+                        self.physics_menu(ui);
+                        self.particle_menu(ui);
+                        self.materials_menu(ui);
+                        self.data_menu(ui, ctx);
+                        self.script_menu(ui, ctx);
+                    });
+                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                        let max_perc = self.simulation.genPerFrame as f32/self.simulation.maxGenPerFrame as f32 * 100.0;
+                        let mut fps_perc = max_perc * self.fps/self.hz; 
+                        if !self.simulating {
+                            fps_perc = 0.0;
+                        }
+                        ui.add(egui::Label::new(format!("{:.0}/{:.0}%", fps_perc, max_perc))).on_hover_text("Actual/Target simulation speed.");
                     });
                 });
-                self.script_panel(ctx, script_manager, prog, device, queue);
-            // });
-        
+            });
+            self.script_panel(ctx, script_manager, prog, &mut config.device, &mut config.queue);
+            self.code_editor(ctx, prog, config);
         }
         if self.simulation.auto_width {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
             self.changed_collision_settings = true;
         }
+        
         return reset;   
     }
 
@@ -574,6 +581,9 @@ impl Settings {
                     self.reset = true;
                 };
                     if self.setup.structure == Structure::Grid {
+                    if ui.checkbox(&mut self.setup.hex_grid, "Hex Grid").changed() {
+                        self.reset = true;
+                    }
                     if ui.add(egui::Slider::new(&mut self.setup.grid_width, 1.0..=self.setup.particles as f32).
                     text("Grid Width").step_by(0.01)
                     .logarithmic(true)).changed() {
@@ -1289,6 +1299,7 @@ impl Settings {
             ui.style_mut().wrap = Some(false);
             
             if ui.selectable_label(self.view.script_menu, "Script Panel").clicked() { self.view.script_menu = !self.view.script_menu; }
+            if ui.selectable_label(self.view.code_editor, "Code Editor").clicked() { self.view.code_editor = !self.view.code_editor; }
         });    
     }
 
@@ -1391,6 +1402,45 @@ impl Settings {
                         script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
                     }   
                 });
+            });
+        }
+    }
+
+    fn code_editor(&mut self, ctx: &Context, prog: &mut WGPUProg, config: &mut WGPUConfig) {
+        let mut panel_width = 200.0; // Store this as a field in your struct
+
+        if self.view.code_editor {
+            egui::SidePanel::left("code_editor").resizable(true).show(ctx, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.set_max_width(ui.available_width());
+                ui.horizontal(|ui|{
+                    if ui.selectable_label(self.curr_shader == 1, "Background").clicked() { self.curr_shader = 1; }
+                    if ui.selectable_label(self.curr_shader == 0, "Particles").clicked() { self.curr_shader = 0; }
+                    if ui.selectable_label(self.curr_shader == 2, "Hit Detection").clicked() { self.curr_shader = 2; }
+                    if ui.selectable_label(self.curr_shader == 3, "Post Processing").clicked() { self.curr_shader = 3; }
+                    if ui.selectable_label(self.curr_shader == 4, "Laws of Motion").clicked() { self.curr_shader = 4; }
+                    if ui.selectable_label(self.curr_shader == 5, "Simulation").clicked() { self.curr_shader = 5; }
+
+                });
+                if self.curr_shader < 4 {
+                    egui::ScrollArea::show(egui::ScrollArea::new([true, true]), ui, |ui|{
+                        let text_edit = TextEdit::multiline(&mut prog.shader_strs[self.curr_shader])
+                        .desired_width(ui.available_width())
+                        .font(egui::TextStyle::Monospace).code_editor();
+                        if ui.add(text_edit).changed() {
+                            prog.rebuild_pipeline(config, self.curr_shader);
+                        }
+                    });
+                } else {
+                    egui::ScrollArea::show(egui::ScrollArea::new([true, true]), ui, |ui|{
+                        let text_edit = TextEdit::multiline(&mut prog.shader_prog.shader_strs[self.curr_shader-4])
+                        .desired_width(ui.available_width())
+                        .font(egui::TextStyle::Monospace).code_editor();
+                        if ui.add(text_edit).changed() {
+                            prog.shader_prog.rebuild_pipeline(config, self.curr_shader-4);
+                        }
+                    });
+                }
             });
         }
     }

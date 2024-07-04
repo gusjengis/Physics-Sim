@@ -2,10 +2,11 @@ struct VertexIn {
     @location(0) position: vec2<f32>,
 };
 
-struct Dimensions {
+struct Input {
     width: f32, time: f32,
     height: f32, temp: f32,
     xOff: f32, yOff: f32,
+    ui_xOff: f32, ui_yOff: f32,
     scale: f32, dark: f32,
     x: i32, y: i32,
     rW: i32, rH: i32,
@@ -75,14 +76,12 @@ struct Bond {
     length: f32
 };
 
-@group(0) @binding(0) var<uniform> dim: Dimensions;
+@group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> pos_buf: array<vec2<f32>>;
 @group(1) @binding(1) var<storage, read_write> radii_buf: array<f32>;
-// @group(2) @binding(0) var<storage, read_write> color_buf: array<vec3<f32>>;
 @group(2) @binding(2) var<storage, read_write> rot_buf: array<f32>;
 @group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
 @group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
-// @group(3) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
 @group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
 @group(5) @binding(0) var<storage, read_write> materials: array<Material>;
@@ -95,11 +94,11 @@ fn vs_main(
     @builtin(instance_index) instance: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let aspect = dim.width/dim.height;
-    let scale= dim.scale;
+    let aspect = input.width/input.height;
+    let scale= input.scale;
     let xy = 2.0*scale*vec2(in.position.x / aspect, in.position.y);
     let center = scale*vec2(pos_buf[instance].x / aspect, pos_buf[instance].y);
-    let off = vec2(dim.xOff/aspect, dim.yOff)*(scale);
+    let off = vec2((input.xOff + input.ui_xOff)/aspect, (input.yOff + input.ui_yOff))*(scale);
     out.clip_position = vec4(xy*radii_buf[instance] + center + off, 0.0, 1.0);
     out.position = in.position;
     // out.color = color_buf[instance % u32(settings.colors)];

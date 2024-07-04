@@ -2,10 +2,11 @@ struct VertexIn {
     @location(0) position: vec2<f32>,
 };
 
-struct Dimensions {
+struct Input {
     width: f32, time: f32,
     height: f32, temp: f32,
     xOff: f32, yOff: f32,
+    ui_xOff: f32, ui_yOff: f32,
     scale: f32, dark: f32,
     x: i32, y: i32,
     rW: i32, rH: i32,
@@ -31,7 +32,6 @@ struct Material {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec4<f32>,
-    // @location(1) color: vec3<f32>,
     @location(1) rot: f32,
     @location(2) rot_vel: f32,
     @location(3) id: u32,
@@ -84,16 +84,14 @@ struct GridInfo {
     h: i32,
 }
 
-@group(0) @binding(0) var<uniform> dim: Dimensions;
+@group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> pos_buf: array<vec2<f32>>;
 @group(1) @binding(1) var<storage, read_write> radii_buf: array<f32>;
-// @group(2) @binding(0) var<storage, read_write> color_buf: array<vec3<f32>>;
 @group(2) @binding(2) var<storage, read_write> rot_buf: array<f32>;
 @group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
 @group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
 @group(3) @binding(4) var<storage, read_write> grid: array<i32>;
 @group(3) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
-// @group(3) @binding(1) var<storage, read_write> bond_info: array<vec2<i32>>;
 @group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
 @group(5) @binding(0) var<storage, read_write> materials: array<Material>;
@@ -106,20 +104,18 @@ fn vs_main(
     @builtin(instance_index) instance: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let aspect = dim.width/dim.height;
-    let scale= dim.scale;
+    let aspect = input.width/input.height;
+    let scale= input.scale;
     let xy = 1.0/scale*vec2(in.position.x * aspect, in.position.y);
     let center = scale*vec2(pos_buf[instance].x / aspect, pos_buf[instance].y);
-    let off = vec2(-dim.xOff, -dim.yOff);
+    let off = vec2(-(input.xOff + input.ui_xOff), -(input.yOff + input.ui_yOff));
 
     out.clip_position = vec4(in.position, 0.0, 1.0);
     out.position = vec4((xy + off), 0.0, 1.0);
-    // out.color = color_buf[instance % u32(settings.colors)];
-    // if material_pointers[instance] != -1 { out.color = vec3(materials[(material_pointers[instance])].red, materials[(material_pointers[instance])].green, materials[(material_pointers[instance])].blue); }
     out.rot = rot_buf[instance];
     out.rot_vel = rot_vel[instance];
     out.id = instance;
-    out.w_h = vec2(i32(dim.width), i32(dim.height));
+    out.w_h = vec2(i32(input.width), i32(input.height));
     out.pixel = out.clip_position.xy;
     return out;
 }
@@ -135,45 +131,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     ), 1.0); 
     if (settings.round_bounds == 1 && length(in.position.xy) > settings.wall_radius) || (settings.round_bounds == 0 && (in.position.x >= settings.w/2.0 || in.position.x <= -settings.w/2.0 || in.position.y >= settings.h/2.0 || in.position.y <= -settings.h/2.0)) {
         color = vec4(0.02, 0.02, 0.02, 1.0);
-    } //else if settings.render_grid == 1 {
-    //     let grid_info = grid_info_buffer[0];
-    //     let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
-    //     let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
-    //     var cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
-    //     var cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
-    //     var cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
-    //     let left   = base_x + grid_info.cell_size * f32(cell_x    );
-    //     let right  = base_x + grid_info.cell_size * f32(cell_x + 1);
-    //     let top    = base_y - grid_info.cell_size * f32(cell_y    );
-    //     let bottom = base_y - grid_info.cell_size * f32(cell_y + 1);
-    //     let v1 = vec2(base_x, base_y);
-    //     if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
-    //         let seed1 = u32(rand(cell_id, 4294967296.0));
-    //         let seed2 = u32(rand(seed1,   4294967296.0));
-    //         let seed3 = u32(rand(seed2,   4294967296.0));
-    //         var brightness = f32(grid[i32(cell_id)*grid_info.cell_cap])/f32(grid_info.cell_cap);
-    //         // var brightness = f32(grid[i32(cell_id)*grid_info.cell_cap + 1]);
-    //         color = vec4(
-    //             color.x + brightness * rand(seed1, 1.0) * 0.5,
-    //             color.y + brightness * rand(seed2, 1.0) * 0.5,
-    //             color.z + brightness * rand(seed3, 1.0) * 0.5,
-    //             1.0
-    //         );
-    //     }
-    //     if (in.position.x + settings.w < 0.005 || settings.w - in.position.x < 0.005 || in.position.y + settings.h < 0.005 || settings.h - in.position.y < 0.005 || in.position.x - left < 0.005 || right - in.position.x < 0.005 || in.position.y - bottom < 0.005 || top - in.position.y < 0.005) && cell_x < grid_info.w && cell_y < grid_info.h && cell_x >= 0 && cell_y >= 0  {
-    //         color *= 4.0;
-    //     }
-    // }
+    }
 
     //done
-    if dim.pressed == 1 && click_info[0] == 0 {
-        // let pos1 = in.scale*(in.position.xy);
+    if input.pressed == 1 && click_info[0] == 0 {
         let pos = (vec2(in.pixel.x + 1.0, -in.pixel.y + 1.0))/2.0;
         let pixel = vec2(i32(pos.x*f32(in.w_h.x)),i32(pos.y*f32(in.w_h.y)));
-        let lower_x = min(dim.x, dim.x + dim.rW);
-        let upper_x = max(dim.x, dim.x + dim.rW);
-        let lower_y = min(dim.y, dim.y + dim.rH);
-        let upper_y = max(dim.y, dim.y + dim.rH);
+        let lower_x = min(input.x, input.x + input.rW);
+        let upper_x = max(input.x, input.x + input.rW);
+        let lower_y = min(input.y, input.y + input.rH);
+        let upper_y = max(input.y, input.y + input.rH);
         if pixel.x > lower_x && pixel.x < upper_x && pixel.y > lower_y && pixel.y < upper_y {
             if pixel.x == lower_x + 1 || pixel.x == upper_x - 1 || pixel.y == lower_y + 1 || pixel.y == upper_y - 1 {
                 color = vec4(
