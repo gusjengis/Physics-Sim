@@ -20,6 +20,7 @@ use winit::{
 };
 use std::cmp::max;
 use std::iter;
+use std::path::PathBuf;
 use cgmath::*;
 use winit_fullscreen;
 use winit_fullscreen::WindowFullScreen;
@@ -155,6 +156,7 @@ impl Client {
             event: WindowEvent::Resized(client.canvas.size),
             // The generic type is provided here
         } as &Event<()>); 
+
         
         // client.wgpu_prog =  WGPUProg::new(&mut client.wgpu_config, (client.canvas.size.width as u32, client.canvas.size.height as u32));
         event_loop.run(move |event, _, control_flow| {
@@ -873,144 +875,146 @@ impl Client {
             let mut encoder = self.wgpu_config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-            {
-                let mut render_pass2 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.wgpu_prog.render_tex.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
+            if settings!().view.rendering {
+                {
+                    let mut render_pass2 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Render Pass"),
+                        color_attachments: &[
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.wgpu_prog.render_tex.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
+                                    store: true,
+                                }
+                            })
+                            ],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.wgpu_prog.depth_buffer.view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
                                 store: true,
-                            }
-                        })
-                        ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.wgpu_prog.depth_buffer.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
+                            }),
+                            stencil_ops: None,
                         }),
-                        stencil_ops: None,
-                    }),
-                });
+                    });
 
-                render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
-                render_pass2.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
-                render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                render_pass2.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                render_pass2.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                render_pass2.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
-                render_pass2.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
-                render_pass2.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
-                render_pass2.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass2.draw_indexed(0..6 as u32, 0, 0..1);
-            }
+                    render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
+                    render_pass2.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
+                    render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
+                    render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass2.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
+                    render_pass2.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
+                    render_pass2.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
+                    render_pass2.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass2.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
+                    render_pass2.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass2.draw_indexed(0..6 as u32, 0, 0..1);
+                }
 
-            {
-                let mut render_pass3 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.wgpu_prog.shader_prog.hit_tex.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
-                                store: true,
-                            }
-                        })
+                {
+                    let mut render_pass3 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Render Pass"),
+                        color_attachments: &[
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.wgpu_prog.shader_prog.hit_tex.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
+                                    store: true,
+                                }
+                            })
+                            ],
+                        depth_stencil_attachment: None,
+                    });
+
+                    render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
+                    render_pass3.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
+                    render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass3.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
+                    render_pass3.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
+                    render_pass3.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
+                    render_pass3.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass3.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
+                    render_pass3.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    
+                    render_pass3.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
+                }
+
+                {
+                    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Render Pass"),
+                        color_attachments: &[
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &self.wgpu_prog.render_tex.view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: true,
+                                }
+                            })
                         ],
-                    depth_stencil_attachment: None,
-                });
-
-                render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
-                render_pass3.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
-                render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                render_pass3.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                render_pass3.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                render_pass3.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
-                render_pass3.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
-                render_pass3.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
-                render_pass3.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                
-                render_pass3.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
-            }
-
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &self.wgpu_prog.render_tex.view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.wgpu_prog.depth_buffer.view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
                                 store: true,
-                            }
-                        })
-                    ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.wgpu_prog.depth_buffer.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
+                            }),
+                            stencil_ops: None,
                         }),
-                        stencil_ops: None,
-                    }),
-                });
+                    });
 
-                render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0]);
-                render_pass.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
-                render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                render_pass.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                render_pass.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                render_pass.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
-                render_pass.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
-                
-            }
+                    render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0]);
+                    render_pass.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
+                    render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
+                    render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
+                    render_pass.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
+                    render_pass.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selections.bind_group, &[]);
+                    render_pass.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
+                    render_pass.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
+                    
+                }
 
-            {
-                let mut render_pass4 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[
-                        Some(wgpu::RenderPassColorAttachment {
-                            view: &output_view,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
+                {
+                    let mut render_pass4 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Render Pass"),
+                        color_attachments: &[
+                            Some(wgpu::RenderPassColorAttachment {
+                                view: &output_view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
+                                    store: true,
+                                }
+                            })
+                            ],
+                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                            view: &self.wgpu_prog.depth_buffer.view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
                                 store: true,
-                            }
-                        })
-                        ],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.wgpu_prog.depth_buffer.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
+                            }),
+                            stencil_ops: None,
                         }),
-                        stencil_ops: None,
-                    }),
-                });
+                    });
 
-                render_pass4.set_pipeline(&self.wgpu_prog.render_pipelines[3]);
-                render_pass4.set_bind_group(0, &self.wgpu_prog.render_tex.diffuse_bind_group, &[]);
-                render_pass4.set_bind_group(1, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                render_pass4.set_bind_group(2, &self.wgpu_prog.dim_uniform.bind_group, &[]);
-                render_pass4.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
-                render_pass4.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass4.draw_indexed(0..6 as u32, 0, 0..1);
+                    render_pass4.set_pipeline(&self.wgpu_prog.render_pipelines[3]);
+                    render_pass4.set_bind_group(0, &self.wgpu_prog.render_tex.diffuse_bind_group, &[]);
+                    render_pass4.set_bind_group(1, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
+                    render_pass4.set_bind_group(2, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass4.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
+                    render_pass4.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    render_pass4.draw_indexed(0..6 as u32, 0, 0..1);
+                }
             }
 
             // Upload all resources for the GPU.

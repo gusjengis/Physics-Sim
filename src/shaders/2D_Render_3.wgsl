@@ -44,6 +44,7 @@ struct Settings {
     color_code_rot: i32,
     colors: i32,
     render_bonds: i32,
+    walls: i32,
     w: f32,
     h: f32,
     stiffness: f32,

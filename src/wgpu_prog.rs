@@ -604,11 +604,11 @@ pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, 
     let h = (height/max_rad).ceil() as i32;
     let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.setup.particles as i32) + 2;
     let total_size = w * h * cell_cap;
-    // println!("Cell Capacity:   {}", cell_cap);
-    // println!("Cell Dimensions: {} x {}", w, h);
-    // println!("Total Cells:     {}", w * h);
-    // println!("Total Capacity:  {}", total_size);
-    // println!("Bytes:           {}", total_size * 4);
+    println!("Cell Capacity:   {}", cell_cap);
+    println!("Cell Dimensions: {} x {}", w, h);
+    println!("Total Cells:     {}", w * h);
+    println!("Total Capacity:  {}", total_size);
+    println!("Bytes:           {}", total_size * 4);
 
     return ((w * h) as usize, max_rad, cell_cap, w, h);
 }
@@ -619,10 +619,10 @@ impl WGPUComputeProg {
 
         let state = State::new(config, settings);
 
-        let p_count = setup::p_count(settings);
+        let p_count = state.p_count;
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*settings.max_contacts*p_count];
         let grid_info_return = grid_capacity(&settings);
-        let mut bp_grid = vec![1; 1];//grid_info_return.0 * grid_info_return.2 as usize];
+        let mut bp_grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
             grid_info_return.0,
@@ -657,6 +657,7 @@ impl WGPUComputeProg {
             bytemuck::cast_slice(&state.material_pointers),
             bytemuck::cast_slice(&bp_grid),
             bytemuck::cast_slice(&grid_info.as_vec()),
+            bytemuck::cast_slice(&vec![0 as i32; 3]) //shared mem, for controlling intermittent collision detection
             ], "Contact Buffers".to_string() );
         // let contact_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&contacts), "Contact Buffer".to_string(), 0);
         // let bond_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&bonds), "Bond Buffer".to_string(), 0);
@@ -762,7 +763,7 @@ impl WGPUComputeProg {
 
         let broad_phase_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Broad phase compute"),
-            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout],
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -1177,16 +1178,32 @@ impl WGPUComputeProg {
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
 
         for i in 0..settings.simulation.genPerFrame {
-            // // BROAD PHASE
+            // LAWS OF MOTION
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
+                
+                compute_pass.set_pipeline(&self.compute_pipelines[0]);
+                
+                compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);      
+                compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);         
+                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);   
+                
+                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
+                
+            }
+            
+            // // BROAD PHASE, now handeled in LOM
             // {
             //     let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
 
             //     compute_pass.set_pipeline(&self.broad_phase_compute_pipeline);
                 
             //     compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
-            //     compute_pass.set_bind_group(1, &self.buffers.contact_buffers.bind_group, &[]);         
+            //     compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);         
+            //     compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);         
 
-            //     compute_pass.dispatch_workgroups((self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
+            //     compute_pass.dispatch_workgroups(1, 1, 1);//(self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
             // }
 
             // SIMULATION/COLLISIONS/BONDS
@@ -1207,20 +1224,7 @@ impl WGPUComputeProg {
 
             }
 
-            // LAWS OF MOTION
-            {
-                let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
-
-                compute_pass.set_pipeline(&self.compute_pipelines[0]);
-                
-                compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);      
-                compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);         
-                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);   
-
-                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
-
-            }
+            
         }
 
         config.queue.submit(Some(encoder.finish()));

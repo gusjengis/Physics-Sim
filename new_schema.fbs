@@ -1,18 +1,4 @@
-struct Physics_Settings {
-  timestep: float;
-  gen_per_frame: int;
-  gravity: bool;
-  planet_mode: bool;
-  g_force: float;
-  contact_damping: float;
-  bond: int;
-  bond_stiffness: float;
-  shear_stiffness: float;
-  collisions: bool;
-  friction_coef: float;
-}
-
-struct Render_Settings {
+struct View_Settings {
   circular_particles: bool;
   render_rotation: bool;
   render_bonds: bool;
@@ -21,26 +7,57 @@ struct Render_Settings {
   color_code_rotation: bool;
 }
 
-struct Wall_Settings {
-  maintain_ar: bool;
+struct Setup_Settings {
+  particles: int;
+  max_radius: float;
+  variable_rad: bool;
+  holeyness: float;
+  max_h_velocity: float;
+  min_h_velocity: float;
+  max_v_velocity: float;
+  min_v_velocity: float;
+  grid_width: float;
+  hex_grid: bool;
+}
+
+struct Simulation_Settings {
+  timestep: float;
+  gen_per_frame: int;
+  auto_width: bool;
   width: float;
   height: float;
+  maintain_ar: bool;
+  round_walls: bool;
+  wall_radius: float;
+}
+
+struct Physics_Settings {
+  gravity: bool;
+  g_force: float;
+  planet_mode: bool;
+  mouse_gravity: bool;
+  collisions: bool;
+  friction_coef: float;
+  bond: int;
+  bond_normal_stiffness: float;
+  bond_shear_stiffness: float;
+  bond_normal_strength: float;
+  bond_shear_strength: float;
+  moment_contribution_factor: float;
 }
 
 struct Settings {
+  view_settings: View_Settings;
+  setup_settings: Setup_Settings;
+  sim_settings: Simulation_Settings;
   physics_settings: Physics_Settings;
-  render_settings: Render_Settings;
-  wall_settings: Wall_Settings;
 }
 
 table State {
-  particles: int;
   pos: [float];
-  del_pos: [float];
   vel: [float];
   acc: [float];
   rot: [float];
-  del_rot: [float];
   rot_vel: [float];
   rot_acc: [float];
   forces: [float];

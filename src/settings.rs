@@ -116,6 +116,7 @@ impl Data {
 pub struct View_Settings {
     pub settings_menu: bool,
     pub scale: f32,
+    pub rendering: bool,
     pub circular_particles: bool,
     pub render_rot: bool,
     pub render_bonds: bool,
@@ -166,6 +167,7 @@ pub struct Simulation_Settings {
     pub genPerFrame: i32,
     pub maxGenPerFrame: i32,
     pub auto_width: bool,
+    pub walls: bool,
     pub hor_bound: f32,
     pub vert_bound: f32,
     pub maintain_ar: bool,
@@ -180,6 +182,7 @@ pub struct Physics_Settings {
     pub planet_mode: bool,
     pub mouse_gravity: bool,
     pub collisions: bool,
+    pub collision_interval: i32,
     pub friction_coefficient: f32,
     pub bonds: i32,
     pub bondenum: BondType,
@@ -271,6 +274,7 @@ impl Settings {
             view: View_Settings { 
                 settings_menu: true,
                 scale: 2.0/vert_bound,
+                rendering: true,
                 circular_particles: true,
                 render_rot: false,
                 render_bonds: true,
@@ -319,6 +323,7 @@ impl Settings {
                 genPerFrame: 105,
                 maxGenPerFrame: 213,
                 auto_width: true,
+                walls: true,
                 hor_bound,
                 vert_bound,
                 maintain_ar: true,
@@ -332,6 +337,7 @@ impl Settings {
                 planet_mode: true,
                 mouse_gravity: false,
                 collisions: true, 
+                collision_interval: 1,
                 friction_coefficient: 0.5, 
                 bonds: 0, 
                 bondenum: BondType::Unbonded, 
@@ -472,7 +478,7 @@ impl Settings {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
             self.changed_collision_settings = true;
         }
-        
+
         return reset;   
     }
 
@@ -581,23 +587,25 @@ impl Settings {
                     self.reset = true;
                 };
                     if self.setup.structure == Structure::Grid {
-                    if ui.checkbox(&mut self.setup.hex_grid, "Hex Grid").changed() {
-                        self.reset = true;
-                    }
                     if ui.add(egui::Slider::new(&mut self.setup.grid_width, 1.0..=self.setup.particles as f32).
                     text("Grid Width").step_by(0.01)
                     .logarithmic(true)).changed() {
                         self.reset = true;
                     };
+                    if ui.checkbox(&mut self.setup.hex_grid, "Hex Grid").changed() {
+                        self.reset = true;
+                    }
                 }
                 
                 if ui.checkbox(&mut self.setup.variable_rad, "Random Radius").changed() {
                     self.reset = true;
                 }
-
-                if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.000000001..=10.0).step_by(0.001)).changed() {
+                
+                if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.000000001..=10.0).step_by(0.001).text("Max Radius")).changed() {
+                    self.setup.min_radius = self.setup.max_radius/self.setup.holeyness;
                     self.reset = true;
                 }
+                
                 // ui.add_enabled_ui(self.setup.variable_rad, |ui| {
                 //     if ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.000000001..=10.0).step_by(0.001)).changed() {
                 //         self.reset = true;
@@ -704,10 +712,12 @@ impl Settings {
             ui.separator();
             ui.label("Rendering");
             // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
+                // ui.checkbox(&mut self.view.rendering, "Render Particles");
                 ui.checkbox(&mut self.view.circular_particles, "Circular Particles");
                 ui.add_enabled(self.view.circular_particles, egui::Checkbox::new(&mut self.view.render_outline, "Render Outline"));
                 ui.checkbox(&mut self.view.render_rot, "Render Rotation");
                 ui.checkbox(&mut self.view.render_bonds, "Render Bonds");
+                ui.checkbox(&mut self.view.render_bp_grid, "Render Grid");
                 ui.menu_button("Particle Color", |ui| {
                     ui.label("Color Source:");
                     // ui.horizontal(|ui|{
@@ -859,34 +869,37 @@ impl Settings {
                 }
             });
             ui.separator();
-            ui.label("Bounds");
-            if ui.checkbox(&mut self.simulation.round_walls, "Circular Bounds").changed() {
-                self.changed_collision_settings = true;
-            }
-            if self.simulation.round_walls {
-                if ui.add(egui::Slider::new(&mut self.simulation.wall_radius, 0.0..=64.0).
+            ui.label("Walls");
+            // ui.checkbox(&mut self.simulation.walls, "Walls");
+            ui.add_enabled_ui(self.simulation.walls, |ui| {
+                if ui.checkbox(&mut self.simulation.round_walls, "Circular Walls").changed() {
+                    self.changed_collision_settings = true;
+                }
+                if self.simulation.round_walls {
+                    if ui.add(egui::Slider::new(&mut self.simulation.wall_radius, 0.0..=64.0).
                     text("Radius")).changed() {
                         self.changed_collision_settings = true;
                     }
-            } else {
-                let ar = self.simulation.hor_bound/self.simulation.vert_bound;
-                ui.checkbox(&mut self.simulation.auto_width, "Auto Width");
-                ui.add_enabled(!self.simulation.auto_width, egui::Checkbox::new(&mut self.simulation.maintain_ar, "Maintain Aspect Ratio"));
-                if ui.add_enabled(!self.simulation.auto_width, egui::Slider::new(&mut self.simulation.hor_bound, 0.0..=64.0).
-                    text("Width")).changed() {
-                        self.changed_collision_settings = true;
-                        if self.simulation.maintain_ar || self.simulation.auto_width {
-                            self.simulation.vert_bound = self.simulation.hor_bound*1.0/ar;
-                        }
+                } else {
+                    let ar = self.simulation.hor_bound/self.simulation.vert_bound;
+                    ui.checkbox(&mut self.simulation.auto_width, "Auto Width");
+                    ui.add_enabled(!self.simulation.auto_width, egui::Checkbox::new(&mut self.simulation.maintain_ar, "Maintain Aspect Ratio"));
+                    if ui.add_enabled(!self.simulation.auto_width, egui::Slider::new(&mut self.simulation.hor_bound, 0.0..=64.0).
+                        text("Width")).changed() {
+                            self.changed_collision_settings = true;
+                            if self.simulation.maintain_ar || self.simulation.auto_width {
+                                self.simulation.vert_bound = self.simulation.hor_bound*1.0/ar;
+                            }
+                    }
+                    if ui.add(egui::Slider::new(&mut self.simulation.vert_bound, 0.0..=64.0).
+                        text("Height")).changed() {
+                            self.changed_collision_settings = true;
+                            if self.simulation.maintain_ar || self.simulation.auto_width {
+                                self.simulation.hor_bound = self.simulation.vert_bound*ar;
+                            }
+                    }
                 }
-                if ui.add(egui::Slider::new(&mut self.simulation.vert_bound, 0.0..=64.0).
-                    text("Height")).changed() {
-                        self.changed_collision_settings = true;
-                        if self.simulation.maintain_ar || self.simulation.auto_width {
-                            self.simulation.hor_bound = self.simulation.vert_bound*ar;
-                        }
-                }
-            }
+            });
         });
     }
 
@@ -923,10 +936,15 @@ impl Settings {
                 self.changed_collision_settings = true;
             }
             ui.add_enabled_ui(self.physics.collisions, |ui|{
+                ui.label("Collision Interval");
+                if ui.add(egui::Slider::new(&mut self.physics.collision_interval, 1..=self.simulation.maxGenPerFrame)).changed() {
+                    self.changed_collision_settings = true;
+                }
                 ui.label("Friction Coefficient");
                 if ui.add(egui::Slider::new(&mut self.physics.friction_coefficient, 0.0..=1.0)).changed() {
                     self.changed_collision_settings = true;
                 }
+                
             });
             ui.separator();
             let mut changed_bonds = false;
@@ -946,12 +964,12 @@ impl Settings {
             if self.physics.bonds != 0 {
                 ui.separator();
                 ui.label("Stiffness");
-                if ui.add(egui::Slider::new(&mut self.physics.bond_normal_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                if ui.add(egui::Slider::new(&mut self.physics.bond_normal_stiffness, 0.001..=1000000000000.0).step_by(0.001).
                     text("Normal")).changed() {
                         self.changed_collision_settings = true;
                     };
                     if self.physics.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_stiffness, 0.001..=10000000000.0).step_by(0.001).
+                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_stiffness, 0.001..=1000000000000.0).step_by(0.001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
@@ -962,12 +980,12 @@ impl Settings {
                 ui.add_enabled_ui(self.physics.bond_tearing, |ui|{
                     ui.separator();
                     ui.label("Strength");
-                    if ui.add(egui::Slider::new(&mut self.physics.bond_normal_strength, 0.0..=5.0).step_by(0.0001).
+                    if ui.add(egui::Slider::new(&mut self.physics.bond_normal_strength, 0.0..=1000000000.0).step_by(0.0001).
                         text("Normal")).changed() {
                             self.changed_collision_settings = true;
                     };
                     if self.physics.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_strength, 0.0..=5.0).step_by(0.0001).
+                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_strength, 0.0..=1000000000.0).step_by(0.0001).
                             text("Shear")).changed() {
                                 self.changed_collision_settings = true;
                         };
@@ -1571,6 +1589,7 @@ impl Settings {
     pub fn collison_settings(&mut self) -> Vec<f32> {
         self.changed_collision_settings = false;
         return vec![
+            bytemuck::cast(self.simulation.walls as i32),
             self.simulation.hor_bound,
             self.simulation.vert_bound,
             bytemuck::cast(self.simulation.round_walls as i32),
@@ -1594,7 +1613,9 @@ impl Settings {
             self.world_pos.0,
             self.world_pos.1,
             bytemuck::cast(self.physics.mouse_gravity as i32),
-            self.physics.moment_contribution_factor
+            self.physics.moment_contribution_factor,
+            bytemuck::cast(self.physics.collision_interval as i32),
+
         ];
     }
 
@@ -1605,6 +1626,7 @@ impl Settings {
             self.view.color_code_rot as i32,
             self.view.color_source.as_i32(),
             (self.physics.bonds != 0 && self.view.render_bonds) as i32,
+            self.simulation.walls as i32,
             self.simulation.hor_bound.to_bits() as i32,
             self.simulation.vert_bound.to_bits() as i32,
             self.physics.bond_normal_stiffness.to_bits() as i32,
@@ -1628,7 +1650,7 @@ impl Settings {
             self.view.sobel as i32 + self.view.colored_sobel as i32 * 2,
             self.view.invert as i32,
             self.view.chrom_ab as i32,
-            self.view.abb_strength.to_bits() as i32
+            self.view.abb_strength.to_bits() as i32,
         ];
     }
 

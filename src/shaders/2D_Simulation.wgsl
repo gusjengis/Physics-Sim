@@ -32,6 +32,7 @@ struct Bond {
 };
 
 struct Settings {
+    walls: i32,
     hor_bound: f32,
     vert_bound: f32,
     round_bounds: i32,
@@ -55,7 +56,8 @@ struct Settings {
     gravity_x: f32,
     gravity_y: f32,
     mouse_gravity: i32,
-    moment_contribution_factor: f32
+    moment_contribution_factor: f32,
+    collision_interval: i32
 }
 
 struct Material {
@@ -65,6 +67,13 @@ struct Material {
     density: f32,
     normal_stiffness: f32,
     shear_stiffness: f32,
+}
+
+struct GridInfo {
+    cell_size: f32,
+    cell_cap: i32,
+    w: i32,
+    h: i32,
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -83,6 +92,9 @@ struct Material {
 @group(2) @binding(1) var<storage, read_write> contacts: array<Contact>;
 @group(2) @binding(2) var<storage, read_write> contact_pointers: array<i32>;
 @group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(2) @binding(4) var<storage, read_write> grid: array<i32>;
+@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
 @group(4) @binding(0) var<storage, read_write> materials: array<Material>; 
 @group(5) @binding(0) var<storage, read_write> data: array<f32>; 
@@ -92,7 +104,8 @@ const PI = 3.141592653589793238;
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
-    
+    let grid_info = grid_info_buffer[0];
+
     data[id*4u   ] = 0.0;
     data[id*4u+1u] = 0.0;
     data[id*4u+2u] = 0.0;
@@ -106,9 +119,51 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // OG O(n^2) Collisions
     let max_contacts = 14u;
-    if settings.collisions == 1 {
+    if settings.collisions == 1 && coll_cont[0] == 1 {
         var collisions = array<i32, 14u>();
         var count = 0u;
+
+        // let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
+        // let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
+
+        // let particle_left = positions[id].x - radii[id];
+        // let particle_right = positions[id].x + radii[id];
+        // let particle_bottom = positions[id].y - radii[id];
+        // let particle_top = positions[id].y + radii[id];
+
+        // let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
+        // let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
+        // let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
+        // let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
+
+        // for (var cell_y = min_cell_y; cell_y <= max_cell_y && count < max_contacts; cell_y++) {
+        //     for (var cell_x = min_cell_x; cell_x <= max_cell_x && count < max_contacts; cell_x++) {
+        //         let cell_id = cell_y * grid_info.w + cell_x;
+        //         let base_index = cell_id * grid_info.cell_cap;
+        //         var neighbors = grid[base_index];
+
+        //         if neighbors > 1 {
+        //             for (var i = 2; i < neighbors + 2; i++) {
+        //                 let b = grid[base_index + i];
+        //                 if u32(b) != id {
+        //                     var already_found = false;
+        //                     for(var j = 0u; j < count; j++) {
+        //                         if collisions[j] == b {
+        //                             already_found = true;
+        //                         }
+        //                     }
+        //                     if !already_found && length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
+        //                         collisions[count] = b;
+        //                         count += 1u;
+        //                         if count == max_contacts {
+        //                             break;
+        //                         }
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         for(var i = 0u; i<arrayLength(&radii); i++){
             if i != id {
@@ -182,7 +237,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
         var forces = vec3(0.0, 0.0, 0.0);
         if bonded < 0 || settings.bonds == 0 {
-            forces = linear_model(a, b, i, bonded);
+            forces = linear_model(a, b, i, -1);
         } else{
             if settings.bonds == 1 {
                 forces = normal_bonds(a, b, i, bonded);
@@ -198,22 +253,33 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     store_forces(id, mat_id, net_force, net_moment);
+    if id == 0u {
+        coll_cont[2] += 1;
+    }
 }
 
 fn distance(a: i32, b: i32) -> f32 {
     return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
 }
 
+fn distance2(a: i32, b: i32, bonded: i32) -> f32 {
+    var length = radii[a] + radii[b];
+    if bonded >= 0 {
+        length = bonds[bonded].length;
+    }
+    return  length(positions[a] - positions[b]) - length;
+}
+
 fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
-    let normal_stiffness = 10.0*settings.bond_normal_stiffness;
-    let shear_stiffness  = 10.0*settings.bond_shear_stiffness;
+    let normal_stiffness = settings.bond_normal_stiffness;
+    let shear_stiffness  = settings.bond_shear_stiffness;
 
     let lambda = 0.5; // make parameter 
     let R = lambda * min(radii[a], radii[b]); // bond radius
     let t = 1.0; // "beam" thickness
     let A = 2.0*R*t; // cross-sectional area
     let I = 2.0/3.0 * R * R * R; // moment of inertia
-    let normal_displacement = distance(a,b);
+    let normal_displacement = distance2(a,b,bonded);
     let normal_force = -normal_stiffness * normal_displacement * A;
 
     let normal = normalize(positions[a] - positions[b]); 
@@ -253,7 +319,7 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
 
 fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     
-    let normal_displacement = min(0.0, distance(a,b));
+    let normal_displacement = min(0.0, distance2(a,b,bonded));
     if normal_displacement == 0.0 {
         return vec3(0.0, 0.0, 0.0);
     }

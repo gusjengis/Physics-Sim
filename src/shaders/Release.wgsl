@@ -28,6 +28,7 @@ struct Forces {
 }
 
 struct Settings {
+    walls: i32,
     hor_bound: f32,
     vert_bound: f32,
     round_bounds: i32,
@@ -51,7 +52,8 @@ struct Settings {
     gravity_x: f32,
     gravity_y: f32,
     mouse_gravity: i32,
-    moment_contribution_factor: f32
+    moment_contribution_factor: f32,
+    collision_interval: i32
 }
 
 @group(0) @binding(0) var<uniform> input: Input;

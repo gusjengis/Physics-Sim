@@ -55,8 +55,10 @@ struct Settings {
     gravity_x: f32,
     gravity_y: f32,
     mouse_gravity: i32,
-    moment_contribution_factor: f32
+    moment_contribution_factor: f32,
+    collision_interval: i32
 }
+
 
 struct Material {
     red: f32,
@@ -135,7 +137,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                     other_particle = (contacts[j].b);
                 }
             }
-            if (!found_collision && contacts[j].bonded < 0) {
+            if (!found_collision) {
                 // delete
                 contacts[j].a = -1;
                 contacts[j].b = -1;
@@ -152,7 +154,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 if contacts[j].b == collisions[i] {
                     existing_index = i32(j);
                     break;
-                } else if contacts[j].b == -1 {
+                } else if contacts[j].b == -1 && contacts.bonded < 0 {
                     empty_index = i32(j);
                 }
                 

@@ -8,6 +8,7 @@ use bytemuck::{bytes_of, cast_slice};
 use rand::Rng;
 use wgpu::Device;
 use wgpu::Queue;
+use csv::*;
 use crate::settings;
 use crate::settings::BondType;
 use crate::settings::ColorSource;
@@ -31,6 +32,9 @@ extern crate flatbuffers;
 #[path = "../schema_generated.rs"]
 mod schema_generated;
 pub use schema_generated::*;
+#[path = "../new_schema_generated.rs"]
+mod new_schema_generated;
+pub use new_schema_generated::*;
 
 pub struct State {
     pub p_count: usize,
@@ -46,6 +50,7 @@ pub struct State {
     pub bonds: Vec<i32>,
     pub material_pointers: Vec<i32>,
     pub selections: Vec<i32>,
+    pub groups: Vec<i32>,
     pub contacts: Vec<f32>,
     pub contact_pointers: Vec<i32>,
     pub data: Vec<f32>,
@@ -67,9 +72,9 @@ impl State {
         let mut radii = vec![0.0 as f32; p_count];
         let mut fixity = vec![0; p_count*6];
         let mut bonds = vec![-1; 1];
-        // let mut bond_info = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
         let mut selections = vec![0; p_count];
+        let mut groups = vec![0; p_count];
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*settings.setup.max_contacts*p_count];
         let mut contact_pointers = vec![-1; settings.setup.max_contacts*p_count];
         let mut data = vec![0.0; p_count * 4];
@@ -91,6 +96,7 @@ impl State {
             bonds,
             material_pointers,
             selections,
+            groups,
             contacts,
             contact_pointers,
             data,
@@ -98,6 +104,7 @@ impl State {
             grid:  vec![0; 1]
         };
 
+        // state.load_from_csv(PathBuf::from("./saved_states/particle_state.csv"), settings);
         state.regen_bonds(config, settings);
         state.save(config, settings);
 
@@ -315,6 +322,51 @@ impl State {
         file.read_to_end(&mut buffer)?;
         self.flatbuffer = buffer;
         Ok(())
+    }
+
+    pub fn load_from_csv(&mut self, path: std::path::PathBuf, settings: &mut Settings) {
+        let mut reader = csv::Reader::from_path(path.clone()).unwrap();
+
+        self.p_count = reader.records().count();
+        settings.set_particles(self.p_count);
+        self.pos = vec![0.0 as f32; self.p_count*2];
+        self.vel = vec![0.0 as f32; self.p_count*2];
+        self.acc = vec![0.0 as f32; self.p_count*2];
+        self.rot = vec![0.0 as f32; self.p_count];
+        self.rot_vel = vec![0.0 as f32; self.p_count];
+        self.rot_acc = vec![0.0 as f32; self.p_count];
+        self.forces = vec![0.0 as f32; self.p_count*6];
+        self.radii = vec![0.0 as f32; self.p_count];
+        self.fixity = vec![0; self.p_count*6];
+        self.bonds = vec![-1; 1];
+        self.material_pointers = vec![0; self.p_count];
+        self.selections = vec![0; self.p_count];
+        self.groups = vec![0; self.p_count];
+        self.contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*settings.setup.max_contacts*self.p_count];
+        self.contact_pointers = vec![-1; settings.setup.max_contacts*self.p_count];
+        self.data = vec![0.0; self.p_count * 4];
+
+        reader = csv::Reader::from_path(path).unwrap();
+        let mut i = 0;
+        for result in reader.records() {
+            let record = result.unwrap();
+            for (j, field) in record.iter().enumerate() {
+
+                match j {
+                    1 => { match field {
+                        " None"        => { self.groups[i] = 0; }
+                        " bottom_grip" => { self.groups[i] = 1; self.material_pointers[i] = 1; }
+                        " top_grip"    => { self.groups[i] = 2; self.material_pointers[i] = 1; }
+                        _ => {}
+                    }}
+                    2 => {self.pos[i*2] = field[1..].parse::<f32>().unwrap(); }
+                    3 => {self.pos[i*2+1] = field[1..].parse::<f32>().unwrap(); }
+                    4 => {self.radii[i] = field[1..].parse::<f32>().unwrap(); }
+                    _ => {}
+                }
+            }
+            i = i + 1;
+        }
     }
 
     pub fn get_min_max_radii(self) -> (f32, f32) {

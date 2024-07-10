@@ -16,7 +16,15 @@ struct Forces {
     delRot: f32,
 }
 
+struct GridInfo {
+    cell_size: f32,
+    cell_cap: i32,
+    w: i32,
+    h: i32,
+}
+
 struct Settings {
+    walls: i32,
     hor_bound: f32,
     vert_bound: f32,
     round_bounds: i32,
@@ -40,7 +48,8 @@ struct Settings {
     gravity_x: f32,
     gravity_y: f32,
     mouse_gravity: i32,
-    moment_contribution_factor: f32
+    moment_contribution_factor: f32,
+    collision_interval: i32
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -55,6 +64,9 @@ struct Settings {
 @group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
+@group(2) @binding(4) var<storage, read_write> grid: array<atomic<i32>>;
+@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
 
 
@@ -63,6 +75,7 @@ const PI = 3.141592653589793238;
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
+    let grid_info = grid_info_buffer[0];
     if radii[id] == 0.0 { return; }
     var int_vel     = velocities[id];
     var int_rot_vel = rot_vel[id];
@@ -75,53 +88,95 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     del_rot[id] = int_rot_vel * settings.dT; 
 
     // Walls
-    let new_pos = positions[id] + del_pos[id];
-    if settings.round_bounds == 0 {
-        let yH = settings.vert_bound/2.0;
-        let xW = settings.hor_bound/2.0;
+    // if settings.walls == 1 {
+        let new_pos = positions[id] + del_pos[id];
+        if settings.round_bounds == 0 {
+            let yH = settings.vert_bound/2.0;
+            let xW = settings.hor_bound/2.0;
 
-        if fixity[id].y_vel != 1 {
-            if new_pos.y-radii[id] < -yH {
-                int_vel.y = -int_vel.y * 0.5;
-                positions[id].y += -yH - (new_pos.y-radii[id]);
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
-            } else if new_pos.y+radii[id] > yH {
-                int_vel.y = -int_vel.y * 0.5;
-                positions[id].y -= (new_pos.y+radii[id]) - yH;
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            if fixity[id].y_vel != 1 {
+                if new_pos.y-radii[id] < -yH {
+                    int_vel.y = -int_vel.y * 0.5;
+                    positions[id].y += -yH - (new_pos.y-radii[id]);
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+                } else if new_pos.y+radii[id] > yH {
+                    int_vel.y = -int_vel.y * 0.5;
+                    positions[id].y -= (new_pos.y+radii[id]) - yH;
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+                }
             }
-        }
-        if fixity[id].x_vel != 1 {
-            if new_pos.x-radii[id] < -xW {
-                int_vel.x = -int_vel.x * 0.5;
-                positions[id].x += -xW - (new_pos.x-radii[id]);
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
-            } else if new_pos.x+radii[id] > xW {
-                int_vel.x = -int_vel.x * 0.5;
-                positions[id].x -= (new_pos.x+radii[id]) - xW;
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+            if fixity[id].x_vel != 1 {
+                if new_pos.x-radii[id] < -xW {
+                    int_vel.x = -int_vel.x * 0.5;
+                    positions[id].x += -xW - (new_pos.x-radii[id]);
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+                } else if new_pos.x+radii[id] > xW {
+                    int_vel.x = -int_vel.x * 0.5;
+                    positions[id].x -= (new_pos.x+radii[id]) - xW;
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id]*0.9; }
+                }
             }
+        } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
+            let norm_pos = normalize(new_pos);
+            let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
+            let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
+            if fixity[id].x_vel != 1 {
+                positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
+                int_vel.x -= comp_v_p.x * 1.5;
+            }
+            if fixity[id].y_vel != 1 {
+                positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
+                int_vel.y -= comp_v_p.y * 1.5;
+            }
+            if fixity[id].rot_vel != 1 {
+                rot_vel[id] = rot_vel[id]*0.9;
+            }    
         }
-    } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
-        let norm_pos = normalize(new_pos);
-        let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
-        let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
-        if fixity[id].x_vel != 1 {
-            positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
-            int_vel.x -= comp_v_p.x * 1.5;
-        }
-        if fixity[id].y_vel != 1 {
-            positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
-            int_vel.y -= comp_v_p.y * 1.5;
-        }
-        if fixity[id].rot_vel != 1 {
-            rot_vel[id] = rot_vel[id]*0.9;
-        }    
-    }
+    // }
 
     positions[id] += del_pos[id];
     rot[id]       += del_rot[id];
     
     velocities[id] = int_vel;
     rot_vel[id] = int_rot_vel;
+
+    // determine if simulation shader is going to search for new collisions
+    if id == 0u {
+        coll_cont[1] += 1;
+        if coll_cont[1] >= settings.collision_interval {
+            coll_cont[0] = 1;
+            coll_cont[1] = 0;
+        } else {
+            coll_cont[0] = 0;
+        }
+    }
+
+    // Broad Phase
+    if coll_cont[0] == 1 {
+        let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
+        let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
+
+        let particle_left = positions[id].x - radii[id];
+        let particle_right = positions[id].x + radii[id];
+        let particle_bottom = positions[id].y - radii[id];
+        let particle_top = positions[id].y + radii[id];
+
+        let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
+        let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
+        let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
+        let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
+
+        for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
+            for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
+                let base_index = (cell_y * grid_info.w + cell_x) * grid_info.cell_cap;
+                if atomicExchange(&grid[base_index + 1], coll_cont[2]) != coll_cont[2] { // store tick number in cell so we know when it was last updated and if we need to reset it
+                    atomicStore(&grid[base_index + 0], 0);
+                }
+                let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
+                if p_count < grid_info.cell_cap - 1 {
+                    atomicStore(&grid[base_index + 1 + p_count], i32(id));
+                }
+            } 
+        }
+    }
 }

@@ -59,6 +59,7 @@ struct Settings {
     color_code_rot: i32,
     colors: i32,
     render_bonds: i32,
+    walls: i32,
     w: f32,
     h: f32,
     stiffness: f32,
@@ -84,6 +85,7 @@ struct Settings {
     chrom_ab: i32,
     abb_strength: f32
 }
+
 struct Bond {
     index: i32,
     angle: f32,
@@ -109,7 +111,7 @@ fn vs_main(
     in: VertexIn,
     @builtin(instance_index) instance: u32,
 ) -> VertexOutput {
-    var out: VertexOutput;
+        var out: VertexOutput;
     let aspect = input.width/input.height;
     let scale= input.scale;
     let xy = 2.0*scale*vec2(in.position.x / aspect, in.position.y);
@@ -232,9 +234,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // bonds
-    if settings.render_bonds == 1 {
+    // if settings.render_bonds == 1 {
         for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
-            if contacts[i].bonded >= 0 {
+            if contacts[i].a >= 0 {
                 let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
                 var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);
                 if dot(dir, normalize(in.position)) > 0.99 {
@@ -245,7 +247,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 }
             }
         }
-    }
+    // }
     
     //done
     if input.pressed == 1 && click_info[0] == 0 {
@@ -273,6 +275,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             }
         }
     }
+    // if settings.lighting == 1 {
+    //     let surf_pos = vec3(in.position, cos(len))*radii_buf[in.id];
+    //     let part_delta = vec3(pos_buf[0], 0.0) - vec3(pos_buf[in.id], 0.0);
+    //     let delta = part_delta - surf_pos;
+    //     return color * max(0.0, dot(normalize(part_delta), normalize(surf_pos))) / max(0.2, length(delta));
+    // }
     return color;
 }
 
