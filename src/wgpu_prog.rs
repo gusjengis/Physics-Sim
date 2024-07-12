@@ -104,7 +104,7 @@ impl WGPUProg {
                 &shader_prog.buffers.contact_buffers.bind_group_layout,
                 &ren_set_uniform.bind_group_layout,
                 &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selections.bind_group_layout,
+                &shader_prog.buffers.selection_buffers.bind_group_layout,
                 &shader_prog.buffers.click_buffer.bind_group_layout,
             ],
             push_constant_ranges: &[],
@@ -120,7 +120,7 @@ impl WGPUProg {
                 &shader_prog.buffers.contact_buffers.bind_group_layout,
                 &ren_set_uniform.bind_group_layout,
                 &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selections.bind_group_layout,
+                &shader_prog.buffers.selection_buffers.bind_group_layout,
                 &shader_prog.buffers.click_buffer.bind_group_layout,
             ],
             push_constant_ranges: &[],
@@ -136,7 +136,7 @@ impl WGPUProg {
                 &shader_prog.buffers.contact_buffers.bind_group_layout,
                 &ren_set_uniform.bind_group_layout,
                 &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selections.bind_group_layout,
+                &shader_prog.buffers.selection_buffers.bind_group_layout,
                 &shader_prog.buffers.click_buffer.bind_group_layout,
             ],
             push_constant_ranges: &[],
@@ -496,7 +496,7 @@ pub struct BufferContainer {
     pub release_input: Uniform,
     pub drag_input: Uniform,
     pub set_prop_input: Uniform,
-    pub selections: BufferUniform,
+    pub selection_buffers: BufferGroup,
     pub data_buffer: BufferUniform,
     pub material_buffer: BufferUniform,
 }
@@ -513,7 +513,7 @@ impl BufferContainer {
         release_input: Uniform,
         drag_input: Uniform,
         set_prop_input: Uniform,
-        selections: BufferUniform,
+        selection_buffers: BufferGroup,
         data_buffer: BufferUniform,
         material_buffer: BufferUniform,
         ) -> Self {
@@ -529,7 +529,7 @@ impl BufferContainer {
             release_input,
             drag_input,
             set_prop_input,
-            selections,
+            selection_buffers,
             data_buffer,
             material_buffer,
         }
@@ -663,7 +663,7 @@ impl WGPUComputeProg {
         // let bond_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&bonds), "Bond Buffer".to_string(), 0);
         // let bond_info_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.bond_info), "Bond Info Buffer".to_string(), 0);
         let material_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&settings.materials), "Materials".to_string(), 0);
-        let collision_settings = Uniform::new(&config.device, bytemuck::cast_slice(&settings.collison_settings()), "Collision Settings".to_string(), 0);
+        let collision_settings = Uniform::new(&config.device, bytemuck::cast_slice(&settings.collision_settings()), "Collision Settings".to_string(), 0);
         
         let click_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&cilck_info), "Color Buffer".to_string(), 0);
         
@@ -672,7 +672,10 @@ impl WGPUComputeProg {
         let release_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Release Data".to_string(), 0);
         let drag_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Drag Data".to_string(), 0);
         let set_prop_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Drag Data".to_string(), 0);
-        let selections = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.selections), "Selection Buffer".to_string(), 0);
+        let selection_buffers = BufferGroup::new(&config.device, vec![
+            bytemuck::cast_slice(&state.selections),
+            bytemuck::cast_slice(&state.groups),
+            ], "Selection Buffers".to_string() );
         let data_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&state.data), "Selection Buffer".to_string(), 0);
         let hit_tex = Texture::new_from_dimensions(&config, dimensions, 0, wgpu::TextureFormat::Bgra8Unorm);
         
@@ -687,7 +690,7 @@ impl WGPUComputeProg {
             release_input,
             drag_input,
             set_prop_input,
-            selections,
+            selection_buffers,
             data_buffer,
             material_buffer
         );
@@ -775,43 +778,43 @@ impl WGPUComputeProg {
         
         let drag_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Translate compute"),
-            bind_group_layouts: &[&buffers.drag_input.bind_group_layout, &buffers.selections.bind_group_layout, &buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
+            bind_group_layouts: &[&buffers.drag_input.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let selectangle_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Selectangle compute"),
-            bind_group_layouts: &[&buffers.selectangle_input.bind_group_layout, &buffers.selections.bind_group_layout, &hit_tex.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.mov_buffers.bind_group_layout],
+            bind_group_layouts: &[&buffers.selectangle_input.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &hit_tex.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.mov_buffers.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let click_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Click compute"),
-            bind_group_layouts: &[&buffers.click_input.bind_group_layout, &buffers.selections.bind_group_layout, &hit_tex.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.mov_buffers.bind_group_layout],
+            bind_group_layouts: &[&buffers.click_input.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &hit_tex.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.mov_buffers.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let release_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Release compute"),
-            bind_group_layouts: &[&buffers.release_input.bind_group_layout, &buffers.selections.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.collision_settings.bind_group_layout],
+            bind_group_layouts: &[&buffers.release_input.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout, &buffers.collision_settings.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let fix_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Fix compute"),
-            bind_group_layouts: &[&buffers.selections.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
+            bind_group_layouts: &[&buffers.selection_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let drop_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Drop compute"),
-            bind_group_layouts: &[&buffers.selections.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
+            bind_group_layouts: &[&buffers.selection_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.click_buffer.bind_group_layout],
             push_constant_ranges: &[]
         });
 
         let set_prop_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Collision compute"),
-            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.material_buffer.bind_group_layout, &buffers.set_prop_input.bind_group_layout],
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.set_prop_input.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -1003,7 +1006,7 @@ impl WGPUComputeProg {
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 3);
         self.buffers.data_buffer.updateUniform(&config.device, bytemuck::cast_slice(self.state.data.as_slice()));
-        self.buffers.selections.updateUniform(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()));
+        self.buffers.selection_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()), 0);
     }
 
     // fn save_state(&self , state: &State) {
@@ -1023,7 +1026,7 @@ impl WGPUComputeProg {
             compute_pass.set_pipeline(&self.click_compute_pipeline);
             
             compute_pass.set_bind_group(0, &self.buffers.click_input.bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.buffers.selections.bind_group, &[]);   
+            compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(2, &self.hit_tex.diffuse_bind_group, &[]);   
             compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.mov_buffers.bind_group, &[]);  
@@ -1046,7 +1049,7 @@ impl WGPUComputeProg {
             compute_pass.set_pipeline(&self.selectangle_compute_pipeline);
             
             compute_pass.set_bind_group(0, &self.buffers.selectangle_input.bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.buffers.selections.bind_group, &[]);   
+            compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(2, &self.hit_tex.diffuse_bind_group, &[]);   
             compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.mov_buffers.bind_group, &[]);  
@@ -1069,7 +1072,7 @@ impl WGPUComputeProg {
             compute_pass.set_pipeline(&self.release_compute_pipeline);
             
             compute_pass.set_bind_group(0, &self.buffers.release_input.bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.buffers.selections.bind_group, &[]);   
+            compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(2, &self.buffers.mov_buffers.bind_group, &[]);  
             compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]); 
             compute_pass.set_bind_group(4, &self.buffers.collision_settings.bind_group, &[]);   
@@ -1093,7 +1096,7 @@ impl WGPUComputeProg {
             compute_pass.set_pipeline(&self.drag_compute_pipeline);
             
             compute_pass.set_bind_group(0, &self.buffers.drag_input.bind_group, &[]);
-            compute_pass.set_bind_group(1, &self.buffers.selections.bind_group, &[]);   
+            compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(2, &self.buffers.pos_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(4, &self.buffers.click_buffer.bind_group, &[]);   
@@ -1115,7 +1118,7 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.fix_compute_pipeline);
             
-            compute_pass.set_bind_group(0, &self.buffers.selections.bind_group, &[]);    
+            compute_pass.set_bind_group(0, &self.buffers.selection_buffers.bind_group, &[]);    
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(2, &self.buffers.click_buffer.bind_group, &[]);   
 
@@ -1136,7 +1139,7 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.drop_compute_pipeline);
             
-            compute_pass.set_bind_group(0, &self.buffers.selections.bind_group, &[]);    
+            compute_pass.set_bind_group(0, &self.buffers.selection_buffers.bind_group, &[]);    
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(2, &self.buffers.click_buffer.bind_group, &[]);   
 
@@ -1160,7 +1163,7 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);    
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
             compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);   
-            compute_pass.set_bind_group(3, &self.buffers.selections.bind_group, &[]);   
+            compute_pass.set_bind_group(3, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.set_prop_input.bind_group, &[]);   
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);

@@ -61,8 +61,8 @@ struct Forces {
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
 @group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(3) @binding(0) var<storage, read_write> selections: array<i32>;
+@group(3) @binding(1) var<storage, read_write> groups: array<i32>;
 @group(4) @binding(0) var<uniform> input: Input;
-
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

@@ -500,7 +500,7 @@ impl State {
         // State::update_i32(&mut config.device, &mut config.queue, &mut self.bond_info, &mut buffers.contact_buffers.buffers[1]);
         State::update_f32(&mut config.device, &mut config.queue, &mut self.contacts, &mut buffers.contact_buffers.buffers[1]);
         State::update_i32(&mut config.device, &mut config.queue, &mut self.material_pointers, &mut buffers.contact_buffers.buffers[3]);
-        State::update_i32(&mut config.device, &mut config.queue, &mut self.selections, &mut buffers.selections.buffer);
+        State::update_i32(&mut config.device, &mut config.queue, &mut self.selections, &mut buffers.selection_buffers.buffers[0]);
         State::update_f32(&mut config.device, &mut config.queue, &mut self.data, &mut buffers.data_buffer.buffer);
         // State::update_i32(config.device, config.queue, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
         // for n in self.grid.iter() {
@@ -510,7 +510,7 @@ impl State {
     }
 
     pub fn update_selections(&mut self, device: &mut Device, queue: &mut Queue, buffers: &mut BufferContainer) {
-        State::update_i32(device, queue, &mut self.selections, &mut buffers.selections.buffer);
+        State::update_i32(device, queue, &mut self.selections, &mut buffers.selection_buffers.buffers[0]);
     }
 
 

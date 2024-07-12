@@ -187,7 +187,7 @@ impl Thread {
     }
 
     fn select(&mut self, selections: Vec<i32>, config: &WGPUConfig, prog: &mut WGPUProg){
-        prog.shader_prog.buffers.selections.updateUniform(&config.device, bytemuck::cast_slice(selections.as_slice()));
+        prog.shader_prog.buffers.selection_buffers.updateBuffer(&config.device, bytemuck::cast_slice(selections.as_slice()), 0);
 
     }
 
@@ -377,7 +377,7 @@ impl Action {
                     // self.parameters[0].set_list()
                 }
                 if ui.button("Restore").clicked() {
-                    prog.shader_prog.buffers.selections.updateUniform(&device, bytemuck::cast_slice(self.parameters[0].as_i32_vec().as_slice()));
+                    prog.shader_prog.buffers.selection_buffers.updateBuffer(&device, bytemuck::cast_slice(self.parameters[0].as_i32_vec().as_slice()), 0);
                 }
             }
             Command::Simulate => {

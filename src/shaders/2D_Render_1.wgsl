@@ -234,7 +234,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // bonds
-    // if settings.render_bonds == 1 {
+    if settings.render_bonds == 1 {
         for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
             if contacts[i].a >= 0 {
                 let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
@@ -247,7 +247,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 }
             }
         }
-    // }
+    }
     
     //done
     if input.pressed == 1 && click_info[0] == 0 {

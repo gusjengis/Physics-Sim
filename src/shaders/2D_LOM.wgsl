@@ -172,6 +172,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 if atomicExchange(&grid[base_index + 1], coll_cont[2]) != coll_cont[2] { // store tick number in cell so we know when it was last updated and if we need to reset it
                     atomicStore(&grid[base_index + 0], 0);
                 }
+                storageBarrier();
                 let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
                 if p_count < grid_info.cell_cap - 1 {
                     atomicStore(&grid[base_index + 1 + p_count], i32(id));

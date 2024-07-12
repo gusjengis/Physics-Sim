@@ -123,59 +123,59 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         var collisions = array<i32, 14u>();
         var count = 0u;
 
-        // let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
-        // let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
+        let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
+        let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
 
-        // let particle_left = positions[id].x - radii[id];
-        // let particle_right = positions[id].x + radii[id];
-        // let particle_bottom = positions[id].y - radii[id];
-        // let particle_top = positions[id].y + radii[id];
+        let particle_left = positions[id].x - radii[id];
+        let particle_right = positions[id].x + radii[id];
+        let particle_bottom = positions[id].y - radii[id];
+        let particle_top = positions[id].y + radii[id];
 
-        // let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
-        // let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
-        // let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
-        // let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
+        let min_cell_x = max(i32((particle_left - base_x) / grid_info.cell_size), 0);
+        let max_cell_x = min(i32((particle_right - base_x) / grid_info.cell_size), grid_info.w - 1);
+        let min_cell_y = max(i32((base_y - particle_top) / grid_info.cell_size), 0);
+        let max_cell_y = min(i32((base_y - particle_bottom) / grid_info.cell_size), grid_info.h - 1);
 
-        // for (var cell_y = min_cell_y; cell_y <= max_cell_y && count < max_contacts; cell_y++) {
-        //     for (var cell_x = min_cell_x; cell_x <= max_cell_x && count < max_contacts; cell_x++) {
-        //         let cell_id = cell_y * grid_info.w + cell_x;
-        //         let base_index = cell_id * grid_info.cell_cap;
-        //         var neighbors = grid[base_index];
+        for (var cell_y = min_cell_y; cell_y <= max_cell_y && count < max_contacts; cell_y++) {
+            for (var cell_x = min_cell_x; cell_x <= max_cell_x && count < max_contacts; cell_x++) {
+                let cell_id = cell_y * grid_info.w + cell_x;
+                let base_index = cell_id * grid_info.cell_cap;
+                var neighbors = grid[base_index];
 
-        //         if neighbors > 1 {
-        //             for (var i = 2; i < neighbors + 2; i++) {
-        //                 let b = grid[base_index + i];
-        //                 if u32(b) != id {
-        //                     var already_found = false;
-        //                     for(var j = 0u; j < count; j++) {
-        //                         if collisions[j] == b {
-        //                             already_found = true;
-        //                         }
-        //                     }
-        //                     if !already_found && length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
-        //                         collisions[count] = b;
-        //                         count += 1u;
-        //                         if count == max_contacts {
-        //                             break;
-        //                         }
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        for(var i = 0u; i<arrayLength(&radii); i++){
-            if i != id {
-                if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
-                    collisions[count] = i32(i);
-                    count += 1u;
-                    if count == max_contacts {
-                        break;
+                if neighbors > 1 {
+                    for (var i = 2; i < neighbors + 2; i++) {
+                        let b = grid[base_index + i];
+                        if u32(b) != id {
+                            var already_found = false;
+                            for(var j = 0u; j < count; j++) {
+                                if collisions[j] == b {
+                                    already_found = true;
+                                }
+                            }
+                            if !already_found && length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
+                                collisions[count] = b;
+                                count += 1u;
+                                if count == max_contacts {
+                                    break;
+                                }
+                            }
+                        }
                     }
-                } 
+                }
             }
         }
+
+        // for(var i = 0u; i<arrayLength(&radii); i++){
+        //     if i != id {
+        //         if length(positions[i] - positions[id]) < (radii[i] + radii[id]){
+        //             collisions[count] = i32(i);
+        //             count += 1u;
+        //             if count == max_contacts {
+        //                 break;
+        //             }
+        //         } 
+        //     }
+        // }
 
         // delete contacts that don't exist
         for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){
@@ -190,7 +190,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                     other_particle = (contacts[j].b);
                 }
             }
-            if (!found_collision && contacts[j].bonded < 0) {
+            if (!found_collision && (contacts[j].bonded < 0 || settings.bonds == 0)) {
                 // delete
                 contacts[j].a = -1;
                 contacts[j].b = -1;

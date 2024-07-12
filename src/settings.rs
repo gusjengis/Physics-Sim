@@ -716,7 +716,7 @@ impl Settings {
                 ui.checkbox(&mut self.view.circular_particles, "Circular Particles");
                 ui.add_enabled(self.view.circular_particles, egui::Checkbox::new(&mut self.view.render_outline, "Render Outline"));
                 ui.checkbox(&mut self.view.render_rot, "Render Rotation");
-                ui.checkbox(&mut self.view.render_bonds, "Render Bonds");
+                ui.checkbox(&mut self.view.render_bonds, "Render Contacts");
                 ui.checkbox(&mut self.view.render_bp_grid, "Render Grid");
                 ui.menu_button("Particle Color", |ui| {
                     ui.label("Color Source:");
@@ -1586,7 +1586,7 @@ impl Settings {
         }
     }
 
-    pub fn collison_settings(&mut self) -> Vec<f32> {
+    pub fn collision_settings(&mut self) -> Vec<f32> {
         self.changed_collision_settings = false;
         return vec![
             bytemuck::cast(self.simulation.walls as i32),
@@ -1625,7 +1625,7 @@ impl Settings {
             self.view.render_rot as i32,
             self.view.color_code_rot as i32,
             self.view.color_source.as_i32(),
-            (self.physics.bonds != 0 && self.view.render_bonds) as i32,
+            (self.view.render_bonds) as i32,
             self.simulation.walls as i32,
             self.simulation.hor_bound.to_bits() as i32,
             self.simulation.vert_bound.to_bits() as i32,
