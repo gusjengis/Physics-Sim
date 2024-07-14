@@ -51,6 +51,7 @@ struct VertexOutput {
     @location(6) w_h: vec2<i32>,
     @location(7) pixel: vec2<f32>,
     @location(8) vel: vec2<f32>,
+    @location(9) scale: f32,
 };
 
 struct Settings {
@@ -126,6 +127,7 @@ fn vs_main(
     out.w_h = vec2(i32(input.width), i32(input.height));
     out.pixel = out.clip_position.xy;
     out.vel = vel[instance];
+    out.scale = scale;
 
     if settings.colors == 0 {
         out.color = vec3(0.05, 0.05, 0.05);
@@ -189,31 +191,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     var color = vec4(in.color, 1.0);
 
-    // add border/outline
     let border_width = 0.08;
-    if settings.circular_particles == 1 && (settings.render_outline == 1 || in.selected != 0) {
-        if len > 0.5-border_width && len < 0.5 {
-            if in.selected != 0 {
-                color = vec4(1.0, 0.8, 0.0, 1.0);
-                if fixity[in.id].x_vel_2 != 0 || fixity[in.id].y_vel_2 != 0 || fixity[in.id].rot_vel_2 != 0 {
-                    color = vec4(f32(fixity[in.id].x_vel_2), f32(fixity[in.id].y_vel_2), f32(fixity[in.id].rot_vel_2), 1.0);
-                }
-            } else {
-                if settings.colors == 0 && settings.use_part_color == 1 { 
-                    
-                } else if settings.use_part_color == 0 {
-                    color = vec4(
-                        srgb_to_linear(settings.outline_r), 
-                        srgb_to_linear(settings.outline_g), 
-                        srgb_to_linear(settings.outline_b),
-                        1.0
-                    );
-                } else {
-                    color = vec4(color.rgb*0.5, color.a);
-                }
-            }
-        }
-    }
 
     // cut out wedge for rotation
     let rot_point = vec2(cos(in.rot), sin(in.rot));
@@ -234,16 +212,55 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // bonds
-    if settings.render_bonds == 1 {
-        for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
-            if contacts[i].a >= 0 {
-                let displacement = ((radii_buf[in.id]+radii_buf[contacts[i].b]) - length(pos_buf[in.id] - pos_buf[abs(contacts[i].b)])) * 255.0;
-                var dir = normalize(pos_buf[abs(contacts[i].b)] - pos_buf[in.id]);
+    var border_pixel = false;
+    for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
+        if contacts[i].a >= 0 {
+            let delta = pos_buf[contacts[i].b] - pos_buf[in.id];
+            let dir = normalize(delta);
+            let tangent = normalize(vec2(-delta.y, delta.x));
+            let midpoint = pos_buf[in.id] + delta * 0.5;
+            // let tangent = vec2(delta.y, -delta.x);
+            let pixel_world_pos = pos_buf[in.id] + radii_buf[in.id] * in.position * 2.0;
+            let test_vec = midpoint - pixel_world_pos;
+            let side = dot(delta, test_vec);
+            border_pixel = border_pixel || dot(test_vec, dir) < border_width * 2.0 * radii_buf[in.id];
+            if side < 0.0 {
+                discard;
+            }
+            if settings.render_bonds == 1 {
+
+                let displacement = ((radii_buf[in.id] + radii_buf[contacts[i].b]) - length(delta));
+                let scaled_displacement = displacement * 255.0;
                 if dot(dir, normalize(in.position)) > 0.99 {
-                    color = vec4(1.0 - displacement, 1.0 + clamp(displacement*0.8, -0.8, 1.0) + 0.2*clamp(displacement, 0.0, 1.0), 1.0 - abs(displacement), 1.0);
+                    color = vec4(1.0 - scaled_displacement, 1.0 + clamp(scaled_displacement*0.8, -0.8, 1.0) + 0.2*clamp(scaled_displacement, 0.0, 1.0), 1.0 - abs(scaled_displacement), 1.0);
                     if contacts[i].a < 0 {
                         color = vec4(1.0, 0.0, 0.0, 1.0);
                     }
+                }
+            }
+        }
+    }
+
+    // add border/outline
+    if settings.circular_particles == 1 && (settings.render_outline == 1 || in.selected != 0) {
+        if len > 0.5-border_width && len < 0.5 || border_pixel {
+            if in.selected != 0 {
+                color = vec4(1.0, 0.8, 0.0, 1.0);
+                if fixity[in.id].x_vel_2 != 0 || fixity[in.id].y_vel_2 != 0 || fixity[in.id].rot_vel_2 != 0 {
+                    color = vec4(f32(fixity[in.id].x_vel_2), f32(fixity[in.id].y_vel_2), f32(fixity[in.id].rot_vel_2), 1.0);
+                }
+            } else {
+                if settings.colors == 0 && settings.use_part_color == 1 { 
+                    
+                } else if settings.use_part_color == 0 {
+                    color = vec4(
+                        srgb_to_linear(settings.outline_r), 
+                        srgb_to_linear(settings.outline_g), 
+                        srgb_to_linear(settings.outline_b),
+                        1.0
+                    );
+                } else {
+                    color = vec4(color.rgb*0.5, color.a);
                 }
             }
         }
@@ -298,4 +315,20 @@ fn srgb_to_linear(value: f32) -> f32 {
     } else {
         return pow((value + 0.055) / 1.055, 2.4);
     }
+}
+
+fn cross(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    );
+}
+
+fn point_line_distance(point: vec2<f32>, line_point: vec2<f32>, line_vector: vec2<f32>) -> f32 {
+    let v = normalize(line_vector);
+    let pa = point - line_point;
+    let projection = dot(pa, v) * v;
+    let perpendicular = pa - projection;
+    return length(perpendicular);
 }
