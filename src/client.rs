@@ -743,6 +743,7 @@ impl Client {
         if settings!().update_shaders { self.wgpu_prog.shader_prog.update_shaders(&mut self.wgpu_config, &self.settings); settings!().update_shaders = false }
         if settings!().fix            { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config, &self.settings);            settings!().fix            = false }
         if settings!().drop           { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config, &self.settings);           settings!().drop           = false }
+        if settings!().set_group >= 0 { self.wgpu_prog.shader_prog.set_groups(&mut self.wgpu_config, &self.settings, settings!().set_group);           settings!().set_group           = -1 }
 
         self.drag_and_selectangle();
     }

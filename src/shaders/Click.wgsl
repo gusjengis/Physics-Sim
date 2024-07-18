@@ -25,6 +25,7 @@ struct Forces {
 
 @group(0) @binding(0) var<uniform> input: Input;
 @group(1) @binding(0) var<storage, read_write> selections: array<i32>;
+@group(1) @binding(1) var<storage, read_write> groups: array<i32>;
 @group(2) @binding(0) var tex_sampler: texture_2d<f32>;
 @group(3) @binding(0) var<storage, read_write> click_info: array<i32>;
 @group(4) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
@@ -38,25 +39,31 @@ struct Forces {
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let id: u32 = global_id.x;
+    let id = i32(global_id.x);
     let pixel_coord = vec2(input.x, input.y);
     let pixel_color = textureLoad(tex_sampler, pixel_coord, 0);
-    let clicked_particle = u32((pixel_color.r)*255.0*255.0*255.0) + u32((pixel_color.g)*255.0*255.0) + u32((pixel_color.b)*255.0) - 1u;
-    if selections[clicked_particle] == 0 && input.ctrl == 0 {
+    let clicked_particle = i32(u32((pixel_color.r)*255.0*255.0*255.0) + u32((pixel_color.g)*255.0*255.0) + u32((pixel_color.b)*255.0)) - 1;
+    if input.ctrl == 0 && (clicked_particle < 0 || selections[clicked_particle] == 0) {
         selections[id] = 0;
     }
     if clicked_particle == id {
         click_info[0] = 1;
-        if fixity[id].x_vel == 1  && selections[clicked_particle] == 0 || selections[clicked_particle] == 2 {
+        select(clicked_particle);
+    } else if clicked_particle >= 0 && groups[id] >= 0 && groups[clicked_particle] == groups[id] {
+        select(id);
+    }
+}
+
+fn select(id: i32) {
+    if fixity[id].x_vel == 1  && selections[id] == 0 || selections[id] == 2 {
             selections[id] = 2;
         } else {
             selections[id] = 1;
         }
-        if  fixity[clicked_particle].x_vel   == 1 ||
-            fixity[clicked_particle].y_vel   == 1 ||
-            fixity[clicked_particle].rot_vel == 1 
-            { selections[clicked_particle] = 2; }
+        if  fixity[id].x_vel   == 1 ||
+            fixity[id].y_vel   == 1 ||
+            fixity[id].rot_vel == 1 
+            { selections[id] = 2; }
         else 
-            { selections[clicked_particle] = 1; }
-    }
+            { selections[id] = 1; }
 }

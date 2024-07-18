@@ -496,6 +496,7 @@ pub struct BufferContainer {
     pub release_input: Uniform,
     pub drag_input: Uniform,
     pub set_prop_input: Uniform,
+    pub set_group_input: Uniform,
     pub selection_buffers: BufferGroup,
     pub data_buffer: BufferUniform,
     pub material_buffer: BufferUniform,
@@ -513,6 +514,7 @@ impl BufferContainer {
         release_input: Uniform,
         drag_input: Uniform,
         set_prop_input: Uniform,
+        set_group_input: Uniform,
         selection_buffers: BufferGroup,
         data_buffer: BufferUniform,
         material_buffer: BufferUniform,
@@ -529,6 +531,7 @@ impl BufferContainer {
             release_input,
             drag_input,
             set_prop_input,
+            set_group_input,
             selection_buffers,
             data_buffer,
             material_buffer,
@@ -587,30 +590,12 @@ pub struct WGPUComputeProg {
     pub fix_compute_pipeline: wgpu::ComputePipeline,
     pub drop_compute_pipeline: wgpu::ComputePipeline,
     pub set_prop_compute_pipeline: wgpu::ComputePipeline,
+    pub set_group_compute_pipeline: wgpu::ComputePipeline,
     pub hit_tex: Texture,
     pub grid_info: GridInfo,
     pub shader_strs: Vec<String>,
     pub pipeline_layouts: Vec<PipelineLayout>,
     pub compute_pipelines: Vec<wgpu::ComputePipeline>,
-}
-
-pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
-    let width  = settings.simulation.hor_bound  * 2.0;
-    let height = settings.simulation.vert_bound * 2.0;
-    let     max_rad = settings.setup.max_radius * 2.0;
-    let mut min_rad = settings.setup.min_radius;
-    if !settings.setup.variable_rad { min_rad = settings.setup.max_radius; }
-    let w = (width/max_rad).ceil() as i32;
-    let h = (height/max_rad).ceil() as i32;
-    let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.setup.particles as i32) + 2;
-    let total_size = w * h * cell_cap;
-    println!("Cell Capacity:   {}", cell_cap);
-    println!("Cell Dimensions: {} x {}", w, h);
-    println!("Total Cells:     {}", w * h);
-    println!("Total Capacity:  {}", total_size);
-    println!("Bytes:           {}", total_size * 4);
-
-    return ((w * h) as usize, max_rad, cell_cap, w, h);
 }
 
 impl WGPUComputeProg {
@@ -621,7 +606,7 @@ impl WGPUComputeProg {
 
         let p_count = state.p_count;
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*settings.max_contacts*p_count];
-        let grid_info_return = grid_capacity(&settings);
+        let grid_info_return = settings.grid_info();
         let mut bp_grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(
@@ -672,6 +657,7 @@ impl WGPUComputeProg {
         let release_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Release Data".to_string(), 0);
         let drag_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Drag Data".to_string(), 0);
         let set_prop_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32, 0.0 as f32]), "Drag Data".to_string(), 0);
+        let set_group_input = Uniform::new(&config.device, bytemuck::cast_slice(&[0 as i32]), "Drag Data".to_string(), 0);
         let selection_buffers = BufferGroup::new(&config.device, vec![
             bytemuck::cast_slice(&state.selections),
             bytemuck::cast_slice(&state.groups),
@@ -690,6 +676,7 @@ impl WGPUComputeProg {
             release_input,
             drag_input,
             set_prop_input,
+            set_group_input,
             selection_buffers,
             data_buffer,
             material_buffer
@@ -757,6 +744,11 @@ impl WGPUComputeProg {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Properties.wgsl").into()),
         });
+        // println!("11");
+        let set_group_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Group.wgsl").into()),
+        });
         //create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("LOM compute"),
@@ -815,6 +807,12 @@ impl WGPUComputeProg {
         let set_prop_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Collision compute"),
             bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.set_prop_input.bind_group_layout],
+            push_constant_ranges: &[]
+        });
+
+        let set_group_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Collision compute"),
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.set_group_input.bind_group_layout],
             push_constant_ranges: &[]
         });
 
@@ -889,6 +887,13 @@ impl WGPUComputeProg {
             module: &set_prop_compute_shader,
             entry_point: "main",
         });
+        // println!("11");
+        let set_group_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&set_group_compute_pipeline_layout),
+            module: &set_group_compute_shader,
+            entry_point: "main",
+        });
 
         Self {
             state,
@@ -903,6 +908,7 @@ impl WGPUComputeProg {
             fix_compute_pipeline,
             drop_compute_pipeline,
             set_prop_compute_pipeline,
+            set_group_compute_pipeline,
             hit_tex,
             grid_info,
             shader_strs: vec![
@@ -1165,6 +1171,32 @@ impl WGPUComputeProg {
             compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(3, &self.buffers.selection_buffers.bind_group, &[]);   
             compute_pass.set_bind_group(4, &self.buffers.set_prop_input.bind_group, &[]);   
+
+            compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
+            
+        }
+
+        config.queue.submit(Some(encoder.finish()));
+    }
+
+    pub fn set_groups(&mut self, config: &WGPUConfig, settings: &Settings, group_id: i32) {
+
+        self.buffers.set_group_input.updateUniform(&config.device, bytemuck::cast_slice(&[group_id]));
+
+        let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        
+        let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
+
+            compute_pass.set_pipeline(&self.set_group_compute_pipeline);
+            
+            compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);    
+            compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);     
+            compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);   
+            compute_pass.set_bind_group(3, &self.buffers.selection_buffers.bind_group, &[]);   
+            compute_pass.set_bind_group(4, &self.buffers.set_group_input.bind_group, &[]);   
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             

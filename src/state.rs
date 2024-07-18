@@ -74,7 +74,7 @@ impl State {
         let mut bonds = vec![-1; 1];
         let mut material_pointers = vec![0; p_count];
         let mut selections = vec![0; p_count];
-        let mut groups = vec![0; p_count];
+        let mut groups = vec![-1; p_count];
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 6*settings.setup.max_contacts*p_count];
         let mut contact_pointers = vec![-1; settings.setup.max_contacts*p_count];
         let mut data = vec![0.0; p_count * 4];
