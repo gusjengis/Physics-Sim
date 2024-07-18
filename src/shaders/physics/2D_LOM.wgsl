@@ -49,7 +49,9 @@ struct Settings {
     gravity_y: f32,
     mouse_gravity: i32,
     moment_contribution_factor: f32,
-    collision_interval: i32
+    collision_interval: i32,
+    local_damping: i32,
+    local_damping_alpha: f32,
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -175,7 +177,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 storageBarrier();
                 let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
                 if p_count < grid_info.cell_cap - 1 {
-                    atomicStore(&grid[base_index + 1 + p_count], i32(id));
+                    grid[base_index + 1 + p_count] = i32(id);
                 }
             } 
         }

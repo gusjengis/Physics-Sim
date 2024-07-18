@@ -1,6 +1,7 @@
 use crate::scripts::ScriptManager;
 use crate::settings::Data;
 use crate::wgpu_prog::WGPUComputeProg;
+use crate::wgpu_structs::Camera;
 use crate::wgpu_structs::DepthBuffer;
 use crate::wgpu_structs::Texture;
 use crate::window_init;
@@ -12,6 +13,7 @@ use crate::wgpu_prog::WGPUProg;
 use cgmath::Angle;
 use egui::Rect;
 use egui_demo_lib::DemoWindows;
+use winit::dpi::PhysicalPosition;
 use winit::window::Fullscreen;
 use winit::{
     event::*,
@@ -46,6 +48,8 @@ pub struct Client {
     cursor_pos: (i32, i32),
     click_pos: (i32, i32),
     cursor_delta: (i32, i32),
+    mouse_delta: (i32, i32),
+    mouse_captured: bool,
     world_delta: (f32, f32),
     minimized: bool,
     fullscreen: bool,
@@ -122,6 +126,8 @@ impl Client {
             cursor_pos: (0, 0),
             click_pos: (0, 0),
             cursor_delta: (0, 0),
+            mouse_delta: (0, 0),
+            mouse_captured: false,
             world_delta: (0.0, 0.0),
             minimized: false,
             fullscreen: false,
@@ -215,26 +221,6 @@ impl Client {
             let windowDim = self.wgpu_config.size;
             let int_scale = self.settings.view.scale as f32;
 
-            self.wgpu_prog.dim_uniform.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
-                &[  self.wgpu_config.size.width as f32,
-                    0.0 as f32, //time as f32, 
-                    self.wgpu_config.size.height as f32,
-                    self.temp,
-                    self.xOff as f32,
-                    self.yOff as f32,
-                    self.post_ui_x_off(),
-                    self.post_ui_y_off(),
-                    self.post_ui_scale(),
-                    self.dark as f32,
-                    bytemuck::cast(self.click_pos.0),
-                    bytemuck::cast(self.click_pos.1),
-                    bytemuck::cast(self.cursor_pos.0 - self.click_pos.0),
-                    bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
-                    bytemuck::cast((self.middle && !self.shift) as i32),
-                    bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32)
-                ]
-            ));
-
             self.wgpu_prog.depth_buffer = DepthBuffer::new(&self.wgpu_config.device, &self.wgpu_config.config, "depth_texture");
 
             
@@ -259,7 +245,9 @@ impl Client {
                             ]
                         ));
                     self.wgpu_prog.shader_prog.click(&mut self.wgpu_config, &self.settings);
-                        
+                    if self.settings.simulation.D3 {
+                        self.mouse_captured = true;
+                    }
                 }
                 return true;
             },
@@ -286,6 +274,7 @@ impl Client {
                 return true;
             }
             WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
+                if self.settings.simulation.D3 { return true; }
                 let mut mY = 0.0;
                 match delta {
                     MouseScrollDelta::LineDelta(x, y) => {
@@ -302,7 +291,13 @@ impl Client {
                 self.cursor_delta = delta;
                 self.cursor_pos = (position.x as i32, position.y as i32);
                 self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos), (self.post_ui_x_off(), self.post_ui_y_off()));
-                if(self.middle && self.shift){
+                if self.mouse_captured {
+                    let center = self.post_ui_center();
+                self.mouse_delta = (position.x as i32 - center.0, position.y as i32 - center.1);
+
+                    self.canvas.window.set_cursor_position(PhysicalPosition::new(center.0, center.1));
+                }
+                if(self.middle && self.shift && !self.settings.simulation.D3){
                     self.xOff += (world_delta.0 as f32);
                     self.yOff += (world_delta.1 as f32);
                 }
@@ -331,8 +326,6 @@ impl Client {
                             state: ElementState::Pressed,
                             ..
                         } => {
-                                // self.temp = 1.0;
-                                // self.start_time = Local::now();
                                 self.settings.simulating = !self.settings.simulating;
                                 return true;
                             },
@@ -478,6 +471,14 @@ impl Client {
                             return true;
                         },
                     KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        state: ElementState::Pressed,
+                        ..
+                    } => {
+                            self.mouse_captured = false;
+                            return true;
+                        },
+                    KeyboardInput {
                         virtual_keycode: Some(VirtualKeyCode::W),
                         state: ElementState::Pressed,
                         ..
@@ -620,6 +621,8 @@ impl Client {
         self.wgpu_prog.shader_prog = WGPUComputeProg::new(&mut self.wgpu_config, &mut self.settings, (self.canvas.size.width as u32, self.canvas.size.height as u32));
         self.settings.simulating = false;
         self.generation = 0;
+        self.prevGen = 0;
+        self.start_time = Local::now();
         self.settings.data = Data::new();
     }
 
@@ -631,6 +634,9 @@ impl Client {
     fn restore(&mut self){
         self.wgpu_prog.shader_prog.state.load(&mut self.wgpu_config, &mut self.settings, false);
         self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, &mut self.settings);
+        self.generation = 0;
+        self.prevGen = 0;
+        self.start_time = Local::now();
         self.settings.data = Data::new();
     }
 
@@ -644,6 +650,9 @@ impl Client {
     fn home(&mut self){
         self.xOff = 0.0;
         self.yOff = 0.0;
+        if self.settings.simulation.D3 {
+            self.wgpu_prog.cam = Camera::new(&self.wgpu_config);
+        }
     }
 
     fn select_all(&mut self){
@@ -686,7 +695,7 @@ impl Client {
     }
 
     fn cursor_del_to_world_delta(&self, cursor_del: (i32, i32)) -> (f32, f32) {
-        let scale = self.post_ui_scale();
+        let scale = self.ui_scale() * self.settings.view.scale;
         let xOff = self.xOff;
         let yOff = self.yOff;
         let w = self.canvas.size.width as f32;
@@ -700,7 +709,7 @@ impl Client {
     }
 
     fn cursor_to_world_pos(&self, pos: (i32, i32)) -> (f32, f32) {
-        let scale = self.post_ui_scale();
+        let scale = self.ui_scale() * self.settings.view.scale;
         let xOff = self.xOff;
         let yOff = self.yOff;
         let scale_factor = self.canvas.window.scale_factor() as f32;
@@ -740,9 +749,9 @@ impl Client {
         if settings!().zoom_out       { self.zoom(-1.0);                                                                  settings!().zoom_out       = false }
         if settings!().home           { self.home();                                                                      settings!().home           = false }
         if settings!().select_all     { self.select_all();                                                                settings!().select_all     = false }
-        if settings!().update_shaders { self.wgpu_prog.shader_prog.update_shaders(&mut self.wgpu_config, &self.settings); settings!().update_shaders = false }
         if settings!().fix            { self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config, &self.settings);            settings!().fix            = false }
         if settings!().drop           { self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config, &self.settings);           settings!().drop           = false }
+        if settings!().rebuild_shaders { self.wgpu_prog.rebuild_shaders(&mut self.wgpu_config, &self.settings);            settings!().rebuild_shaders = false }
         if settings!().set_group >= 0 { self.wgpu_prog.shader_prog.set_groups(&mut self.wgpu_config, &self.settings, settings!().set_group);           settings!().set_group           = -1 }
 
         self.drag_and_selectangle();
@@ -768,10 +777,81 @@ impl Client {
         return world_offset.1 as f32;
     }
 
-    fn post_ui_scale(&self) -> f32 {
-        return self.canvas.window.scale_factor() as f32 * self.settings.view.scale * self.available_rect.height()/self.canvas.size.height as f32;
+    fn post_ui_center(&self) -> (i32, i32) {
+        let scale_factor = self.canvas.window.scale_factor() as f32;
+        let left = self.available_rect.left() * scale_factor;
+        let right = self.available_rect.right() * scale_factor;
+        let new_center_x = (right - left)/2.0 + left;
+        let top = self.available_rect.top() * scale_factor;
+        let bottom = self.available_rect.bottom() * scale_factor;
+        let new_center_y = ((bottom - top)/2.0 + top);
+        return (new_center_x as i32, new_center_y as i32);
     }
 
+    fn ui_scale(&self) -> f32 {
+        return self.canvas.window.scale_factor() as f32 * self.available_rect.height()/self.canvas.size.height as f32;
+    }
+
+    fn update_render_input(&mut self) {
+        let mut input = vec![  
+            self.wgpu_config.size.width as f32,
+            0.0 as f32, //time as f32, 
+            self.wgpu_config.size.height as f32,
+            self.xOff as f32,
+            self.yOff as f32,
+            self.post_ui_x_off(),
+            self.post_ui_y_off(),
+            self.ui_scale(),
+            self.settings.view.scale * self.ui_scale(),
+            self.dark as f32,
+            bytemuck::cast(self.click_pos.0),
+            bytemuck::cast(self.click_pos.1),
+            bytemuck::cast(self.cursor_pos.0 - self.click_pos.0),
+            bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
+            bytemuck::cast((self.middle && !self.shift) as i32),
+            bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32),
+            self.wgpu_prog.cam.eye.x,
+            self.wgpu_prog.cam.eye.y,
+            self.wgpu_prog.cam.eye.z,
+            0.0,
+        ];
+        //add camera
+        input.extend_from_slice(&self.wgpu_prog.cam.view_proj.as_slice()[0]);
+        input.extend_from_slice(&self.wgpu_prog.cam.view_proj.as_slice()[1]);
+        input.extend_from_slice(&self.wgpu_prog.cam.view_proj.as_slice()[2]);
+        input.extend_from_slice(&self.wgpu_prog.cam.view_proj.as_slice()[3]);
+        input.extend_from_slice(&self.wgpu_prog.cam.eye().as_slice()[0]);
+        input.extend_from_slice(&self.wgpu_prog.cam.eye().as_slice()[1]);
+        input.extend_from_slice(&self.wgpu_prog.cam.eye().as_slice()[2]);
+        input.extend_from_slice(&self.wgpu_prog.cam.eye().as_slice()[3]);
+        input.extend_from_slice(&self.wgpu_prog.cam.target().as_slice()[0]);
+        input.extend_from_slice(&self.wgpu_prog.cam.target().as_slice()[1]);
+        input.extend_from_slice(&self.wgpu_prog.cam.target().as_slice()[2]);
+        input.extend_from_slice(&self.wgpu_prog.cam.target().as_slice()[3]);
+
+        self.wgpu_prog.render_input.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&input.as_slice()));   
+    }
+
+    fn camera_movement(&mut self) {
+        let camera = &mut self.wgpu_prog.cam;
+        camera.process_mouse_movement(-self.mouse_delta.0 as f32, -self.mouse_delta.1 as f32, 0.001);
+        let forward = camera.target - camera.eye;
+        let forward_norm = forward.normalize();
+        let forward_mag = forward.magnitude();
+        let right = forward_norm.cross(camera.up);
+        let xzMag = (forward.x.powf(2.0) + forward.z.powf(2.0)).powf(0.5);
+        let xzNorm = (forward.x / xzMag, forward.z / xzMag);
+        let angle = xzNorm.1.atan2(xzNorm.0);
+        let move_speed = 0.01;
+        
+        let cross = forward_norm.cross(camera.up);
+        if(self.A){ camera.eye -= cross*move_speed; camera.target -= cross*move_speed; }
+        if(self.S){ camera.eye -= forward_norm*move_speed; camera.target -= forward_norm*move_speed; }
+        if(self.D){ camera.eye += cross*move_speed; camera.target += cross*move_speed; }
+        if(self.W){ camera.eye += forward_norm*move_speed; camera.target += forward_norm*move_speed; }
+        self.mouse_delta = (0, 0);
+    }
+ 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> { macro_rules! settings { () => { self.settings };}
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
@@ -847,26 +927,13 @@ impl Client {
         if settings!().materials_changed {
             self.wgpu_prog.shader_prog.buffers.material_buffer.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().materials));
         }
-        
-            self.wgpu_prog.dim_uniform.updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(
-                &[  self.wgpu_config.size.width as f32,
-                    0.0 as f32, //time as f32, 
-                    self.wgpu_config.size.height as f32,
-                    self.temp,
-                    self.xOff as f32,
-                    self.yOff as f32,
-                    self.post_ui_x_off(),
-                    self.post_ui_y_off(),
-                    self.post_ui_scale(),
-                    self.dark as f32,
-                    bytemuck::cast(self.click_pos.0),
-                    bytemuck::cast(self.click_pos.1),
-                    bytemuck::cast(self.cursor_pos.0 - self.click_pos.0),
-                    bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
-                    bytemuck::cast((self.middle && !self.shift) as i32),
-                    bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32)
-                ]
-            ));   
+            if self.settings.simulation.D3 && self.mouse_captured {
+                self.camera_movement();
+            } else {
+                self.mouse_captured = false;
+            }
+            self.wgpu_prog.cam.update_view_proj(&self.wgpu_config);
+            self.update_render_input();
             
             let full_output = self.platform.end_frame(Some(&self.canvas.window));
             let paint_jobs = self.platform.context().tessellate(full_output.shapes);
@@ -901,7 +968,7 @@ impl Client {
                     });
 
                     render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
-                    render_pass2.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass2.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
                     render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                     // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
                     render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
@@ -928,11 +995,18 @@ impl Client {
                                 }
                             })
                             ],
-                        depth_stencil_attachment: None,
+                            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                                view: &self.wgpu_prog.depth_buffer.view,
+                                depth_ops: Some(wgpu::Operations {
+                                    load: wgpu::LoadOp::Clear(1.0),
+                                    store: true,
+                                }),
+                                stencil_ops: None,
+                            }),
                     });
 
                     render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
-                    render_pass3.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass3.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
                     render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                     render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
                     render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
@@ -969,8 +1043,8 @@ impl Client {
                         }),
                     });
 
-                    render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0]);
-                    render_pass.set_bind_group(0, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0 + settings!().view.show_hit_tex as usize * 4]);
+                    render_pass.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
                     render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
                     // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
                     render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
@@ -1011,7 +1085,7 @@ impl Client {
                     render_pass4.set_pipeline(&self.wgpu_prog.render_pipelines[3]);
                     render_pass4.set_bind_group(0, &self.wgpu_prog.render_tex.diffuse_bind_group, &[]);
                     render_pass4.set_bind_group(1, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass4.set_bind_group(2, &self.wgpu_prog.dim_uniform.bind_group, &[]);
+                    render_pass4.set_bind_group(2, &self.wgpu_prog.render_input.bind_group, &[]);
                     render_pass4.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass4.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass4.draw_indexed(0..6 as u32, 0, 0..1);

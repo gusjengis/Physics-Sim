@@ -1,4 +1,5 @@
 use crate::wgpu_config::WGPUConfig;
+use cgmath::{InnerSpace, Transform};
 use wgpu::{util::DeviceExt, BindGroupLayout, BindGroupLayoutEntry, BindGroupEntry, Buffer};
 
 
@@ -707,13 +708,13 @@ impl Camera {
     pub fn new(config: &WGPUConfig) -> Self {
         use cgmath::SquareMatrix;
         let mut returnVal =  Self {
-            eye: (0.0, 1.0, 1.0).into(),
+            eye: (0.0, 0.0, 1.0).into(),
             // have it look at the origin
             target: (0.0, 0.0, 0.0).into(),
             // which way is "up"
             up: cgmath::Vector3::unit_y(),
             aspect: config.size.width as f32 / config.size.height as f32,
-            fovy: 85.0,
+            fovy: 90.0,
             znear: 0.05,
             zfar: 1141.0,
             speed: 10.2,
@@ -733,6 +734,34 @@ impl Camera {
 
         
         return OPENGL_TO_WGPU_MATRIX * proj * view;
+    }
+
+    pub fn process_mouse_movement(&mut self, delta_x: f32, delta_y: f32, sensitivity: f32) {
+        use cgmath::{Matrix4, Rad, Vector3};
+
+        // Adjust mouse delta by sensitivity
+        let delta_x = delta_x * sensitivity;
+        let delta_y = delta_y * sensitivity;
+
+        // Calculate new rotation angles
+        let horizontal_angle = Rad(delta_x);
+        let vertical_angle = Rad(delta_y);
+
+        // Get current direction vector from eye to target
+        let mut direction = self.target - self.eye;
+
+        // Rotate around the up axis for horizontal movement
+        let horizontal_rotation = Matrix4::from_axis_angle(self.up, horizontal_angle);
+        direction = horizontal_rotation.transform_vector(direction);
+
+        // Rotate around the right axis (perpendicular to up and direction) for vertical movement
+        let right = direction.cross(self.up).normalize();
+        let vertical_rotation = Matrix4::from_axis_angle(right, vertical_angle);
+        direction = vertical_rotation.transform_vector(direction);
+
+        // Update target position
+        self.target = self.eye + direction;
+        self.view_proj = self.build_view_projection_matrix().into();
     }
 
     pub fn eye(&self) -> [[f32; 4]; 4] {
@@ -757,6 +786,13 @@ impl Camera {
         self.aspect = config.size.width as f32 / config.size.height as f32;
         self.view_proj = self.build_view_projection_matrix().into();
         // self.rot_mat = 
+    }
+
+    pub fn zoom(&mut self, zoom: f32){
+        let forward = self.target - self.eye;
+        let forward_norm = forward.normalize();
+        let mag = (self.target - self.eye).magnitude();
+        self.eye += forward_norm * mag/(zoom);
     }
 }
  

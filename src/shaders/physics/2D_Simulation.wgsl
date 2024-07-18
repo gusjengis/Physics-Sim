@@ -57,7 +57,9 @@ struct Settings {
     gravity_y: f32,
     mouse_gravity: i32,
     moment_contribution_factor: f32,
-    collision_interval: i32
+    collision_interval: i32,
+    local_damping: i32,
+    local_damping_alpha: f32,
 }
 
 struct Material {
@@ -232,8 +234,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let b = contacts[i].b;
         var bonded = contacts[i].bonded;
         if bonded >= 0 && bonds[bonded].index < 0 {
-            contacts[i].bonded = -1;
-            bonded = -1;
+            contacts[i].bonded = bonds[bonded].index;
+            bonded = bonds[bonded].index;
         }
         var forces = vec3(0.0, 0.0, 0.0);
         if bonded < 0 || settings.bonds == 0 {
@@ -259,7 +261,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 fn distance(a: i32, b: i32) -> f32 {
-    return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
+    $ F64 {
+        return  f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - (f64(radii[a]) + f64(radii[b])));
+    }
+    $ F32 {
+        return  length(positions[a] - positions[b]) - (radii[a] + radii[b]);
+    }
 }
 
 fn distance2(a: i32, b: i32, bonded: i32) -> f32 {
@@ -310,8 +317,9 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
     var shear_limit  = settings.bond_shear_strength;
     let normal_and_moment = normal_force; 
     if settings.bonds_tear == 1 && normal_force/A + settings.moment_contribution_factor*(abs(moment)*R) > normal_limit && abs(contacts[i].bond_tangent_force/A) > shear_limit {
-        bonds[bonded].index = -bonds[bonded].index;
-        contacts[i].bonded = -1;
+        let break_code = -10 + i32(sign(normal_displacement));
+        bonds[bonded].index = break_code;
+        contacts[i].bonded = break_code;
     }
 
     return  vec3(force, moment) + linear_model(a,b,i,bonded); 
@@ -383,8 +391,9 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
     var shear_limit  = settings.bond_shear_strength;
     var normal_limit = settings.bond_normal_strength;
     if settings.bonds_tear == 1 && (normal_force < -normal_limit || abs(contacts[i].tangent_force) > shear_limit){
-        bonds[bonded].index = -bonds[bonded].index;
-        contacts[i].bonded = -1;
+        let break_code = -10 + i32(sign(normal_displacement));
+        bonds[bonded].index = break_code;
+        contacts[i].bonded = break_code;
     }
 
     return vec3(force, moment);
@@ -397,8 +406,9 @@ fn normal_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     force += spring_force * normalize(positions[b] - positions[a]) * settings.bond_damping;
 
     if settings.bonds_tear == 1 && spring_force < -settings.bond_normal_strength {
-        bonds[bonded].index = -bonds[bonded].index;
-        contacts[i].bonded = -1;
+        let break_code = -10 + i32(sign(displacement));
+        bonds[bonded].index = break_code;
+        contacts[i].bonded = break_code;
     }
     return linear_model(a, b, i, bonded) + vec3(force, 0.0);
 }
@@ -408,11 +418,12 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
     let density = materials[mat_id].density;
     let mass = density * PI * radii[id] * radii[id];
     let rot_inertia = 0.5*mass*radii[id]*radii[id];
-    // natural accelerations
-    accelerations[id] = net_force/mass;
-    rot_acc[id] = net_moment/rot_inertia;
 
+    var force = net_force;
+    var moment = net_moment;
+    
     // gravity
+    var gravity = vec2(0.0, 0.0);
     if settings.gravity == 1 && settings.planet_mode == 1  {
         var center_of_gravity = vec2(0.0, 0.0);
         if settings.mouse_gravity == 1 {
@@ -420,19 +431,33 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
         }
         let delta = (center_of_gravity - positions[id]);
         if delta.x != 0.0 || delta.y != 0.0 {
-            accelerations[id] += delta/length(delta) * 9.81 * settings.gravity_acc;
+            force += (delta/length(delta) * 9.81 * settings.gravity_acc) * mass;
         }
     } else if settings.gravity == 1 {
-        let gravity = 9.81 * settings.gravity_acc;
-        accelerations[id] += vec2(0.0, -gravity);
+        let gravity_acc = 9.81 * settings.gravity_acc;
+        force += vec2(0.0, -gravity_acc*mass);
     }
+
+    //damping
+    if settings.local_damping == 1 {
+        let alpha = settings.local_damping_alpha;
+        force  += vec2(abs(force.x), abs(force.y))  * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
+        moment += moment         * alpha * -sign(rot_vel[id]);
+    }
+
+    // natural accelerations
+    accelerations[id] = (force)/mass;
+    rot_acc[id] = (moment)/rot_inertia;
+
 
     if fixity[id].x_vel   == 0 { velocities[id].x += 0.5 * accelerations[id].x * settings.dT; }
     if fixity[id].y_vel   == 0 { velocities[id].y += 0.5 * accelerations[id].y * settings.dT; }
     if fixity[id].rot_vel == 0 { rot_vel[id]      += 0.5 * rot_acc[id]         * settings.dT; }
+
     // artifical accelerations
     velocities[id] += 0.5 * vec2(forces[id].x, forces[id].y) * settings.dT;
     rot_vel[id] += forces[id].rot*settings.dT;
+
 }
 
 fn stress_tensor(id: u32, force: vec2<f32>, delta: vec2<f32>) -> vec3<f32> {

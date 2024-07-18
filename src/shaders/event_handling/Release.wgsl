@@ -53,7 +53,9 @@ struct Settings {
     gravity_y: f32,
     mouse_gravity: i32,
     moment_contribution_factor: f32,
-    collision_interval: i32
+    collision_interval: i32,
+    local_damping: i32,
+    local_damping_alpha: f32,
 }
 
 @group(0) @binding(0) var<uniform> input: Input;

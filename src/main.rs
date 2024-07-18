@@ -8,6 +8,7 @@ pub mod settings;
 pub mod setup;
 pub mod state;
 pub mod scripts;
+pub mod shader_gen;
 
 pub  fn main(){
     env_logger::init();

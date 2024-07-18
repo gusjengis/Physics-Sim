@@ -36,6 +36,42 @@ pub use schema_generated::*;
 mod new_schema_generated;
 pub use new_schema_generated::*;
 
+pub struct GridInfo {
+    pub total_cells: usize,
+    pub cell_size: f32,
+    pub cell_cap: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+impl GridInfo {
+    pub fn new(
+        total_cells: usize,
+        cell_size: f32,
+        cell_cap: i32,
+        w: i32,
+        h: i32,
+        ) -> Self {
+        
+        Self {
+            total_cells,
+            cell_size,
+            cell_cap,
+            w,
+            h,
+        }
+    }
+
+    pub fn as_vec(&self) -> Vec<f32> {
+        return vec![
+            self.cell_size,
+            bytemuck::cast(self.cell_cap),
+            bytemuck::cast(self.w),
+            bytemuck::cast(self.h),
+        ];
+    }
+}
+
 pub struct State {
     pub p_count: usize,
     pub pos: Vec<f32>,
@@ -55,7 +91,8 @@ pub struct State {
     pub contact_pointers: Vec<i32>,
     pub data: Vec<f32>,
     pub flatbuffer: Vec<u8>,
-    pub grid: Vec<i32>
+    pub grid: Vec<i32>,
+    pub grid_info: GridInfo,
 }
 
 impl State {
@@ -81,6 +118,7 @@ impl State {
         let flatbuffer = vec![0 as u8; 1];
         // Setup initial state
         setup::grid(settings, &mut pos, &mut vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
+        let grid_info_return = grid_capacity(&settings);
 
         let mut state = State {
             p_count,
@@ -101,7 +139,14 @@ impl State {
             contact_pointers,
             data,
             flatbuffer,
-            grid:  vec![0; 1]
+            grid:  vec![0; 1],
+            grid_info: GridInfo::new(
+                grid_info_return.0,
+                grid_info_return.1,
+                grid_info_return.2,
+                grid_info_return.3,
+                grid_info_return.4,
+            )
         };
 
         // state.load_from_csv(PathBuf::from("./saved_states/particle_state.csv"), settings);
@@ -431,6 +476,28 @@ impl State {
         }
         self.selections = vec![0; self.p_count];
         self.data = vec![0.0; 4*self.p_count];
+
+        let mut min = f32::MAX;
+        let mut max = f32::MIN;
+        for radius in &self.radii {
+            min = radius.min(min);
+            max = radius.max(max);
+        }
+
+        settings.setup.min_radius = min;
+        settings.setup.max_radius = max;
+        settings.setup.variable_rad = min != max;
+
+        let grid_info_return = grid_capacity(&settings);
+        self.grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
+        self.grid_info = GridInfo::new(
+            grid_info_return.0,
+            grid_info_return.1,
+            grid_info_return.2,
+            grid_info_return.3,
+            grid_info_return.4,
+        );
+
     }
 
     pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64;10]> {
