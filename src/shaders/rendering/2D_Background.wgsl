@@ -4,21 +4,26 @@ struct VertexIn {
 
 struct Input {
     width: f32, time: f32,
-    height: f32, temp: f32,
+    height: f32,
     xOff: f32, yOff: f32,
     ui_xOff: f32, ui_yOff: f32,
-    scale: f32, dark: f32,
+    ui_scale: f32, scale: f32,
+    dark: f32,
     x: i32, y: i32,
     rW: i32, rH: i32,
     pressed: i32,
-    timestamp: i32
+    timestamp: i32,
+    $ 3D { cam: Camera, }
 }
 
-struct Camera {
-    view_proj: mat4x4<f32>,
-    eye: mat4x4<f32>,
-    focus: mat4x4<f32>,
-};
+$ 3D {
+    struct Camera {
+        pos: vec4<f32>,
+        view_proj: mat4x4<f32>,
+        eye: mat4x4<f32>,
+        focus: mat4x4<f32>,
+    };
+}
 
 struct Material {
     red: f32,
@@ -69,7 +74,9 @@ struct Settings {
     sobel: i32,
     invert: i32,
     chrom_ab: i32,
-    abb_strength: f32
+    abb_strength: f32,
+    bond_highlight_strength: f32,
+    render_unbonded_contacts: i32
 }
 
 struct Bond {
@@ -131,38 +138,39 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         srgb_to_linear(settings.background_g),
         srgb_to_linear(settings.background_b)
     ), 1.0); 
-
-    if ((settings.round_bounds == 1 && length(in.position.xy) > settings.wall_radius) || (settings.round_bounds == 0 && (in.position.x >= settings.w/2.0 || in.position.x <= -settings.w/2.0 || in.position.y >= settings.h/2.0 || in.position.y <= -settings.h/2.0))) {
-        color = vec4(0.02, 0.02, 0.02, 1.0);
-    } else if settings.render_grid == 1 {
-        let grid_info = grid_info_buffer[0];
-        let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
-        let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
-        let cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
-        let cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
-        let cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
-        let base_index = i32(cell_id)*grid_info.cell_cap;
-        if coll_cont[2] == grid[base_index + 1] + 1 {
-            let left   = base_x + grid_info.cell_size * f32(cell_x    );
-            let right  = base_x + grid_info.cell_size * f32(cell_x + 1);
-            let top    = base_y - grid_info.cell_size * f32(cell_y    );
-            let bottom = base_y - grid_info.cell_size * f32(cell_y + 1);
-            if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
-                let seed1 = u32(rand(cell_id, 4294967296.0));
-                let seed2 = u32(rand(seed1,   4294967296.0));
-                let seed3 = u32(rand(seed2,   4294967296.0));
-                var brightness = f32(grid[base_index])/f32(grid_info.cell_cap);
-                color = vec4(
-                    max(0.0, color.x + brightness * rand(seed1, 1.0) * 0.5),
-                    max(0.0, color.y + brightness * rand(seed2, 1.0) * 0.5),
-                    max(0.0, color.z + brightness * rand(seed3, 1.0) * 0.5),
-                    1.0
-                );
-                if grid[base_index] >= grid_info.cell_cap {
-                    color = vec4(1.0, 0.0, 0.0, 1.0);
-                }
-                if (in.position.x + settings.w < 0.005 || settings.w - in.position.x < 0.005 || in.position.y + settings.h < 0.005 || settings.h - in.position.y < 0.005 || in.position.x - left < 0.005 || right - in.position.x < 0.005 || in.position.y - bottom < 0.005 || top - in.position.y < 0.005) && cell_x < grid_info.w && cell_y < grid_info.h && cell_x >= 0 && cell_y >= 0  {
-                    color *= 4.0;
+    $ 2D {
+        if ((settings.round_bounds == 1 && length(in.position.xy) > settings.wall_radius) || (settings.round_bounds == 0 && (in.position.x >= settings.w/2.0 || in.position.x <= -settings.w/2.0 || in.position.y >= settings.h/2.0 || in.position.y <= -settings.h/2.0))) {
+            color = vec4(0.02, 0.02, 0.02, 1.0);
+        } else if settings.render_grid == 1 {
+            let grid_info = grid_info_buffer[0];
+            let base_x = -grid_info.cell_size*f32(grid_info.w)*0.5;
+            let base_y =  grid_info.cell_size*f32(grid_info.h)*0.5;
+            let cell_x = i32((in.position.x - base_x) / grid_info.cell_size);
+            let cell_y = i32((base_y - in.position.y) / grid_info.cell_size);
+            let cell_id = u32(cell_y) * u32(grid_info.w) + u32(cell_x);
+            let base_index = i32(cell_id)*grid_info.cell_cap;
+            if coll_cont[2] == grid[base_index + 1] + 1 {
+                let left   = base_x + grid_info.cell_size * f32(cell_x    );
+                let right  = base_x + grid_info.cell_size * f32(cell_x + 1);
+                let top    = base_y - grid_info.cell_size * f32(cell_y    );
+                let bottom = base_y - grid_info.cell_size * f32(cell_y + 1);
+                if cell_x >= 0 && cell_y >= 0 && base_x <= in.position.x && base_y >= in.position.y && cell_x < grid_info.w && cell_y < grid_info.h{
+                    let seed1 = u32(rand(cell_id, 4294967296.0));
+                    let seed2 = u32(rand(seed1,   4294967296.0));
+                    let seed3 = u32(rand(seed2,   4294967296.0));
+                    var brightness = f32(grid[base_index])/f32(grid_info.cell_cap);
+                    color = vec4(
+                        max(0.0, color.x + brightness * rand(seed1, 1.0) * 0.5),
+                        max(0.0, color.y + brightness * rand(seed2, 1.0) * 0.5),
+                        max(0.0, color.z + brightness * rand(seed3, 1.0) * 0.5),
+                        1.0
+                    );
+                    if grid[base_index] >= grid_info.cell_cap {
+                        color = vec4(1.0, 0.0, 0.0, 1.0);
+                    }
+                    if (in.position.x + settings.w < 0.005 || settings.w - in.position.x < 0.005 || in.position.y + settings.h < 0.005 || settings.h - in.position.y < 0.005 || in.position.x - left < 0.005 || right - in.position.x < 0.005 || in.position.y - bottom < 0.005 || top - in.position.y < 0.005) && cell_x < grid_info.w && cell_y < grid_info.h && cell_x >= 0 && cell_y >= 0  {
+                        color *= 4.0;
+                    }
                 }
             }
         }

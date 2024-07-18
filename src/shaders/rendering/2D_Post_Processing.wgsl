@@ -36,19 +36,23 @@ struct Settings {
     sobel: i32,
     invert: i32,
     chrom_ab: i32,
-    abb_strength: f32
+    abb_strength: f32,
+    bond_highlight_strength: f32,
+    render_unbonded_contacts: i32
 }
 
 struct Input {
     width: f32, time: f32,
-    height: f32, temp: f32,
+    height: f32,
     xOff: f32, yOff: f32,
     ui_xOff: f32, ui_yOff: f32,
-    scale: f32, dark: f32,
+    ui_scale: f32, scale: f32,
+    dark: f32,
     x: i32, y: i32,
     rW: i32, rH: i32,
     pressed: i32,
-    timestamp: i32
+    timestamp: i32,
+    $ 3D { cam: Camera, }
 }
 
 @group(0) @binding(0) var tex_view: texture_2d<f32>;

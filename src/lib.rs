@@ -8,6 +8,7 @@ pub mod settings;
 pub mod setup;
 pub mod state;
 pub mod scripts;
+pub mod shader_gen;
 use std::ptr::null;
 use winit::dpi::PhysicalSize;
 use log::*;

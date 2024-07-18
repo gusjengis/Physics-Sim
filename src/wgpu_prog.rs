@@ -19,6 +19,7 @@ use crate::wgpu_config::*;
 use crate::setup::*;
 use crate::state::*;
 use crate::settings::*;
+use crate::shader_gen::*;
 
 extern crate flatbuffers;
 use wgpu::util::DeviceExt;
@@ -38,7 +39,7 @@ pub const INDICES: &[u16] = &[
 ];
 
 pub struct WGPUProg {
-    pub dim_uniform: Uniform,
+    pub render_input: Uniform,
     pub ren_set_uniform: Uniform,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -51,6 +52,7 @@ pub struct WGPUProg {
     pub pipeline_layouts: Vec<PipelineLayout>,
     pub tex_formats: Vec<TextureFormat>,
     pub render_pipelines: Vec<wgpu::RenderPipeline>,
+    pub cam: Camera,
 }
 
 impl WGPUProg {
@@ -69,26 +71,28 @@ impl WGPUProg {
             4, 3, 1,
             4, 5, 3,
         ];
+        let cam = Camera::new(&config);
+
         let depth_buffer = DepthBuffer::new(&config.device, &config.config, "depth_texture");
-        let shader1_str = include_str!("shaders/2D_Render_1.wgsl").to_string();
+        let shader1_str = include_str!("shaders/rendering/2D_Particles.wgsl");
         let shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/2D_Render_1.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(shader1_str, settings).into()),
         });
-        let shader2_str = include_str!("shaders/2D_Render_2.wgsl").to_string();
+        let shader2_str = include_str!("shaders/rendering/2D_Background.wgsl");
         let shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/2D_Render_2.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(shader2_str, settings).into()),
         });
-        let shader3_str = include_str!("shaders/2D_Render_3.wgsl").to_string();
+        let shader3_str = include_str!("shaders/rendering/2D_Hit_Tex.wgsl");
         let shader3 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/2D_Render_3.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(shader3_str, settings).into()),
         });
-        let shader4_str = include_str!("shaders/2D_Render_4.wgsl").to_string();
+        let shader4_str = include_str!("shaders/rendering/2D_Post_Processing.wgsl");
         let shader4 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(shader4_str.clone().into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(shader4_str, settings).into()),
         });
         let dim_contents = &[config.size.width as f32, config.size.height as f32, config.size.width as f32, config.size.height as f32, 0 as f32, 0 as f32, 1 as f32, 0 as f32];
         let dim_uniform = Uniform::new(&config.device, bytemuck::cast_slice(dim_contents), String::from("dimensions"), 0);
@@ -152,6 +156,22 @@ impl WGPUProg {
             ],
             push_constant_ranges: &[],
         });
+
+        let mut pipeline_layout5 =
+        config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[
+                &dim_uniform.bind_group_layout,
+                &shader_prog.buffers.pos_buffers.bind_group_layout,
+                &shader_prog.buffers.mov_buffers.bind_group_layout,
+                &shader_prog.buffers.contact_buffers.bind_group_layout,
+                &ren_set_uniform.bind_group_layout,
+                &shader_prog.buffers.material_buffer.bind_group_layout,
+                &shader_prog.buffers.selection_buffers.bind_group_layout,
+                &shader_prog.buffers.click_buffer.bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
         
         let render_pipeline = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
@@ -175,11 +195,8 @@ impl WGPUProg {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -235,11 +252,8 @@ impl WGPUProg {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -279,14 +293,17 @@ impl WGPUProg {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None, // 1.
+            depth_stencil: Some(wgpu::DepthStencilState {
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                format: DepthBuffer::DEPTH_FORMAT,
+                stencil: wgpu::StencilState::default(), // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }), // 1.
             multisample: wgpu::MultisampleState {
                 count: 1, // 2.
                 mask: !0, // 3.
@@ -333,11 +350,65 @@ impl WGPUProg {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw, // 2.
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                format: DepthBuffer::DEPTH_FORMAT,
+                stencil: wgpu::StencilState::default(), // 2.
+                bias: wgpu::DepthBiasState::default(),
+              }), // 1.
+            multisample: wgpu::MultisampleState {
+                count: 1, // 2.
+                mask: !0, // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+            multiview: None, // 5.
+        });
+
+        let vertex_buffer = config.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        let index_buffer = config.device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(INDICES),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );
+
+        let render_pipeline5 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&pipeline_layout3),
+            vertex: wgpu::VertexState {
+                module: &shader3,
+                entry_point: "vs_main", // 1.
+                buffers: &[Vertex::desc()], // 2.
+            },
+            fragment: Some(wgpu::FragmentState { // 3.
+                module: &shader3,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState { // 4.
+                    format: config.config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
                 conservative: false,
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -374,7 +445,7 @@ impl WGPUProg {
         
         
         Self{
-            dim_uniform,
+            render_input: dim_uniform,
             ren_set_uniform,
             vertex_buffer,
             index_buffer,
@@ -384,29 +455,34 @@ impl WGPUProg {
             shader,
             render_tex,
             shader_strs: vec![
-                shader1_str,
-                shader2_str,
-                shader3_str,
-                shader4_str
+                shader1_str.to_string(),
+                shader2_str.to_string(),
+                shader3_str.to_string().clone(),
+                shader4_str.to_string(),
+                shader3_str.to_string(),
             ],
             pipeline_layouts: vec![
                 pipeline_layout1,
                 pipeline_layout2,
                 pipeline_layout3,
                 pipeline_layout4,
+                pipeline_layout5,
             ],
             tex_formats: vec![
                 config.config.format.clone(),
                 config.config.format.clone(),
                 wgpu::TextureFormat::Bgra8Unorm,
                 config.config.format.clone(),
+                config.config.format.clone(),
             ],
             render_pipelines: vec![
                 render_pipeline,
                 render_pipeline2,
                 render_pipeline3,
-                render_pipeline4
+                render_pipeline4,
+                render_pipeline5
             ],
+            cam,
         }
     }
 
@@ -415,10 +491,19 @@ impl WGPUProg {
         self.render_tex = Texture::new_from_dimensions(config, dimensions, 0, config.config.format);
     }
 
-    pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, i: usize) {
+    pub fn rebuild_shaders(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+        for i in 0..self.render_pipelines.len() {
+            self.rebuild_pipeline(config, settings, i);
+        }
+        for i in 0..2 {
+            self.shader_prog.rebuild_pipeline(config, settings, i);
+        }
+    }
+
+    pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, settings: &Settings, i: usize) {
         // Compile WGSL to SPIR-V
-        let shader_str = self.shader_strs[i].clone();
-        return match naga::front::wgsl::parse_str(&self.shader_strs[i]) {
+        let shader_str = self.shader_strs[i].as_str();
+        return match naga::front::wgsl::parse_str(&assemble_shader(shader_str, settings)) {
             Ok(module) => {
                 return match naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
                 .validate(&module)
@@ -428,7 +513,7 @@ impl WGPUProg {
                             Ok(_) => {
                                 let shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
                                         label: Some("Shader"),
-                                            source: wgpu::ShaderSource::Wgsl(self.shader_strs[i].clone().into()),
+                                            source: wgpu::ShaderSource::Wgsl(assemble_shader(shader_str, settings).into()),
                                         });
                                         
                                         self.render_pipelines[i] = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -453,11 +538,8 @@ impl WGPUProg {
                                             strip_index_format: None,
                                             front_face: wgpu::FrontFace::Ccw, // 2.
                                             cull_mode: Some(wgpu::Face::Back),
-                                            // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                                             polygon_mode: wgpu::PolygonMode::Fill,
-                                            // Requires Features::DEPTH_CLIP_CONTROL
                                             unclipped_depth: false,
-                                            // Requires Features::CONSERVATIVE_RASTERIZATION
                                             conservative: false,
                                         },
                                         depth_stencil: Some(wgpu::DepthStencilState {
@@ -700,62 +782,57 @@ impl WGPUComputeProg {
         
         //create shaders
         // println!("1");
-        let lom_shader = include_str!("./shaders/2D_LOM.wgsl").to_string();
+        let lom_shader = include_str!("./shaders/physics/2D_LOM.wgsl");
         let compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_LOM.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(lom_shader, settings).into()),
         });
         // println!("2");
         let broad_phase_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Broad_Phase.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/physics/2D_Broad_Phase.wgsl"), settings).into()),
         });
         // println!("3");
-        let sim_shader = include_str!("./shaders/2D_Simulation.wgsl").to_string();
+        let sim_shader = include_str!("./shaders/physics/2D_Simulation.wgsl");
         let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(sim_shader, settings).into()),
         });
-        if settings.simulation.use_f64 {
-            compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
-            });
-        }
+        
         // println!("4");
         let selectangle_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Selectangle.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Selectangle.wgsl"), settings).into()),
         });
         // println!("5");
         let release_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Release.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Release.wgsl"), settings).into()),
         });
         // println!("6");
         let click_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Click.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Click.wgsl"), settings).into()),
         });
         // println!("7");
         let drag_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Translate.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Translate.wgsl"), settings).into()),
         });
         // println!("8");
         let fix_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Fix.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Fix.wgsl"), settings).into()),
         });
         // println!("9");
         let drop_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Drop.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Drop.wgsl"), settings).into()),
         });
         // println!("10");
         let set_prop_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Properties.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Set_Properties.wgsl"), settings).into()),
         });
         //create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -906,8 +983,8 @@ impl WGPUComputeProg {
             hit_tex,
             grid_info,
             shader_strs: vec![
-                lom_shader,
-                sim_shader
+                lom_shader.to_string(),
+                sim_shader.to_string()
             ],
             pipeline_layouts: vec![
                 compute_pipeline_layout,
@@ -920,9 +997,9 @@ impl WGPUComputeProg {
         }
     }
 
-    pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, i: usize) {
-        let shader_str = self.shader_strs[i].clone();
-        return match naga::front::wgsl::parse_str(&self.shader_strs[i]) {
+    pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, settings: &Settings, i: usize) {
+        let shader_str = self.shader_strs[i].as_str();
+        return match naga::front::wgsl::parse_str(&assemble_shader(shader_str, settings)) {
             Ok(module) => {
                 return match naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
                 .validate(&module)
@@ -932,7 +1009,7 @@ impl WGPUComputeProg {
                             Ok(_) => {
                                 let shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
                                     label: Some("Shader"),
-                                    source: wgpu::ShaderSource::Wgsl(self.shader_strs[i].clone().into()),
+                                    source: wgpu::ShaderSource::Wgsl(assemble_shader(shader_str, settings).into()),
                                 });
                                         
                                 self.compute_pipelines[i] = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -961,31 +1038,6 @@ impl WGPUComputeProg {
         self.state.update_selections(device, queue, &mut self.buffers);
     }
 
-    pub fn update_shaders(&mut self, config: &mut WGPUConfig, settings: &Settings) {
-        let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation.wgsl").into()),
-        });
-        if settings.simulation.use_f64 {
-            compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: None,
-                source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/2D_Simulation_f64.wgsl").into()),
-            });
-        }
-        let compute_pipeline_layout2 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Collision compute"),
-            bind_group_layouts: &[&self.buffers.pos_buffers.bind_group_layout, &self.buffers.mov_buffers.bind_group_layout, &self.buffers.contact_buffers.bind_group_layout, &self.buffers.collision_settings.bind_group_layout, &self.buffers.material_buffer.bind_group_layout, &self.buffers.data_buffer.bind_group_layout],
-            push_constant_ranges: &[]
-        });
-
-        self.compute_pipelines[1] = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&compute_pipeline_layout2),
-            module: &compute_shader2,
-            entry_point: "main",
-        });
-    }
-
     pub fn restore(&mut self, config: &mut WGPUConfig, settings: &mut Settings) {
 
         settings.set_particles(self.state.p_count);
@@ -1005,6 +1057,8 @@ impl WGPUComputeProg {
         // self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.bond_info.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.contacts.as_slice()), 1);
         self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.material_pointers.as_slice()), 3);
+        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.grid.as_slice()), 4);
+        self.buffers.contact_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.grid_info.as_vec().as_slice()), 5);
         self.buffers.data_buffer.updateUniform(&config.device, bytemuck::cast_slice(self.state.data.as_slice()));
         self.buffers.selection_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()), 0);
     }

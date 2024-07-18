@@ -21,20 +21,6 @@ use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use crate::{state::State, wgpu_structs::Uniform, window_init::Canvas};
 
-pub struct Menu {
-    pub render_settings: bool,
-    pub materials_menu: bool,
-    pub setup_menu: bool,
-    pub physics_menu: bool,
-    pub walls_menu: bool,
-    pub save_load_menu: bool,
-    pub properties_menu: bool,
-    pub data_menu: bool,
-    pub bond_menu: bool,
-    pub speed_menu: bool,
-    pub script_menu: bool,
-}
-
 pub struct Properties {
     pub set_x_force: bool,
     pub set_y_force: bool,
@@ -138,6 +124,10 @@ pub struct View_Settings {
     pub invert: bool,
     pub chrom_ab: bool,
     pub abb_strength: f32,
+    pub bond_highlight_strength: f32,
+    pub render_unbonded_contacts: bool,
+    pub lighting: bool,
+    pub show_hit_tex: bool,
     pub data_menu: bool,
     pub script_menu: bool,
     pub code_editor: bool,
@@ -174,6 +164,7 @@ pub struct Simulation_Settings {
     pub round_walls: bool,
     pub wall_radius: f32,
     pub use_f64: bool,
+    pub D3: bool,
 }
 
 pub struct Physics_Settings {
@@ -195,6 +186,8 @@ pub struct Physics_Settings {
     pub bond_damping: f32,
     pub drag: f32,
     pub moment_contribution_factor: f32,
+    pub local_damping: bool,
+    pub local_damping_alpha: f32,
 
 }
 
@@ -238,7 +231,7 @@ pub struct Settings {
     pub drop: bool,
     pub speed_perc: f32,
     pub f64_support: bool,
-    pub update_shaders: bool,
+    pub rebuild_shaders: bool,
     pub current_script: usize,
     pub just_set_line: bool,
     pub world_pos: (f32, f32),
@@ -296,6 +289,10 @@ impl Settings {
                 invert: false,
                 chrom_ab: false,
                 abb_strength: 0.005,
+                bond_highlight_strength: 5.0,
+                render_unbonded_contacts: false,
+                lighting: false,
+                show_hit_tex: false,
                 data_menu: false,
                 script_menu: false,
                 code_editor: false,
@@ -329,7 +326,8 @@ impl Settings {
                 maintain_ar: true,
                 round_walls: false,
                 wall_radius: 1.0,
-                use_f64: false
+                use_f64: false,
+                D3: false
             },
             physics: Physics_Settings { 
                 gravity: true,
@@ -349,7 +347,9 @@ impl Settings {
                 contact_damping: 0.2,
                 bond_damping: 0.2,
                 drag: 1.0,
-                moment_contribution_factor: 1.0  
+                moment_contribution_factor: 1.0,
+                local_damping: false,
+                local_damping_alpha: 0.1
             },
             changed_collision_settings: false,
             materials,
@@ -415,7 +415,7 @@ impl Settings {
             drop: false,
             speed_perc: 100.0,
             f64_support: false,
-            update_shaders: false,
+            rebuild_shaders: false,
             current_script: 0,
             just_set_line: false,
             world_pos: (0.0, 0.0),
@@ -460,6 +460,7 @@ impl Settings {
                         self.materials_menu(ui);
                         self.data_menu(ui, ctx);
                         self.script_menu(ui, ctx);
+                        self.developer_menu(ui, ctx);
                     });
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                         let max_perc = self.simulation.genPerFrame as f32/self.simulation.maxGenPerFrame as f32 * 100.0;
@@ -587,30 +588,16 @@ impl Settings {
                     self.reset = true;
                 };
                     if self.setup.structure == Structure::Grid {
-                    if ui.add(egui::Slider::new(&mut self.setup.grid_width, 1.0..=self.setup.particles as f32).
-                    text("Grid Width").step_by(0.01)
-                    .logarithmic(true)).changed() {
-                        self.reset = true;
-                    };
-                    if ui.checkbox(&mut self.setup.hex_grid, "Hex Grid").changed() {
-                        self.reset = true;
-                    }
+                    self.reset |= ui.add(egui::Slider::new(&mut self.setup.grid_width, 1.0..=self.setup.particles as f32).text("Grid Width").step_by(0.01).logarithmic(true)).changed();
+                    self.reset |= ui.checkbox(&mut self.setup.hex_grid, "Hex Grid").changed();
                 }
                 
-                if ui.checkbox(&mut self.setup.variable_rad, "Random Radius").changed() {
-                    self.reset = true;
-                }
+                self.reset |= ui.checkbox(&mut self.setup.variable_rad, "Random Radius").changed();
                 
                 if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.000000001..=10.0).step_by(0.001).text("Max Radius")).changed() {
                     self.setup.min_radius = self.setup.max_radius/self.setup.holeyness;
                     self.reset = true;
                 }
-                
-                // ui.add_enabled_ui(self.setup.variable_rad, |ui| {
-                //     if ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.000000001..=10.0).step_by(0.001)).changed() {
-                //         self.reset = true;
-                //     }
-                // });
 
                 if self.setup.variable_rad {
                     match self.setup.structure {
@@ -622,14 +609,8 @@ impl Settings {
                             };
                         },
                         _ => {
-                            if ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.0001..=0.5).
-                            text("Max Radius")).changed() {
-                                self.reset = true;
-                            };
-                            if ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.0001..=0.5).
-                            text("Min Radius")).changed() {
-                                self.reset = true;
-                            };
+                            self.reset |= ui.add(egui::Slider::new(&mut self.setup.max_radius, 0.0001..=0.5).text("Max Radius")).changed();
+                            self.reset |= ui.add(egui::Slider::new(&mut self.setup.min_radius, 0.0001..=0.5).text("Min Radius")).changed();
                         }
                     }
                 }
@@ -713,27 +694,24 @@ impl Settings {
             ui.label("Rendering");
             // egui::Window::new("Render Settings").collapsible(false).auto_sized().show(ctx, |ui| {
                 // ui.checkbox(&mut self.view.rendering, "Render Particles");
-                ui.checkbox(&mut self.view.circular_particles, "Circular Particles");
+                self.rebuild_shaders |= ui.checkbox(&mut self.view.circular_particles, "Circular Particles").changed();
                 ui.add_enabled(self.view.circular_particles, egui::Checkbox::new(&mut self.view.render_outline, "Render Outline"));
-                ui.checkbox(&mut self.view.render_rot, "Render Rotation");
-                ui.checkbox(&mut self.view.render_bonds, "Render Contacts");
-                ui.checkbox(&mut self.view.render_bp_grid, "Render Grid");
+                self.rebuild_shaders |= ui.checkbox(&mut self.view.render_rot, "Render Rotation").changed();
+                ui.checkbox(&mut self.view.render_unbonded_contacts, "Render Contacts");
+                self.rebuild_shaders |= ui.checkbox(&mut self.view.render_bonds, "Render Bonds").changed();
+                self.rebuild_shaders |= ui.checkbox(&mut self.view.lighting, "Lighting").changed();
+                self.rebuild_shaders |= ui.checkbox(&mut self.simulation.D3, "3D").changed();
                 ui.menu_button("Particle Color", |ui| {
                     ui.label("Color Source:");
-                    // ui.horizontal(|ui|{
-                        ui.menu_button(format!("{}", self.view.color_source.to_string()), |ui| {
-                            ui.selectable_value(&mut self.view.color_source, ColorSource::None, "None");
-                            ui.selectable_value(&mut self.view.color_source, ColorSource::Material, "Material");
-                            ui.selectable_value(&mut self.view.color_source, ColorSource::Direction, "Direction");
-                            ui.selectable_value(&mut self.view.color_source, ColorSource::Random, "Random");
-                        });
-                    // });
-                    ui.checkbox(&mut self.view.color_code_rot, "Color Code Rotation"); 
+                    ui.menu_button(format!("{}", self.view.color_source.to_string()), |ui| {
+                        ui.selectable_value(&mut self.view.color_source, ColorSource::None, "None");
+                        ui.selectable_value(&mut self.view.color_source, ColorSource::Material, "Material");
+                        ui.selectable_value(&mut self.view.color_source, ColorSource::Direction, "Direction");
+                        ui.selectable_value(&mut self.view.color_source, ColorSource::Random, "Random");
+                    });
+                    self.rebuild_shaders |= ui.checkbox(&mut self.view.color_code_rot, "Color Code Rotation").changed(); 
                     ui.checkbox(&mut self.view.dim_slow_particles, "Dim Slow Particles");
-                    // ui.horizontal(|ui|
-                        ui.add_enabled(self.view.dim_slow_particles, egui::DragValue::new(&mut self.view.max_brightness_vel).clamp_range(0.0001..=100.0).prefix("Dimming Threshold: ").suffix(" m/s").speed(0.01));
-                    // });
-                    
+                    ui.add_enabled(self.view.dim_slow_particles, egui::DragValue::new(&mut self.view.max_brightness_vel).clamp_range(0.0001..=100.0).prefix("Dimming Threshold: ").suffix(" m/s").speed(0.01));
                 });
                 ui.add_enabled_ui(self.view.render_outline && self.view.circular_particles, |ui|{
                     ui.menu_button("Outline Color", |ui| {
@@ -802,7 +780,6 @@ impl Settings {
                         });
                     });
                 });
-                // ui.checkbox(&mut self.render_bp_grid, "Broad Phase Grid"); 
             // });
             
         });
@@ -860,12 +837,10 @@ impl Settings {
             ui.add_enabled_ui(self.f64_support, |ui| {
                 if self.f64_support {
                     if ui.checkbox(&mut self.simulation.use_f64, "64-bit precision").on_hover_text("Use f64s to calculate distance between particles.").clicked() {
-                        self.update_shaders = true;
+                        self.rebuild_shaders = true;
                     }
                 } else {
-                    if ui.checkbox(&mut self.simulation.use_f64, "64-bit precision").on_hover_text("Not supported by your GPU.").clicked() {
-                        self.update_shaders = true;
-                    }
+                    ui.checkbox(&mut self.simulation.use_f64, "64-bit precision").on_hover_text("Not supported by your GPU.");
                 }
             });
             ui.separator();
@@ -914,46 +889,37 @@ impl Settings {
         ui.menu_button("Physics", |ui| {
             ui.style_mut().wrap = Some(false);
             ui.set_min_width(min_x);
-            if ui.checkbox(&mut self.physics.gravity, "Gravity").changed() {
-                self.changed_collision_settings = true;
-            }
+            self.changed_collision_settings |= ui.checkbox(&mut self.physics.gravity, "Gravity").changed();
             ui.add_enabled_ui(self.physics.gravity, |ui|{
-                if ui.checkbox(&mut self.physics.planet_mode, "Planet Mode").changed() {
-                    self.changed_collision_settings = true;
-                }
+                self.changed_collision_settings |= ui.checkbox(&mut self.physics.planet_mode, "Planet Mode").changed();
                 ui.add_enabled_ui(self.physics.planet_mode, |ui| {
-                    if ui.checkbox(&mut self.physics.mouse_gravity, "Mouse Gravity").changed() {
-                        self.changed_collision_settings = true;
-                    }
+                    self.changed_collision_settings |= ui.checkbox(&mut self.physics.mouse_gravity, "Mouse Gravity").changed();
                 });
                 ui.label("G Force");
-                if ui.add(egui::Slider::new(&mut self.physics.gravity_acceleration, -100.0..=100.0).step_by(0.1)).changed() {
-                    self.changed_collision_settings = true;
-                }
+                self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.gravity_acceleration, -100.0..=100.0).step_by(0.1)).changed();
             });
             ui.separator();
-            if ui.checkbox(&mut self.physics.collisions, "Collisions").changed() {
-                self.changed_collision_settings = true;
-            }
+            self.changed_collision_settings |= ui.checkbox(&mut self.physics.collisions, "Collisions").changed();
             ui.add_enabled_ui(self.physics.collisions, |ui|{
-                ui.label("Collision Interval");
-                if ui.add(egui::Slider::new(&mut self.physics.collision_interval, 1..=self.simulation.maxGenPerFrame)).changed() {
-                    self.changed_collision_settings = true;
-                }
+                // ui.label("Collision Interval");
+                // self.changed_collision_settings |=  ui.add(egui::Slider::new(&mut self.physics.collision_interval, 1..=self.simulation.maxGenPerFrame)).changed();
                 ui.label("Friction Coefficient");
-                if ui.add(egui::Slider::new(&mut self.physics.friction_coefficient, 0.0..=1.0)).changed() {
-                    self.changed_collision_settings = true;
-                }
+                self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.friction_coefficient, 0.0..=1.0)).changed();
                 
+            });
+            ui.separator();
+            self.changed_collision_settings |= ui.checkbox(&mut self.physics.local_damping, "Local Damping").changed();
+            ui.add_enabled_ui(self.physics.local_damping, |ui|{
+                self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.local_damping_alpha, 0.0..=1.0)).changed();
             });
             ui.separator();
             let mut changed_bonds = false;
 
             ui.menu_button(format!("{}", self.physics.bondenum.to_string()), |ui| {
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Unbonded, "Unbonded").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
-                changed_bonds = changed_bonds || ui.selectable_value(&mut self.physics.bondenum, BondType::Parallel_Linear_Contact_Bond, "Linear Parallel Bonds").changed();
+                changed_bonds |= ui.selectable_value(&mut self.physics.bondenum, BondType::Unbonded, "Unbonded").changed();
+                changed_bonds |= ui.selectable_value(&mut self.physics.bondenum, BondType::Normal_Bonds, "Normal Bonds").changed();
+                changed_bonds |= ui.selectable_value(&mut self.physics.bondenum, BondType::Linear_Contact_Bond, "Linear Contact Bonds").changed();
+                changed_bonds |= ui.selectable_value(&mut self.physics.bondenum, BondType::Parallel_Linear_Contact_Bond, "Linear Parallel Bonds").changed();
             });
 
             if changed_bonds { 
@@ -964,45 +930,25 @@ impl Settings {
             if self.physics.bonds != 0 {
                 ui.separator();
                 ui.label("Stiffness");
-                if ui.add(egui::Slider::new(&mut self.physics.bond_normal_stiffness, 0.001..=1000000000000.0).step_by(0.001).
-                    text("Normal")).changed() {
-                        self.changed_collision_settings = true;
-                    };
+                self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.bond_normal_stiffness, 0.001..=1000000000000.0).step_by(0.001).text("Normal")).changed();
                     if self.physics.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_stiffness, 0.001..=1000000000000.0).step_by(0.001).
-                            text("Shear")).changed() {
-                                self.changed_collision_settings = true;
-                        };
+                        self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.bond_shear_stiffness, 0.001..=1000000000000.0).step_by(0.001).text("Shear")).changed();
                 }
-                if ui.checkbox(&mut self.physics.bond_tearing, "Bond Tearing").changed() {
-                    self.changed_collision_settings = true;
-                }
+                self.changed_collision_settings |= ui.checkbox(&mut self.physics.bond_tearing, "Bond Tearing").changed();
                 ui.add_enabled_ui(self.physics.bond_tearing, |ui|{
                     ui.separator();
                     ui.label("Strength");
-                    if ui.add(egui::Slider::new(&mut self.physics.bond_normal_strength, 0.0..=1000000000.0).step_by(0.0001).
-                        text("Normal")).changed() {
-                            self.changed_collision_settings = true;
-                    };
+                    self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.bond_normal_strength, 0.0..=1000000000.0).step_by(0.0001).text("Normal")).changed();
                     if self.physics.bonds > 1 {
-                        if ui.add(egui::Slider::new(&mut self.physics.bond_shear_strength, 0.0..=1000000000.0).step_by(0.0001).
-                            text("Shear")).changed() {
-                                self.changed_collision_settings = true;
-                        };
+                        self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.bond_shear_strength, 0.0..=1000000000.0).step_by(0.0001).text("Shear")).changed();
                     }
                     if self.physics.bonds > 2 {
-                        if ui.add(egui::Slider::new(&mut self.physics.moment_contribution_factor, 0.0..=1.0).step_by(0.0001).
-                            text("Moment Contribution Factor")).changed() {
-                                self.changed_collision_settings = true;
-                        };
+                        self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.moment_contribution_factor, 0.0..=1.0).step_by(0.0001).text("Moment Contribution Factor")).changed();
                     }
                     
                 });
             }
-            if ui.button("Regenerate Bonds").clicked() {
-                self.regen_bonds = true;                            
-            }
-
+            self.regen_bonds = ui.button("Regenerate Bonds").clicked();
         });
     }
 
@@ -1315,8 +1261,19 @@ impl Settings {
     fn script_menu(&mut self, ui: &mut Ui, ctx: &Context) {
         ui.menu_button("Scripts", |ui| {
             ui.style_mut().wrap = Some(false);
-            
             if ui.selectable_label(self.view.script_menu, "Script Panel").clicked() { self.view.script_menu = !self.view.script_menu; }
+        });    
+    }
+
+    fn developer_menu(&mut self, ui: &mut Ui, ctx: &Context) {
+        ui.menu_button("Developer", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.label("Debug");
+            ui.checkbox(&mut self.view.render_bp_grid, "Render Grid");
+            ui.checkbox(&mut self.view.show_hit_tex, "Show Hit Texture");
+            ui.separator();
+            // ui.label("Experimental");
+            
             if ui.selectable_label(self.view.code_editor, "Code Editor").clicked() { self.view.code_editor = !self.view.code_editor; }
         });    
     }
@@ -1446,7 +1403,11 @@ impl Settings {
                         .desired_width(ui.available_width())
                         .font(egui::TextStyle::Monospace).code_editor();
                         if ui.add(text_edit).changed() {
-                            prog.rebuild_pipeline(config, self.curr_shader);
+                            prog.rebuild_pipeline(config, &self, self.curr_shader);
+                            if self.curr_shader == 2 {
+                                prog.shader_strs[4] = prog.shader_strs[2].clone();
+                                prog.rebuild_pipeline(config, &self, 4);
+                            }
                         }
                     });
                 } else {
@@ -1455,7 +1416,7 @@ impl Settings {
                         .desired_width(ui.available_width())
                         .font(egui::TextStyle::Monospace).code_editor();
                         if ui.add(text_edit).changed() {
-                            prog.shader_prog.rebuild_pipeline(config, self.curr_shader-4);
+                            prog.shader_prog.rebuild_pipeline(config, &self, self.curr_shader-4);
                         }
                     });
                 }
@@ -1615,7 +1576,8 @@ impl Settings {
             bytemuck::cast(self.physics.mouse_gravity as i32),
             self.physics.moment_contribution_factor,
             bytemuck::cast(self.physics.collision_interval as i32),
-
+            bytemuck::cast(self.physics.local_damping as i32),
+            self.physics.local_damping_alpha
         ];
     }
 
@@ -1651,6 +1613,8 @@ impl Settings {
             self.view.invert as i32,
             self.view.chrom_ab as i32,
             self.view.abb_strength.to_bits() as i32,
+            self.view.bond_highlight_strength.to_bits() as i32,
+            self.view.render_unbonded_contacts as i32
         ];
     }
 
