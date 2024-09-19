@@ -60,6 +60,7 @@ struct Settings {
     collision_interval: i32,
     local_damping: i32,
     local_damping_alpha: f32,
+    particles: i32,
 }
 
 struct Material {
@@ -110,7 +111,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     if radii[id] == 0.0 { return; }
 
-    
+
     let max_contacts = 14u;
     if settings.collisions == 1 {
         var collisions = array<i32, 14u>();
@@ -140,7 +141,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                         let b = grid[base_index + i];
                         if u32(b) != id {
                             var already_found = false;
-                            for(var j = 0u; j < count; j++) {
+                            for (var j = 0u; j < count; j++) {
                                 if collisions[j] == b {
                                     already_found = true;
                                 }
@@ -172,41 +173,40 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // }
 
         // delete contacts that don't exist
-        for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){
+        for (var j = id * max_contacts; j < (id + 1u) * max_contacts; j++) {
             if contacts[j].b == -1 {
                 continue;
             }
             var found_collision = false;
             var other_particle = -1;
-            for(var i = 0u; i<count; i++){
+            for (var i = 0u; i < count; i++) {
                 if contacts[j].b == collisions[i] {
                     found_collision = true;
                     other_particle = (contacts[j].b);
                 }
             }
-            if (!found_collision && (contacts[j].bonded < 0 || settings.bonds == 0)) {
+            if !found_collision && (contacts[j].bonded < 0 || settings.bonds == 0) {
                 // delete
                 contacts[j].a = -1;
                 contacts[j].b = -1;
-            } else if (!found_collision && contacts[j].bonded > 0 && settings.bonds <= 1) {
+            } else if !found_collision && contacts[j].bonded > 0 && settings.bonds <= 1 {
                 contacts[j].tangent_force = 0.0;
             }
         }   
 
         // create new contacts
-        for(var i = 0u; i<count; i++){
+        for (var i = 0u; i < count; i++) {
             var existing_index = -1;
             var empty_index = -1;
-            for(var j = id*max_contacts; j<(id+1u)*max_contacts; j++){
+            for (var j = id * max_contacts; j < (id + 1u) * max_contacts; j++) {
                 if contacts[j].b == collisions[i] {
                     existing_index = i32(j);
                     break;
                 } else if contacts[j].b == -1 {
                     empty_index = i32(j);
                 }
-                
             }
-            
+
             if existing_index == -1 && empty_index == -1 {
                 continue;
             } else if existing_index == -1 { // initialize completely new contact
@@ -215,7 +215,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 contacts[empty_index].b = b;
                 contacts[empty_index].tangent_force = 0.0;
             }
-
         }
     }
 }

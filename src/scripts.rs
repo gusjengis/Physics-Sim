@@ -1,12 +1,16 @@
+use std::fmt;
 use std::ops::RangeInclusive;
+use std::path::PathBuf;
 use std::{str::FromStr, vec};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use crate::settings::{Properties, Settings, Data};
 use chrono::Local;
 use egui::Ui;
+use native_dialog::FileDialog;
 use serde_json::*;
 use serde::{self, Serialize, Deserialize};
 use wgpu::{Device, Queue};
+use winit::event::VirtualKeyCode;
 
 use crate::{client::Client, wgpu_prog::{WGPUProg, WGPUComputeProg}};
 
@@ -75,13 +79,54 @@ impl ScriptManager {
         }
     }
 
+    pub fn auto_run(&mut self) {
+        for i in 0..self.scripts.len() {
+            if self.scripts[i].auto_run {
+                self.toggle_execution(i);
+            }
+        }
+    }
+
     pub fn push_action(&mut self, script_index: usize, action: Action){
         self.scripts[script_index].push_action(action);
+    }
+
+    pub fn key_pressed(&mut self, key: VirtualKeyCode, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
+        let k = Key::from_vck(key);
+        for (i, script) in self.scripts.iter().enumerate() {
+            match &script.script_trigger {
+                Trigger::KeyPressed(sk) => { 
+                    if k == *sk { 
+                        if !self.threads[i].executing {
+                            self.threads[i].toggle_execution(i);
+                            self.threads[i].execute(&self.scripts, prog, config, settings, canvas);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn execute(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
         for thread in &mut self.threads {
             thread.execute(&self.scripts, prog, config, settings, canvas);
+        }
+    }
+
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self.scripts).unwrap()
+    }
+
+    pub fn from_json(&mut self, string: &str) {
+        let scripts: Vec<Script> = serde_json::from_str(string).unwrap();
+        self.scripts = vec![];
+        self.threads = vec![];
+        for script in scripts {
+            self.push_script(script);
+        }
+        if self.scripts.len() == 0 {
+            self.new_script("Script 1");
         }
     }
 }
@@ -153,6 +198,9 @@ impl Thread {
             Command::Backup => { self.backup(prog, config, settings); }
             Command::Restore => { self.restore(prog, config, settings); }
             Command::Call_Script => { self.call_script(scripts, action_index, script_index); }
+            Command::Advance => { self.advance(scripts, action_index, script_index, settings); }
+            Command::Export => { settings.save_data(Some(scripts[script_index].actions[action_index].parameters[0].as_path().clone())); }
+            Command::Record => { self.record(scripts, action_index, script_index, settings); }
         }
     }
 
@@ -197,11 +245,11 @@ impl Thread {
 
     fn backup(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings) {
         prog.shader_prog.update_state(config, settings);
-        prog.shader_prog.state.save(config, settings);
+        prog.shader_prog.state.save(config, settings, None);
     }
 
     fn restore(&mut self, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings) {
-        prog.shader_prog.state.load(config, settings, false);
+        prog.shader_prog.state.load(config, settings, None, false);
         prog.shader_prog.restore(config, settings);
         settings.data = Data::new();
     }
@@ -210,11 +258,29 @@ impl Thread {
         let called_script = scripts[script_index].actions[action_index].parameters[0].as_i32() as usize;
         self.stack.push((called_script, -1));
     }
+
+    fn advance(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize, settings: &mut Settings) {
+        settings.simulation.advance_x_timesteps = true;
+        settings.simulation.x_timesteps = scripts[script_index].actions[action_index].parameters[0].as_i32();
+    }
+
+    fn record(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize, settings: &mut Settings) {
+        let record = scripts[script_index].actions[action_index].parameters[0].truthy();
+        settings.recording = record;
+        settings.gather_data = record;
+        if record {
+            settings.start_time = settings.sim_time;
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Script {
     pub name: String,
+    #[serde(default)]
+    pub auto_run: bool,
+    #[serde(default)]
+    pub script_trigger: Trigger,
     pub actions: Vec<Action>
 }
 
@@ -222,6 +288,8 @@ impl Script {
     pub fn new(name: &str) -> Self {
         Self {
             name: String::from_str(name).unwrap(),
+            auto_run: false,
+            script_trigger: Trigger::None,
             actions: vec![]
         }
     }
@@ -334,7 +402,16 @@ impl Action {
             Command::Restore => {self.parameters = vec![]; },
             Command::Call_Script => {self.parameters = vec![
                 Parameter::Integer(format!("Script_Index"), 0)
-            ]}
+            ]; },
+            Command::Advance => { self.parameters = vec![
+                Parameter::Integer(format!("Ticks"), 0)
+            ]; },
+            Command::Export => { self.parameters = vec![
+                Parameter::Path(format!("Path"), PathBuf::new())
+            ]; },
+            Command::Record => { self.parameters = vec![
+                Parameter::Boolean(format!("Record"), false)
+            ]; },
         }
     }
 
@@ -393,7 +470,10 @@ impl Action {
                         if ui.selectable_label(self.parameters[0].as_i32() == i as i32, script_names[i].clone()).clicked() { self.parameters[0] = Parameter::Integer(format!("Script_Index"), i as i32); }
                     }
                 });
-            }
+            },
+            Command::Advance => {ui.label("Ticks: "); self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));}
+            Command::Export => {ui.label("Path: "); self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));}
+            Command::Record => {self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));}
         }
     }
 
@@ -414,8 +494,45 @@ impl Action {
 //     manager.execute(prog);
 // }
 
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Default)]
+pub enum Trigger {
+    #[default] None,
+    Click,
+    KeyDown(Key),
+    KeyPressed(Key),
+}
+
+impl fmt::Display for Trigger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Trigger::None     => write!(f, "None"),
+            Trigger::Click    => write!(f, "Click"),
+            Trigger::KeyDown(_) => write!(f, "KeyDown"),
+            Trigger::KeyPressed(_) => write!(f, "KeyPressed"),
+        }
+    }
+}
+
+impl Trigger {
+    pub fn keycode(&self) -> Key {
+        match self {
+            Trigger::KeyDown(key) |
+            Trigger::KeyPressed(key) => *key,
+            _ => Key::Null,
+        }
+    }
+
+    pub fn set_key(&mut self, key: Key) {
+        match self {
+            Trigger::KeyDown(k) |
+            Trigger::KeyPressed(k) => {*k = key;},
+            _ => {},
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
-// #[derive(Clone, PartialEq)]
 pub enum Command {
     None,
     Wait,
@@ -426,7 +543,11 @@ pub enum Command {
     Simulate,
     Backup,
     Restore,
-    Call_Script
+    Call_Script,
+    Advance,
+    Export,
+    Record,
+    // Load_File,
     // Record
 }
 
@@ -443,6 +564,10 @@ impl Command {
             Command::Backup => { String::from_str("Backup").unwrap() }
             Command::Restore => { String::from_str("Restore").unwrap() }
             Command::Call_Script => { String::from_str("Call Script").unwrap() }
+            Command::Advance => { String::from_str("Advance").unwrap() }
+            Command::Export => { String::from_str("Export").unwrap() }
+            Command::Record => { String::from_str("Record").unwrap() }
+            // Command::Load_File => { String::from_str("Load File").unwrap() }
         }
     }
 }
@@ -454,6 +579,7 @@ pub enum Parameter {
     Integer(String, i32),
     Boolean(String, bool),
     List(String, Vec<i32>),
+    Path(String, PathBuf)
 }
 
 impl Parameter {
@@ -469,7 +595,11 @@ impl Parameter {
                     res.push(',');
                 }
                 return res;
-            }
+            },
+            Parameter::Path(_, path) => {return String::from(match path.to_str() {
+                Some(str) => str,
+                None => ""
+            }); }
         }
     }
 
@@ -479,6 +609,28 @@ impl Parameter {
             Parameter::Integer(_, value) => { ui.add_enabled(enabled, egui::DragValue::new(&mut *value).clamp_range(range.unwrap()).suffix(label)); }
             Parameter::Boolean(_, value) => { ui.add_enabled(enabled, egui::Checkbox::new(&mut *value, label)); }
             Parameter::List(_, _) => {}
+            Parameter::Path(_, path) => {ui.add_enabled_ui(enabled, |ui|{
+                ui.horizontal(|ui|{
+                    ui.label(String::from(match path.file_name() {
+                        Some(str) => str.to_str().unwrap(),
+                        None => ""
+                    }));
+                    if ui.button("Browse").clicked() {
+                        let new_path = FileDialog::new()
+                        .set_location("")
+                        .add_filter("CSV", &["csv"])
+                        .show_open_single_file()
+                        .unwrap();
+                        match new_path {
+                            Some(p) => {
+                                    path.clear();
+                                    path.push(p);
+                                },
+                            None => {}
+                            }
+                        }
+                });
+            }); },
         }
     }
 
@@ -488,6 +640,8 @@ impl Parameter {
             Parameter::Integer(_, value) => { true }
             Parameter::Boolean(_, value) => { *value }
             Parameter::List(_, value) => { value.len() != 0 }
+            Parameter::Path(_, value) => { value.to_str().unwrap().len() > 0 }
+
         }
     }
 
@@ -497,6 +651,7 @@ impl Parameter {
             Parameter::Integer(_, value) => { bytemuck::cast(*value) }
             Parameter::Boolean(_, value) => { bytemuck::cast(*value as i32) }
             Parameter::List(_, _) => { -1.0 }
+            Parameter::Path(_, _) => { -1.0 }
         }
     }
 
@@ -506,6 +661,7 @@ impl Parameter {
             Parameter::Integer(_, value) => { *value }
             Parameter::Boolean(_, value) => { *value as i32 }
             Parameter::List(_, _) => { -1 }
+            Parameter::Path(_, _) => { -1 }
         }
     }
 
@@ -515,6 +671,7 @@ impl Parameter {
             Parameter::Integer(_, value) => { vec![*value; 1] }
             Parameter::Boolean(_, value) => { vec![1; 1] }
             Parameter::List(_, value) => { (*value.clone()).to_vec() }
+            Parameter::Path(_, value) => { vec![1; 1] }
         }
     }
 
@@ -524,6 +681,7 @@ impl Parameter {
             Parameter::Integer(_, _) => {},
             Parameter::Boolean(_, _) => {},
             Parameter::List(_, value) => { *value = list; },
+            Parameter::Path(_, _) => {},
         }
     }
 
@@ -533,6 +691,59 @@ impl Parameter {
             Parameter::Integer(_, value) => { Some(&mut *value) },
             Parameter::Boolean(_, _) => { None },
             Parameter::List(_, _) => { None },
+            Parameter::Path(_, _) => { None },
+        }
+    }
+
+    fn as_path(&self) -> PathBuf {
+        match self {
+            Parameter::Path(_, path) => path.clone(),
+            _ => PathBuf::new()
+        }
+    }
+ }
+ 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+pub enum Key {
+    #[default] Null,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
+    J,
+    K,
+    L,
+    M,
+    N,
+    O,
+    P,
+    Q,
+    R,
+    S,
+    T,
+    U,
+    V,
+    W,
+    X,
+    Y,
+    Z,
+    Space
+ }
+
+ impl Key {
+    pub fn from_vck(key: VirtualKeyCode) -> Self {
+        match key {
+            VirtualKeyCode::A => { Key::A }
+            VirtualKeyCode::D => { Key::D }
+            VirtualKeyCode::S => { Key::S }
+            VirtualKeyCode::W => { Key::W }
+            VirtualKeyCode::Space => { Key::Space }
+            _ => { Key::Null }
         }
     }
  }

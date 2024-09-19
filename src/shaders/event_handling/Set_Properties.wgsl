@@ -60,6 +60,7 @@ struct Forces {
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
 @group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<storage, read_write> selections: array<i32>;
 @group(3) @binding(1) var<storage, read_write> groups: array<i32>;
 @group(4) @binding(0) var<uniform> input: Input;
@@ -69,8 +70,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
 
     if selections[id] != 0 {
-        if input.set_x_pos       == 1 { del_pos[id].x = input.x_pos - positions[id].x; positions[id].x = input.x_pos; } 
-        if input.set_y_pos       == 1 { del_pos[id].y = input.y_pos - positions[id].y; positions[id].y = input.y_pos; } 
+        if input.set_x_pos       == 1 { del_pos[id].x = input.x_pos - positions[id].x; positions[id].x = input.x_pos; coll_cont[3] = 1; } 
+        if input.set_y_pos       == 1 { del_pos[id].y = input.y_pos - positions[id].y; positions[id].y = input.y_pos; coll_cont[3] = 1; } 
         if input.set_rot         == 1 { del_rot[id] = input.rot - rot[id]; rot[id] = input.rot; } 
         if input.set_x_vel       == 1 { velocities[id].x      = input.x_vel; } 
         if input.set_y_vel       == 1 { velocities[id].y      = input.y_vel; } 

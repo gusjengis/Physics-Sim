@@ -52,6 +52,7 @@ struct Settings {
     collision_interval: i32,
     local_damping: i32,
     local_damping_alpha: f32,
+    particles: i32,
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -105,6 +106,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             if p_count < grid_info.cell_cap - 1 {
                 atomicStore(&grid[base_index + 1 + p_count], i32(id));
             }
-        } 
+        }
     }
 }

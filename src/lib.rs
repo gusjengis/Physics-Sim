@@ -9,6 +9,8 @@ pub mod setup;
 pub mod state;
 pub mod scripts;
 pub mod shader_gen;
+pub mod particle_def;
+
 use std::ptr::null;
 use winit::dpi::PhysicalSize;
 use log::*;
