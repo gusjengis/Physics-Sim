@@ -49,9 +49,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if clicked_particle == id {
         click_info[0] = 1;
         select(clicked_particle);
-    } else if clicked_particle >= 0 && groups[id] >= 0 && groups[clicked_particle] == groups[id] {
-        select(id);
-    }
+    }// else if clicked_particle >= 0 && groups[id] >= 0 && groups[clicked_particle] == groups[id] {
+    //    select(id);
+    //}
 }
 
 fn select(id: i32) {

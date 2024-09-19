@@ -133,11 +133,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
         if fixity[id].x_vel != 1 {
             positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
-            int_vel.x -= comp_v_p.x * 1.5;
+            int_vel.x = -comp_v_p.x * 0.5;
         }
         if fixity[id].y_vel != 1 {
             positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
-            int_vel.y -= comp_v_p.y * 1.5;
+            int_vel.y = -comp_v_p.y * 0.5;
         }
         if fixity[id].rot_vel != 1 {
             rot_vel[id] = rot_vel[id] * 0.9;

@@ -248,9 +248,8 @@ pub struct Settings {
     pub just_set_line: bool,
     pub world_pos: (f32, f32),
     pub curr_shader: usize,
-    pub groups: i32,
-    pub set_group: i32
-    // pub paths: ReadDir,
+    // pub groups: i32,
+    // pub set_group: i32, // pub paths: ReadDir,
 }
 
 impl Settings {
@@ -468,7 +467,7 @@ impl Settings {
                 egui::menu::bar(ui, |ui| {
                     ui.horizontal_centered(|ui| {
                         self.file_menu(ui);
-                        self.edit_menu(ctx, ui);
+                        // self.edit_menu(ctx, ui);
                         self.view_menu(ui);
                         self.state_menu(ui);
                         self.sim_controls_menu(ui);
@@ -1248,21 +1247,20 @@ impl Settings {
                 ui.close_menu();
             }
 
-            ui.menu_button("Groups", |ui|{
-                for i in 0..self.groups {
-                    ui.horizontal(|ui|{
-                        ui.label(format!("Group {}", i+1));
-                        if ui.button("Set").clicked() {
-                            self.set_group = i;
-                        }
-                    });
-                    // ui.selectable_label(self.set_group >= 0, text);
-                }
-               if ui.button("New Group").clicked(){
-                    self.groups += 1;
-                }
-            });
-
+            // ui.menu_button("Groups", |ui| {
+            //     for i in 0..self.groups {
+            //         ui.horizontal(|ui| {
+            //             ui.label(format!("Group {}", i + 1));
+            //             if ui.button("Set").clicked() {
+            //                 self.set_group = i;
+            //             }
+            //         });
+            //         // ui.selectable_label(self.set_group >= 0, text);
+            //     }
+            //     if ui.button("New Group").clicked() {
+            //         self.groups += 1;
+            //     }
+            // });
 
             ui.add_enabled_ui(false, |ui| {
                 ui.add(egui::Button::new("Translate").min_size(Vec2::new(min_x, min_y)).shortcut_text("Click + Drag"));
@@ -1650,6 +1648,20 @@ impl Settings {
             ui.checkbox(&mut self.view.render_bp_grid, "Render Grid");
             ui.checkbox(&mut self.view.show_hit_tex, "Show Hit Texture");
             ui.separator();
+            ui.label("Experimental");
+            if self.create.create_mode {
+                if ui.button("Create Mode").highlight().clicked() {
+                    self.toggle_create();
+                }
+            } else {
+                if ui.button("Create Mode").clicked() {
+                    self.toggle_create();
+                }
+            }
+            if ui.button("Particle Definitions").clicked() {
+                self.create.p_def_menu = !self.create.p_def_menu;
+            }
+            ui.separator();
             // ui.label("Experimental");
 
             if ui.selectable_label(self.view.code_editor, "Code Editor").clicked() {
@@ -1914,21 +1926,23 @@ impl Settings {
     }
 
     pub fn grid_info(&mut self) -> (usize, f32, i32, i32, i32) {
-        let width  = self.simulation.hor_bound  * 2.0;
+        let width = self.simulation.hor_bound * 2.0;
         let height = self.simulation.vert_bound * 2.0;
-        let     max_rad = self.setup.max_radius * 2.0;
+        let max_rad = self.setup.max_radius * 2.0;
         let mut min_rad = self.setup.min_radius;
-        if !self.setup.variable_rad { min_rad = self.setup.max_radius; }
-        let w = (width/max_rad).ceil() as i32;
-        let h = (height/max_rad).ceil() as i32;
-        let cell_cap = ((max_rad/min_rad + 1.0).powf(2.0).ceil() as i32).min(self.setup.particles as i32) + 2;
+        if !self.setup.variable_rad {
+            min_rad = self.setup.max_radius;
+        }
+        let w = (width / max_rad).ceil() as i32;
+        let h = (height / max_rad).ceil() as i32;
+        let cell_cap = ((max_rad / min_rad + 1.0).powf(2.0).ceil() as i32).min(self.setup.particles as i32) + 2;
         let total_size = w * h * cell_cap;
         println!("Cell Capacity:   {}", cell_cap);
         println!("Cell Dimensions: {} x {}", w, h);
         println!("Total Cells:     {}", w * h);
         println!("Total Capacity:  {}", total_size);
         println!("Bytes:           {}", total_size * 4);
-    
+
         return ((w * h) as usize, max_rad, cell_cap, w, h);
     }
 
