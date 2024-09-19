@@ -1,0 +1,22 @@
+# ball properties
+density = 2500
+radius = (varies between 0.5e-3 and 0.75e-3)
+
+
+# linear contact properties
+normal stiffness (force/length) = 1e9
+shear stiffness (force/length) = 1e9
+friction coeficcient = 0.577
+
+# parallel bond properties
+normal stiffness (force/length/length) = 8e11
+shear stiffness (force/length/length) = 8e11
+bond radius multiplier = 1.0
+tensile strength = 10.0e6 (units are force/length)
+shear strength = 50e6 (units are force/length)
+
+# top group
+y-velocity = -0.01
+
+#bottom group
+y-velocity = 0.01
