@@ -606,6 +606,7 @@ pub struct BufferContainer {
     pub release_input: Uniform,
     pub drag_input: Uniform,
     pub set_prop_input: Uniform,
+    pub set_group_input: Uniform,
     pub selection_buffers: BufferGroup,
     pub data_buffer: BufferUniform,
     pub material_buffer: BufferUniform,
@@ -624,6 +625,7 @@ impl BufferContainer {
         release_input: Uniform,
         drag_input: Uniform,
         set_prop_input: Uniform,
+        set_group_input: Uniform,
         selection_buffers: BufferGroup,
         data_buffer: BufferUniform,
         material_buffer: BufferUniform,
@@ -640,6 +642,7 @@ impl BufferContainer {
             release_input,
             drag_input,
             set_prop_input,
+            set_group_input,
             selection_buffers,
             data_buffer,
             material_buffer,
@@ -684,6 +687,7 @@ pub struct WGPUComputeProg {
     pub fix_compute_pipeline: wgpu::ComputePipeline,
     pub drop_compute_pipeline: wgpu::ComputePipeline,
     pub set_prop_compute_pipeline: wgpu::ComputePipeline,
+    pub set_group_compute_pipeline: wgpu::ComputePipeline,
     pub hit_tex: Texture,
     pub grid_info: GridInfo,
     pub shader_strs: Vec<String>,
@@ -720,7 +724,7 @@ impl WGPUComputeProg {
 
         let p_count = state.p_count;
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*settings.max_contacts*p_count];
-        let grid_info_return = grid_capacity(&settings);
+        let grid_info_return = settings.grid_info();
         let mut bp_grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
         let mut cilck_info = vec![0; 4];
         let grid_info = GridInfo::new(grid_info_return.0, grid_info_return.1, grid_info_return.2, grid_info_return.3, grid_info_return.4);
@@ -823,6 +827,7 @@ impl WGPUComputeProg {
             release_input,
             drag_input,
             set_prop_input,
+            set_group_input,
             selection_buffers,
             data_buffer,
             material_buffer,
@@ -884,6 +889,11 @@ impl WGPUComputeProg {
         let set_prop_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Set_Properties.wgsl"), settings).into()),
+        });
+        // println!("11");
+        let set_group_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Group.wgsl").into()),
         });
         //create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -1001,6 +1011,12 @@ impl WGPUComputeProg {
             push_constant_ranges: &[],
         });
 
+        let set_group_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Collision compute"),
+            bind_group_layouts: &[&buffers.pos_buffers.bind_group_layout, &buffers.mov_buffers.bind_group_layout, &buffers.contact_buffers.bind_group_layout, &buffers.selection_buffers.bind_group_layout, &buffers.set_group_input.bind_group_layout],
+            push_constant_ranges: &[]
+        });
+
         //create pipeline
         // println!("1");
         let compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -1072,6 +1088,13 @@ impl WGPUComputeProg {
             module: &set_prop_compute_shader,
             entry_point: "main",
         });
+        // println!("11");
+        let set_group_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&set_group_compute_pipeline_layout),
+            module: &set_group_compute_shader,
+            entry_point: "main",
+        });
 
         Self {
             state,
@@ -1086,6 +1109,7 @@ impl WGPUComputeProg {
             fix_compute_pipeline,
             drop_compute_pipeline,
             set_prop_compute_pipeline,
+            set_group_compute_pipeline,
             hit_tex,
             grid_info,
             shader_strs: vec![lom_shader.to_string(), sim_shader.to_string()],
