@@ -56,7 +56,6 @@ struct Settings {
     collision_interval: i32,
     local_damping: i32,
     local_damping_alpha: f32,
-    particles: i32,
 }
 
 @group(0) @binding(0) var<uniform> input: Input;
@@ -75,7 +74,7 @@ struct Settings {
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
-
+    
     if selections[id] != 0 {
         fixity[id] = Particle_Settings(
             fixity[id].x_vel_2,
@@ -86,8 +85,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             fixity[id].rot_vel_2
         );
         if click_info[0] == 1 {
-            velocities[id] = vec2(input.delX, input.delY) / (settings.dT * f32(input.ticks));
-            velocities_buf[id] = vec2(input.delX, input.delY) / (settings.dT * f32(input.ticks));
+            velocities[id] = vec2(input.delX, input.delY)/(settings.dT*f32(input.ticks));
+            velocities_buf[id] = vec2(input.delX, input.delY)/(settings.dT*f32(input.ticks));
         }
     }
     click_info[0] = 0;

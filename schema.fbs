@@ -1,87 +1,39 @@
-struct View_Settings {
-  circular_particles: bool;
-  render_rot: bool;
-  render_bonds: bool;
-  render_outline: bool;
-  render_bp_grid: bool;
-  color_code_rot: bool;
-  use_particle_color_outline: bool;
-  outline_color_r: float;
-  outline_color_g: float;
-  outline_color_b: float;
-  background_color_r: float;
-  background_color_g: float;
-  background_color_b: float;
-  color_source: int;
-  dim_slow_particles: bool;
-  max_brightness_vel: float;
-  crt_res: int;
-  grain: bool;
-  grain_strength: float;
-  grain_size: int;
-  sobel: bool;
-  colored_sobel: bool;
-  invert: bool;
-  chrom_ab: bool;
-  abb_strength: float;
-  bond_highlight_strength: float;
-  render_unbonded_contacts: bool;
-  lighting: bool;
-  show_hit_tex: bool;
-}
-
-struct Setup_Settings {
-  particles: int;
-  max_radius: float;
-  variable_rad: bool;
-  holeyness: float;
-  max_h_velocity: float;
-  min_h_velocity: float;
-  max_v_velocity: float;
-  min_v_velocity: float;
-  grid_width: float;
-  hex_grid: bool;
-}
-
-struct Simulation_Settings {
+struct Physics_Settings {
   timestep: float;
   gen_per_frame: int;
-  auto_width: bool;
-  width: float;
-  height: float;
-  maintain_ar: bool;
-  round_walls: bool;
-  wall_radius: float;
-  d3: bool;
-  x_timesteps: int;
+  gravity: bool;
+  planet_mode: bool;
+  g_force: float;
+  contact_damping: float;
+  bond: int;
+  bond_stiffness: float;
+  collisions: bool;
+  friction_coef: float;
 }
 
-struct Physics_Settings {
-  gravity: bool;
-  g_force: float;
-  planet_mode: bool;
-  mouse_gravity: bool;
-  collisions: bool;
-  collision_interval: int;
-  friction_coef: float;
-  bond: int;
-  bond_normal_stiffness: float;
-  bond_shear_stiffness: float;
-  bond_normal_strength: float;
-  bond_shear_strength: float;
-  moment_contribution_factor: float;
-  local_damping: bool;
-  local_damping_alpha: float;
+struct Render_Settings {
+  circular_particles: bool;
+  render_rotation: bool;
+  render_bonds: bool;
+  colors: bool;
+  random_colors: bool;
+  color_code_rotation: bool;
+}
+
+struct Wall_Settings {
+  maintain_ar: bool;
+  width: float;
+  height: float;
 }
 
 struct Settings {
-  view_settings: View_Settings;
-  setup_settings: Setup_Settings;
-  sim_settings: Simulation_Settings;
   physics_settings: Physics_Settings;
+  render_settings: Render_Settings;
+  wall_settings: Wall_Settings;
 }
 
 table State {
+  particles: int;
   pos: [float];
   vel: [float];
   acc: [float];
@@ -95,7 +47,6 @@ table State {
   contacts: [float];
   material_pointers: [int];
   materials: [float];
-  groups: [int];
   settings: Settings;
 }
 

@@ -651,10 +651,6 @@ impl BufferGroup {
         self.bind_group = bind_group;
     }
 
-    pub fn write_data(&mut self, config: &mut WGPUConfig, offset: usize, contents: &[u8], index: usize){
-        config.queue.write_buffer(&self.buffers[index], offset as u64, contents);
-    }
-
     // pub fn setReadOnly(&mut self, bufferID: usize, readonly: bool){
     //     self.layout_entries[bufferID] = wgpu::BindGroupLayoutEntry {
     //         binding: bufferID as u32,

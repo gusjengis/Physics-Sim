@@ -13,7 +13,6 @@ struct Input {
     rW: i32, rH: i32,
     pressed: i32,
     timestamp: i32,
-    p_count: i32,
     $ 3D { cam: Camera, }
 }
 

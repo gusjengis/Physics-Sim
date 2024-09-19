@@ -13,7 +13,6 @@ struct Input {
     rW: i32, rH: i32,
     pressed: i32,
     timestamp: i32,
-    p_count: i32,
     $ 3D { cam: Camera, }
 }
 
@@ -27,7 +26,7 @@ struct Contact {
 };
 
 $ 3D {
-struct Camera {
+    struct Camera {
         pos: vec4<f32>,
         view_proj: mat4x4<f32>,
         eye: mat4x4<f32>,
@@ -131,13 +130,13 @@ fn vs_main(
     @builtin(instance_index) instance: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
-    let scale = input.scale;
-    $ 2D {
-        let aspect = input.width / input.height;
-        let xy = 2.0 * scale * vec2(in.position.x / aspect, in.position.y);
-        let center = scale * vec2(pos[instance].x / aspect, pos[instance].y);
-        let off = vec2((input.xOff + input.ui_xOff) / aspect, (input.yOff + input.ui_yOff)) * (scale);
-        out.clip_position = vec4(xy * radii[instance] + center + off, 0.0, 1.0);
+    let scale= input.scale;
+    $ 2D {    
+        let aspect = input.width/input.height;
+        let xy = 2.0*scale*vec2(in.position.x / aspect, in.position.y);
+        let center = scale*vec2(pos[instance].x / aspect, pos[instance].y);
+        let off = vec2((input.xOff + input.ui_xOff) / aspect, (input.yOff + input.ui_yOff))*(scale);
+        out.clip_position = vec4(xy*radii[instance] + center + off, 0.0, 1.0);
     }
     $ 3D {
         let cam_pos = input.cam.pos.xyz;
@@ -153,15 +152,15 @@ fn vs_main(
             rotated_up,
             dir
         );
-
+        
         let rotated_position = rotation_matrix * vec3(in.position, 0.0);
-
+        
         let xy = 2.0 * input.ui_scale * rotated_position;
         let center = input.ui_scale * vec3(pos[instance].x, pos[instance].y, 0.0);
         let off = vec3(input.ui_xOff, input.ui_yOff, 0.0) * input.ui_scale;
-
+    
         let final_pos = xy * radii[instance] + center + off;
-
+        
         out.clip_position = input.cam.view_proj * vec4(final_pos, 1.0);
         out.dir = dir;
     }
@@ -177,12 +176,12 @@ fn vs_main(
 
     if settings.colors == 0 {
         out.color = vec3(0.05, 0.05, 0.05);
-    } else if settings.colors == 1 && material_pointers[instance] != -1 {
+    } else if settings.colors == 1 && material_pointers[instance] != -1 { 
         out.color = vec3(
             srgb_to_linear(materials[(material_pointers[instance])].red),
             srgb_to_linear(materials[(material_pointers[instance])].green),
             srgb_to_linear(materials[(material_pointers[instance])].blue)
-        );
+        ); 
     } else if settings.colors == 2 {
         let seed1 = u32(rand(instance, 4294967296.0));
         let seed2 = u32(rand(seed1, 4294967296.0));
@@ -193,20 +192,20 @@ fn vs_main(
             rand(seed3, 1.0),
         );
     } else if settings.colors == 3 {
-        let vel_norm = normalize(out.vel);
+        let vel_norm = normalize(out.vel); 
         let angle = atan2(vel_norm.y, vel_norm.x) + PI;
-        let r = (1.0 - abs(angle - 1.0000 * PI) / (2.0 * PI / 3.0));
-        let g = (max(0.0, 1.0 - abs(angle - 1.6666 * PI) / (2.0 * PI / 3.0)) + max(0.0, 1.0 - abs(angle + 0.3333 * PI) / (2.0 * PI / 3.0)));
-        let b = (max(0.0, 1.0 - abs(angle - 0.3333 * PI) / (2.0 * PI / 3.0)) + max(0.0, 1.0 - abs(angle - 2.3333 * PI) / (2.0 * PI / 3.0)));
-
-        out.color = vec3(r, g, b) * 1.0 / max(max(r, b), g);
-    } else {
-        out.color = vec3(1.0, 1.0, 1.0);
+        let r = (1.0 - abs(angle - 1.0000  * PI)/(2.0*PI/3.0)); 
+        let g = (max(0.0, 1.0 - abs(angle - 1.6666  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle + 0.3333  * PI)/(2.0*PI/3.0))); 
+        let b = (max(0.0, 1.0 - abs(angle - 0.3333  * PI)/(2.0*PI/3.0)) +  max(0.0, 1.0 - abs(angle - 2.3333  * PI)/(2.0*PI/3.0)));
+        
+        out.color = vec3(r, g, b) * 1.0/max(max(r, b), g);
+    } else { 
+        out.color = vec3(1.0, 1.0, 1.0); 
     }
 
     if settings.dim_slow_particles == 1 {
         let vel_mag = length(out.vel) / settings.max_brightness_vel;
-        let max_brightness = min(1.0, vel_mag * vel_mag * vel_mag);
+        let max_brightness = min(1.0, vel_mag*vel_mag*vel_mag);
         out.color *= max_brightness;
     }
     return out;
@@ -230,13 +229,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // cut out wedge for rotation
         let rot_point = vec2(cos(in.rot), sin(in.rot));
         let rot_dot = dot(rot_point, normalize(in.position));
-        if !(len > 0.5 - border_width && len < 0.5) {
+        if !(len > 0.5-border_width && len < 0.5){
             if rot_dot > 0.9 {
                 color = vec4(0.0, 0.0, 0.0, 1.0);
             }
         }
     }
-
+    
     $ COLOR-ROTATION {
         // color code based on direction of rotation
         if settings.color_code_rot == 1 {
@@ -251,7 +250,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // bonds
     var border_pixel = false;
-    for (var i = in.id * 14u; i < (in.id + 1u) * 14u; i++) {
+    for(var i = in.id*14u; i<(in.id+1u)*14u; i++){
         if contacts[i].a >= 0 {
             let delta = pos[contacts[i].b] - pos[in.id];
             let dir = normalize(delta);
@@ -267,16 +266,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             }
             $ BONDS {
                 if contacts[i].bonded != -1 || settings.render_unbonded_contacts == 1 {
-                    let scaled_displacement = displacement / radii[in.id] * settings.bond_highlight_strength;
+                    let scaled_displacement = displacement/radii[in.id] * settings.bond_highlight_strength;
                     if dot(dir, normalize(in.position)) > 0.99 {
-                        color = vec4(1.0 - scaled_displacement, 1.0 + clamp(scaled_displacement * 0.8, -0.8, 1.0) + 0.2 * clamp(scaled_displacement, 0.0, 1.0), 1.0 - abs(scaled_displacement), 1.0);
+                        color = vec4(1.0 - scaled_displacement, 1.0 + clamp(scaled_displacement*0.8, -0.8, 1.0) + 0.2*clamp(scaled_displacement, 0.0, 1.0), 1.0 - abs(scaled_displacement), 1.0);
                         if contacts[i].bonded == -1 {
                             color = vec4(0.0, 1.0, 1.0, 1.0);
                         } else if contacts[i].bonded == -9 {
                             color = vec4(1.0, 0.0, 0.0, 1.0);
                         } else if contacts[i].bonded == -11 {
                             color = vec4(0.0, 0.0, 1.0, 1.0);
-                        }
+                        } 
                     }
                 }
             }
@@ -290,7 +289,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let y = axes[1];
             let z = axes[2];
             var surface_normal = normalize(
-                sin(in.position.x * PI) * x + sin(in.position.y * PI) * y + cos(len * PI) * z
+                sin(in.position.x * PI) * x +
+                sin(in.position.y * PI) * y +
+                cos(len           * PI) * z 
             );
             let center = vec3(pos[in.id], 0.0);
             let surface_pos = center + surface_normal * radii[in.id];
@@ -306,7 +307,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             let y = axes[1];
             let z = axes[2];
             var surface_normal = normalize(
-                sin(in.position.x * PI) * x + sin(in.position.y * PI) * y + cos(len * PI) * z
+                sin(in.position.x * PI) * x +
+                sin(in.position.y * PI) * y +
+                cos(len           * PI) * z 
             );
             let center = vec3(pos[in.id], 0.0);
             let surface_pos = center + surface_normal * radii[in.id];
@@ -319,24 +322,25 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     $ ROUND-PARTICLES {
         // add border/outline
-        if settings.render_outline == 1 || in.selected != 0 {
-            if len > 0.5 - border_width && len < 0.5 || border_pixel {
+        if (settings.render_outline == 1 || in.selected != 0) {
+            if len > 0.5-border_width && len < 0.5 || border_pixel {
                 if in.selected != 0 {
                     color = vec4(1.0, 0.8, 0.0, 1.0);
                     if fixity[in.id].x_vel_2 != 0 || fixity[in.id].y_vel_2 != 0 || fixity[in.id].rot_vel_2 != 0 {
                         color = vec4(f32(fixity[in.id].x_vel_2), f32(fixity[in.id].y_vel_2), f32(fixity[in.id].rot_vel_2), 1.0);
                     }
                 } else {
-                    if settings.colors == 0 && settings.use_part_color == 1 {
+                    if settings.colors == 0 && settings.use_part_color == 1 { 
+                        
                     } else if settings.use_part_color == 0 {
                         color = vec4(
-                            srgb_to_linear(settings.outline_r),
-                            srgb_to_linear(settings.outline_g),
+                            srgb_to_linear(settings.outline_r), 
+                            srgb_to_linear(settings.outline_g), 
                             srgb_to_linear(settings.outline_b),
                             1.0
                         );
                     } else {
-                        color = vec4(color.rgb * 0.5, color.a);
+                        color = vec4(color.rgb*0.5, color.a);
                     }
                 }
             }
@@ -345,8 +349,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     //done
     if input.pressed == 1 && click_info[0] == 0 {
-        let pos = (vec2(in.pixel.x + 1.0, -in.pixel.y + 1.0)) / 2.0;
-        let pixel = vec2(i32(pos.x * f32(in.w_h.x)), i32(pos.y * f32(in.w_h.y)));
+        let pos = (vec2(in.pixel.x + 1.0, -in.pixel.y + 1.0))/2.0;
+        let pixel = vec2(i32(pos.x*f32(in.w_h.x)),i32(pos.y*f32(in.w_h.y)));
         let lower_x = min(input.x, input.x + input.rW);
         let upper_x = max(input.x, input.x + input.rW);
         let lower_y = min(input.y, input.y + input.rH);
@@ -354,16 +358,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         if pixel.x > lower_x && pixel.x < upper_x && pixel.y > lower_y && pixel.y < upper_y {
             if pixel.x == lower_x + 1 || pixel.x == upper_x - 1 || pixel.y == lower_y + 1 || pixel.y == upper_y - 1 {
                 color = vec4(
-                    srgb_to_linear(0.0 / 255.0),
-                    srgb_to_linear(120.0 / 255.0),
-                    srgb_to_linear(215.0 / 255.0),
+                    srgb_to_linear(0.0/255.0),
+                    srgb_to_linear(120.0/255.0),
+                    srgb_to_linear(215.0/255.0),
                     0.0
                 );
             } else {
                 color = color + vec4(
-                    srgb_to_linear(0.0 / 255.0),
-                    srgb_to_linear(28.0 / 255.0),
-                    srgb_to_linear(56.0 / 255.0),
+                    srgb_to_linear(0.0/255.0),
+                    srgb_to_linear(28.0/255.0),
+                    srgb_to_linear(56.0/255.0),
                     0.0
                 );
             }
@@ -372,18 +376,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return color;
 }
 
-fn rand(seed: u32, max: f32) -> f32 {
+fn rand(seed: u32, max: f32) -> f32{
     //PCG Hash
     var res = seed;
     res = res * 747796405u + 2891336453u;
     res = ((res >> ((res >> 28u) + 4u)) ^ res) * 277803737u;
     res = (res >> 22u) ^ res;
 
-    return max * f32(res) / 4294967296.0;
+    return max*f32(res)/4294967296.0;
 }
 
 fn linear_to_srgb(value: f32) -> f32 {
-    if value <= 0.0031308 {
+    if (value <= 0.0031308) {
         return 12.92 * value;
     } else {
         return 1.055 * pow(value, 1.0 / 2.4) - 0.055;
@@ -419,7 +423,7 @@ fn build_orthonormal_basis(z: vec3<f32>) -> mat3x3<f32> {
     
     // Choose an arbitrary vector not parallel to z
     var arbitrary = vec3<f32>(0.0, 1.0, 0.0);  // world up
-    if abs(dot(z_norm, arbitrary)) > 0.99 {
+    if (abs(dot(z_norm, arbitrary)) > 0.99) {
         arbitrary = vec3<f32>(1.0, 0.0, 0.0);  // world right
     }
     

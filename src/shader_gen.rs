@@ -1,8 +1,9 @@
-use std::{iter::Peekable, str::Chars};
+use std::{str::Chars, iter::Peekable};
 
 use crate::settings::{self, Settings};
 
 pub fn assemble_shader(shader: &str, settings: &Settings) -> String {
+    
     let mut res = String::from("");
     let mut iter = shader.chars().peekable();
     while iter.peek() != None {
@@ -13,7 +14,7 @@ pub fn assemble_shader(shader: &str, settings: &Settings) -> String {
             res.push(char);
         }
     }
-
+    
     return res;
 }
 
@@ -32,7 +33,7 @@ fn handle_conditional_blocks(iter: &mut Peekable<Chars<'_>>, settings: &Settings
     iter.next(); // remove {
     let mut res = String::from("");
     let mut open_brackets = 0;
-    while iter.peek() != None && (*iter.peek().unwrap() != '}' || open_brackets > 0) {
+    while iter.peek() != None && (*iter.peek().unwrap() != '}' || open_brackets > 0){
         let char = iter.next().unwrap();
         if char == '$' {
             res.push_str(&handle_conditional_blocks(iter, settings));
@@ -60,40 +61,19 @@ fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
 
     for token in tokens {
         match token.as_str() {
-            "LIGHTING" => {
-                res |= settings.view.lighting;
-            }
-            "BONDS" => {
-                res |= settings.view.render_bonds;
-            }
-            "ROTATION" => {
-                res |= settings.view.render_rot;
-            }
-            "COLOR-ROTATION" => {
-                res |= settings.view.color_code_rot;
-            }
-            "SQUARE-PARTICLES" => {
-                res |= !settings.view.circular_particles;
-            }
-            "ROUND-PARTICLES" => {
-                res |= settings.view.circular_particles;
-            }
-            "F32" => {
-                res |= !settings.simulation.use_f64;
-            }
-            "F64" => {
-                res |= settings.simulation.use_f64 && settings.f64_support;
-            }
-            "2D" => {
-                res |= !settings.simulation.d3;
-            }
-            "3D" => {
-                res |= settings.simulation.d3;
-            }
-            _ => {}
+            "LIGHTING"         => { res |= settings.view.lighting;            },
+            "BONDS"            => { res |= settings.view.render_bonds;        },
+            "ROTATION"         => { res |= settings.view.render_rot;          },
+            "COLOR-ROTATION"   => { res |= settings.view.color_code_rot;      },
+            "SQUARE-PARTICLES" => { res |= !settings.view.circular_particles; },
+            "ROUND-PARTICLES"  => { res |= settings.view.circular_particles;  },
+            "F32"              => { res |= !settings.simulation.use_f64;      },
+            "F64"              => { res |= settings.simulation.use_f64;       },
+            "2D"               => { res |= !settings.simulation.D3;           },
+            "3D"               => { res |= settings.simulation.D3;            },
+            _ => { }
         }
     }
-
+     
     return res;
 }
-

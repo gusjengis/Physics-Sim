@@ -9,1425 +9,57 @@ use core::cmp::Ordering;
 extern crate flatbuffers;
 use self::flatbuffers::{EndianScalar, Follow};
 
-// struct View_Settings, aligned to 4
+// struct Physics_Settings, aligned to 4
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq)]
-pub struct View_Settings(pub [u8; 76]);
-impl Default for View_Settings { 
-  fn default() -> Self { 
-    Self([0; 76])
-  }
-}
-impl core::fmt::Debug for View_Settings {
-  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-    f.debug_struct("View_Settings")
-      .field("circular_particles", &self.circular_particles())
-      .field("render_rot", &self.render_rot())
-      .field("render_bonds", &self.render_bonds())
-      .field("render_outline", &self.render_outline())
-      .field("render_bp_grid", &self.render_bp_grid())
-      .field("color_code_rot", &self.color_code_rot())
-      .field("use_particle_color_outline", &self.use_particle_color_outline())
-      .field("outline_color_r", &self.outline_color_r())
-      .field("outline_color_g", &self.outline_color_g())
-      .field("outline_color_b", &self.outline_color_b())
-      .field("background_color_r", &self.background_color_r())
-      .field("background_color_g", &self.background_color_g())
-      .field("background_color_b", &self.background_color_b())
-      .field("color_source", &self.color_source())
-      .field("dim_slow_particles", &self.dim_slow_particles())
-      .field("max_brightness_vel", &self.max_brightness_vel())
-      .field("crt_res", &self.crt_res())
-      .field("grain", &self.grain())
-      .field("grain_strength", &self.grain_strength())
-      .field("grain_size", &self.grain_size())
-      .field("sobel", &self.sobel())
-      .field("colored_sobel", &self.colored_sobel())
-      .field("invert", &self.invert())
-      .field("chrom_ab", &self.chrom_ab())
-      .field("abb_strength", &self.abb_strength())
-      .field("bond_highlight_strength", &self.bond_highlight_strength())
-      .field("render_unbonded_contacts", &self.render_unbonded_contacts())
-      .field("lighting", &self.lighting())
-      .field("show_hit_tex", &self.show_hit_tex())
-      .finish()
-  }
-}
-
-impl flatbuffers::SimpleToVerifyInSlice for View_Settings {}
-impl<'a> flatbuffers::Follow<'a> for View_Settings {
-  type Inner = &'a View_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a View_Settings>::follow(buf, loc)
-  }
-}
-impl<'a> flatbuffers::Follow<'a> for &'a View_Settings {
-  type Inner = &'a View_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<View_Settings>(buf, loc)
-  }
-}
-impl<'b> flatbuffers::Push for View_Settings {
-    type Output = View_Settings;
-    #[inline]
-    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
-        let src = ::core::slice::from_raw_parts(self as *const View_Settings as *const u8, Self::size());
-        dst.copy_from_slice(src);
-    }
-}
-
-impl<'a> flatbuffers::Verifiable for View_Settings {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.in_buffer::<Self>(pos)
-  }
-}
-
-impl<'a> View_Settings {
-  #[allow(clippy::too_many_arguments)]
-  pub fn new(
-    circular_particles: bool,
-    render_rot: bool,
-    render_bonds: bool,
-    render_outline: bool,
-    render_bp_grid: bool,
-    color_code_rot: bool,
-    use_particle_color_outline: bool,
-    outline_color_r: f32,
-    outline_color_g: f32,
-    outline_color_b: f32,
-    background_color_r: f32,
-    background_color_g: f32,
-    background_color_b: f32,
-    color_source: i32,
-    dim_slow_particles: bool,
-    max_brightness_vel: f32,
-    crt_res: i32,
-    grain: bool,
-    grain_strength: f32,
-    grain_size: i32,
-    sobel: bool,
-    colored_sobel: bool,
-    invert: bool,
-    chrom_ab: bool,
-    abb_strength: f32,
-    bond_highlight_strength: f32,
-    render_unbonded_contacts: bool,
-    lighting: bool,
-    show_hit_tex: bool,
-  ) -> Self {
-    let mut s = Self([0; 76]);
-    s.set_circular_particles(circular_particles);
-    s.set_render_rot(render_rot);
-    s.set_render_bonds(render_bonds);
-    s.set_render_outline(render_outline);
-    s.set_render_bp_grid(render_bp_grid);
-    s.set_color_code_rot(color_code_rot);
-    s.set_use_particle_color_outline(use_particle_color_outline);
-    s.set_outline_color_r(outline_color_r);
-    s.set_outline_color_g(outline_color_g);
-    s.set_outline_color_b(outline_color_b);
-    s.set_background_color_r(background_color_r);
-    s.set_background_color_g(background_color_g);
-    s.set_background_color_b(background_color_b);
-    s.set_color_source(color_source);
-    s.set_dim_slow_particles(dim_slow_particles);
-    s.set_max_brightness_vel(max_brightness_vel);
-    s.set_crt_res(crt_res);
-    s.set_grain(grain);
-    s.set_grain_strength(grain_strength);
-    s.set_grain_size(grain_size);
-    s.set_sobel(sobel);
-    s.set_colored_sobel(colored_sobel);
-    s.set_invert(invert);
-    s.set_chrom_ab(chrom_ab);
-    s.set_abb_strength(abb_strength);
-    s.set_bond_highlight_strength(bond_highlight_strength);
-    s.set_render_unbonded_contacts(render_unbonded_contacts);
-    s.set_lighting(lighting);
-    s.set_show_hit_tex(show_hit_tex);
-    s
-  }
-
-  pub fn circular_particles(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[0..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_circular_particles(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[0..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn render_rot(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[1..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_render_rot(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[1..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn render_bonds(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[2..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_render_bonds(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[2..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn render_outline(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[3..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_render_outline(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[3..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn render_bp_grid(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[4..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_render_bp_grid(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[4..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn color_code_rot(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[5..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_color_code_rot(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[5..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn use_particle_color_outline(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[6..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_use_particle_color_outline(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[6..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn outline_color_r(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[8..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_outline_color_r(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[8..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn outline_color_g(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[12..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_outline_color_g(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[12..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn outline_color_b(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[16..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_outline_color_b(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[16..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn background_color_r(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[20..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_background_color_r(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[20..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn background_color_g(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[24..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_background_color_g(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[24..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn background_color_b(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[28..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_background_color_b(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[28..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn color_source(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[32..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_color_source(&mut self, x: i32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[32..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn dim_slow_particles(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[36..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_dim_slow_particles(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[36..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn max_brightness_vel(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[40..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_max_brightness_vel(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[40..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn crt_res(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[44..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_crt_res(&mut self, x: i32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[44..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn grain(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[48..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_grain(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[48..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn grain_strength(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[52..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_grain_strength(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[52..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn grain_size(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[56..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_grain_size(&mut self, x: i32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[56..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn sobel(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[60..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_sobel(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[60..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn colored_sobel(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[61..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_colored_sobel(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[61..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn invert(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[62..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_invert(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[62..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn chrom_ab(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[63..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_chrom_ab(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[63..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn abb_strength(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[64..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_abb_strength(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[64..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn bond_highlight_strength(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[68..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_bond_highlight_strength(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[68..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn render_unbonded_contacts(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[72..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_render_unbonded_contacts(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[72..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn lighting(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[73..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_lighting(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[73..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn show_hit_tex(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[74..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_show_hit_tex(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[74..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-}
-
-// struct Setup_Settings, aligned to 4
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq)]
-pub struct Setup_Settings(pub [u8; 40]);
-impl Default for Setup_Settings { 
-  fn default() -> Self { 
-    Self([0; 40])
-  }
-}
-impl core::fmt::Debug for Setup_Settings {
-  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-    f.debug_struct("Setup_Settings")
-      .field("particles", &self.particles())
-      .field("max_radius", &self.max_radius())
-      .field("variable_rad", &self.variable_rad())
-      .field("holeyness", &self.holeyness())
-      .field("max_h_velocity", &self.max_h_velocity())
-      .field("min_h_velocity", &self.min_h_velocity())
-      .field("max_v_velocity", &self.max_v_velocity())
-      .field("min_v_velocity", &self.min_v_velocity())
-      .field("grid_width", &self.grid_width())
-      .field("hex_grid", &self.hex_grid())
-      .finish()
-  }
-}
-
-impl flatbuffers::SimpleToVerifyInSlice for Setup_Settings {}
-impl<'a> flatbuffers::Follow<'a> for Setup_Settings {
-  type Inner = &'a Setup_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a Setup_Settings>::follow(buf, loc)
-  }
-}
-impl<'a> flatbuffers::Follow<'a> for &'a Setup_Settings {
-  type Inner = &'a Setup_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<Setup_Settings>(buf, loc)
-  }
-}
-impl<'b> flatbuffers::Push for Setup_Settings {
-    type Output = Setup_Settings;
-    #[inline]
-    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
-        let src = ::core::slice::from_raw_parts(self as *const Setup_Settings as *const u8, Self::size());
-        dst.copy_from_slice(src);
-    }
-}
-
-impl<'a> flatbuffers::Verifiable for Setup_Settings {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.in_buffer::<Self>(pos)
-  }
-}
-
-impl<'a> Setup_Settings {
-  #[allow(clippy::too_many_arguments)]
-  pub fn new(
-    particles: i32,
-    max_radius: f32,
-    variable_rad: bool,
-    holeyness: f32,
-    max_h_velocity: f32,
-    min_h_velocity: f32,
-    max_v_velocity: f32,
-    min_v_velocity: f32,
-    grid_width: f32,
-    hex_grid: bool,
-  ) -> Self {
-    let mut s = Self([0; 40]);
-    s.set_particles(particles);
-    s.set_max_radius(max_radius);
-    s.set_variable_rad(variable_rad);
-    s.set_holeyness(holeyness);
-    s.set_max_h_velocity(max_h_velocity);
-    s.set_min_h_velocity(min_h_velocity);
-    s.set_max_v_velocity(max_v_velocity);
-    s.set_min_v_velocity(min_v_velocity);
-    s.set_grid_width(grid_width);
-    s.set_hex_grid(hex_grid);
-    s
-  }
-
-  pub fn particles(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[0..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_particles(&mut self, x: i32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[0..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn max_radius(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[4..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_max_radius(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[4..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn variable_rad(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[8..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_variable_rad(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[8..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn holeyness(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[12..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_holeyness(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[12..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn max_h_velocity(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[16..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_max_h_velocity(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[16..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn min_h_velocity(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[20..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_min_h_velocity(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[20..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn max_v_velocity(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[24..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_max_v_velocity(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[24..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn min_v_velocity(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[28..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_min_v_velocity(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[28..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn grid_width(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[32..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_grid_width(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[32..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn hex_grid(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[36..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_hex_grid(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[36..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-}
-
-// struct Simulation_Settings, aligned to 4
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq)]
-pub struct Simulation_Settings(pub [u8; 36]);
-impl Default for Simulation_Settings { 
+pub struct Physics_Settings(pub [u8; 36]);
+impl Default for Physics_Settings { 
   fn default() -> Self { 
     Self([0; 36])
   }
 }
-impl core::fmt::Debug for Simulation_Settings {
+impl core::fmt::Debug for Physics_Settings {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-    f.debug_struct("Simulation_Settings")
+    f.debug_struct("Physics_Settings")
       .field("timestep", &self.timestep())
       .field("gen_per_frame", &self.gen_per_frame())
-      .field("auto_width", &self.auto_width())
-      .field("width", &self.width())
-      .field("height", &self.height())
-      .field("maintain_ar", &self.maintain_ar())
-      .field("round_walls", &self.round_walls())
-      .field("wall_radius", &self.wall_radius())
-      .field("d3", &self.d3())
-      .field("x_timesteps", &self.x_timesteps())
+      .field("gravity", &self.gravity())
+      .field("planet_mode", &self.planet_mode())
+      .field("g_force", &self.g_force())
+      .field("contact_damping", &self.contact_damping())
+      .field("bond", &self.bond())
+      .field("bond_stiffness", &self.bond_stiffness())
+      .field("collisions", &self.collisions())
+      .field("friction_coef", &self.friction_coef())
       .finish()
   }
 }
 
-impl flatbuffers::SimpleToVerifyInSlice for Simulation_Settings {}
-impl<'a> flatbuffers::Follow<'a> for Simulation_Settings {
-  type Inner = &'a Simulation_Settings;
+impl flatbuffers::SimpleToVerifyInSlice for Physics_Settings {}
+impl<'a> flatbuffers::Follow<'a> for Physics_Settings {
+  type Inner = &'a Physics_Settings;
   #[inline]
   unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a Simulation_Settings>::follow(buf, loc)
+    <&'a Physics_Settings>::follow(buf, loc)
   }
 }
-impl<'a> flatbuffers::Follow<'a> for &'a Simulation_Settings {
-  type Inner = &'a Simulation_Settings;
+impl<'a> flatbuffers::Follow<'a> for &'a Physics_Settings {
+  type Inner = &'a Physics_Settings;
   #[inline]
   unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<Simulation_Settings>(buf, loc)
+    flatbuffers::follow_cast_ref::<Physics_Settings>(buf, loc)
   }
 }
-impl<'b> flatbuffers::Push for Simulation_Settings {
-    type Output = Simulation_Settings;
+impl<'b> flatbuffers::Push for Physics_Settings {
+    type Output = Physics_Settings;
     #[inline]
     unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
-        let src = ::core::slice::from_raw_parts(self as *const Simulation_Settings as *const u8, Self::size());
+        let src = ::core::slice::from_raw_parts(self as *const Physics_Settings as *const u8, Self::size());
         dst.copy_from_slice(src);
     }
 }
 
-impl<'a> flatbuffers::Verifiable for Simulation_Settings {
+impl<'a> flatbuffers::Verifiable for Physics_Settings {
   #[inline]
   fn run_verifier(
     v: &mut flatbuffers::Verifier, pos: usize
@@ -1437,31 +69,31 @@ impl<'a> flatbuffers::Verifiable for Simulation_Settings {
   }
 }
 
-impl<'a> Simulation_Settings {
+impl<'a> Physics_Settings {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
     timestep: f32,
     gen_per_frame: i32,
-    auto_width: bool,
-    width: f32,
-    height: f32,
-    maintain_ar: bool,
-    round_walls: bool,
-    wall_radius: f32,
-    d3: bool,
-    x_timesteps: i32,
+    gravity: bool,
+    planet_mode: bool,
+    g_force: f32,
+    contact_damping: f32,
+    bond: i32,
+    bond_stiffness: f32,
+    collisions: bool,
+    friction_coef: f32,
   ) -> Self {
     let mut s = Self([0; 36]);
     s.set_timestep(timestep);
     s.set_gen_per_frame(gen_per_frame);
-    s.set_auto_width(auto_width);
-    s.set_width(width);
-    s.set_height(height);
-    s.set_maintain_ar(maintain_ar);
-    s.set_round_walls(round_walls);
-    s.set_wall_radius(wall_radius);
-    s.set_d3(d3);
-    s.set_x_timesteps(x_timesteps);
+    s.set_gravity(gravity);
+    s.set_planet_mode(planet_mode);
+    s.set_g_force(g_force);
+    s.set_contact_damping(contact_damping);
+    s.set_bond(bond);
+    s.set_bond_stiffness(bond_stiffness);
+    s.set_collisions(collisions);
+    s.set_friction_coef(friction_coef);
     s
   }
 
@@ -1523,343 +155,6 @@ impl<'a> Simulation_Settings {
     }
   }
 
-  pub fn auto_width(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[8..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_auto_width(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[8..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn width(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[12..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_width(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[12..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn height(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[16..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_height(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[16..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn maintain_ar(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[20..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_maintain_ar(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[20..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn round_walls(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[21..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_round_walls(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[21..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn wall_radius(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[24..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_wall_radius(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[24..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn d3(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[28..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_d3(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[28..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn x_timesteps(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[32..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_x_timesteps(&mut self, x: i32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[32..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-}
-
-// struct Physics_Settings, aligned to 4
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq)]
-pub struct Physics_Settings(pub [u8; 52]);
-impl Default for Physics_Settings { 
-  fn default() -> Self { 
-    Self([0; 52])
-  }
-}
-impl core::fmt::Debug for Physics_Settings {
-  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-    f.debug_struct("Physics_Settings")
-      .field("gravity", &self.gravity())
-      .field("g_force", &self.g_force())
-      .field("planet_mode", &self.planet_mode())
-      .field("mouse_gravity", &self.mouse_gravity())
-      .field("collisions", &self.collisions())
-      .field("collision_interval", &self.collision_interval())
-      .field("friction_coef", &self.friction_coef())
-      .field("bond", &self.bond())
-      .field("bond_normal_stiffness", &self.bond_normal_stiffness())
-      .field("bond_shear_stiffness", &self.bond_shear_stiffness())
-      .field("bond_normal_strength", &self.bond_normal_strength())
-      .field("bond_shear_strength", &self.bond_shear_strength())
-      .field("moment_contribution_factor", &self.moment_contribution_factor())
-      .field("local_damping", &self.local_damping())
-      .field("local_damping_alpha", &self.local_damping_alpha())
-      .finish()
-  }
-}
-
-impl flatbuffers::SimpleToVerifyInSlice for Physics_Settings {}
-impl<'a> flatbuffers::Follow<'a> for Physics_Settings {
-  type Inner = &'a Physics_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a Physics_Settings>::follow(buf, loc)
-  }
-}
-impl<'a> flatbuffers::Follow<'a> for &'a Physics_Settings {
-  type Inner = &'a Physics_Settings;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<Physics_Settings>(buf, loc)
-  }
-}
-impl<'b> flatbuffers::Push for Physics_Settings {
-    type Output = Physics_Settings;
-    #[inline]
-    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
-        let src = ::core::slice::from_raw_parts(self as *const Physics_Settings as *const u8, Self::size());
-        dst.copy_from_slice(src);
-    }
-}
-
-impl<'a> flatbuffers::Verifiable for Physics_Settings {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.in_buffer::<Self>(pos)
-  }
-}
-
-impl<'a> Physics_Settings {
-  #[allow(clippy::too_many_arguments)]
-  pub fn new(
-    gravity: bool,
-    g_force: f32,
-    planet_mode: bool,
-    mouse_gravity: bool,
-    collisions: bool,
-    collision_interval: i32,
-    friction_coef: f32,
-    bond: i32,
-    bond_normal_stiffness: f32,
-    bond_shear_stiffness: f32,
-    bond_normal_strength: f32,
-    bond_shear_strength: f32,
-    moment_contribution_factor: f32,
-    local_damping: bool,
-    local_damping_alpha: f32,
-  ) -> Self {
-    let mut s = Self([0; 52]);
-    s.set_gravity(gravity);
-    s.set_g_force(g_force);
-    s.set_planet_mode(planet_mode);
-    s.set_mouse_gravity(mouse_gravity);
-    s.set_collisions(collisions);
-    s.set_collision_interval(collision_interval);
-    s.set_friction_coef(friction_coef);
-    s.set_bond(bond);
-    s.set_bond_normal_stiffness(bond_normal_stiffness);
-    s.set_bond_shear_stiffness(bond_shear_stiffness);
-    s.set_bond_normal_strength(bond_normal_strength);
-    s.set_bond_shear_strength(bond_shear_strength);
-    s.set_moment_contribution_factor(moment_contribution_factor);
-    s.set_local_damping(local_damping);
-    s.set_local_damping_alpha(local_damping_alpha);
-    s
-  }
-
   pub fn gravity(&self) -> bool {
     let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
     // Safety:
@@ -1867,7 +162,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[0..].as_ptr(),
+        self.0[8..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -1883,37 +178,8 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[0..].as_mut_ptr(),
+        self.0[8..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn g_force(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[4..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_g_force(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[4..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
   }
@@ -1925,7 +191,7 @@ impl<'a> Physics_Settings {
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[8..].as_ptr(),
+        self.0[9..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -1941,72 +207,14 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[8..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn mouse_gravity(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[9..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_mouse_gravity(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
         self.0[9..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
   }
 
-  pub fn collisions(&self) -> bool {
-    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[10..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_collisions(&mut self, x: bool) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[10..].as_mut_ptr(),
-        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn collision_interval(&self) -> i32 {
-    let mut mem = core::mem::MaybeUninit::<<i32 as EndianScalar>::Scalar>::uninit();
+  pub fn g_force(&self) -> f32 {
+    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid value in this slot
@@ -2014,13 +222,13 @@ impl<'a> Physics_Settings {
       core::ptr::copy_nonoverlapping(
         self.0[12..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
       mem.assume_init()
     })
   }
 
-  pub fn set_collision_interval(&mut self, x: i32) {
+  pub fn set_g_force(&mut self, x: f32) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2029,12 +237,12 @@ impl<'a> Physics_Settings {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
         self.0[12..].as_mut_ptr(),
-        core::mem::size_of::<<i32 as EndianScalar>::Scalar>(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
   }
 
-  pub fn friction_coef(&self) -> f32 {
+  pub fn contact_damping(&self) -> f32 {
     let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
@@ -2049,7 +257,7 @@ impl<'a> Physics_Settings {
     })
   }
 
-  pub fn set_friction_coef(&mut self, x: f32) {
+  pub fn set_contact_damping(&mut self, x: f32) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2092,7 +300,7 @@ impl<'a> Physics_Settings {
     }
   }
 
-  pub fn bond_normal_stiffness(&self) -> f32 {
+  pub fn bond_stiffness(&self) -> f32 {
     let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
@@ -2107,7 +315,7 @@ impl<'a> Physics_Settings {
     })
   }
 
-  pub fn set_bond_normal_stiffness(&mut self, x: f32) {
+  pub fn set_bond_stiffness(&mut self, x: f32) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2121,8 +329,8 @@ impl<'a> Physics_Settings {
     }
   }
 
-  pub fn bond_shear_stiffness(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
+  pub fn collisions(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid value in this slot
@@ -2130,13 +338,13 @@ impl<'a> Physics_Settings {
       core::ptr::copy_nonoverlapping(
         self.0[28..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
       mem.assume_init()
     })
   }
 
-  pub fn set_bond_shear_stiffness(&mut self, x: f32) {
+  pub fn set_collisions(&mut self, x: bool) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2145,12 +353,12 @@ impl<'a> Physics_Settings {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
         self.0[28..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
   }
 
-  pub fn bond_normal_strength(&self) -> f32 {
+  pub fn friction_coef(&self) -> f32 {
     let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
@@ -2165,7 +373,7 @@ impl<'a> Physics_Settings {
     })
   }
 
-  pub fn set_bond_normal_strength(&mut self, x: f32) {
+  pub fn set_friction_coef(&mut self, x: f32) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2179,72 +387,92 @@ impl<'a> Physics_Settings {
     }
   }
 
-  pub fn bond_shear_strength(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[36..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
+}
 
-  pub fn set_bond_shear_strength(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[36..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
+// struct Render_Settings, aligned to 1
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct Render_Settings(pub [u8; 6]);
+impl Default for Render_Settings { 
+  fn default() -> Self { 
+    Self([0; 6])
+  }
+}
+impl core::fmt::Debug for Render_Settings {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("Render_Settings")
+      .field("circular_particles", &self.circular_particles())
+      .field("render_rotation", &self.render_rotation())
+      .field("render_bonds", &self.render_bonds())
+      .field("colors", &self.colors())
+      .field("random_colors", &self.random_colors())
+      .field("color_code_rotation", &self.color_code_rotation())
+      .finish()
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for Render_Settings {}
+impl<'a> flatbuffers::Follow<'a> for Render_Settings {
+  type Inner = &'a Render_Settings;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    <&'a Render_Settings>::follow(buf, loc)
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for &'a Render_Settings {
+  type Inner = &'a Render_Settings;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<Render_Settings>(buf, loc)
+  }
+}
+impl<'b> flatbuffers::Push for Render_Settings {
+    type Output = Render_Settings;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const Render_Settings as *const u8, Self::size());
+        dst.copy_from_slice(src);
     }
+}
+
+impl<'a> flatbuffers::Verifiable for Render_Settings {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.in_buffer::<Self>(pos)
+  }
+}
+
+impl<'a> Render_Settings {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    circular_particles: bool,
+    render_rotation: bool,
+    render_bonds: bool,
+    colors: bool,
+    random_colors: bool,
+    color_code_rotation: bool,
+  ) -> Self {
+    let mut s = Self([0; 6]);
+    s.set_circular_particles(circular_particles);
+    s.set_render_rotation(render_rotation);
+    s.set_render_bonds(render_bonds);
+    s.set_colors(colors);
+    s.set_random_colors(random_colors);
+    s.set_color_code_rotation(color_code_rotation);
+    s
   }
 
-  pub fn moment_contribution_factor(&self) -> f32 {
-    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    EndianScalar::from_little_endian(unsafe {
-      core::ptr::copy_nonoverlapping(
-        self.0[40..].as_ptr(),
-        mem.as_mut_ptr() as *mut u8,
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-      mem.assume_init()
-    })
-  }
-
-  pub fn set_moment_contribution_factor(&mut self, x: f32) {
-    let x_le = x.to_little_endian();
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid value in this slot
-    unsafe {
-      core::ptr::copy_nonoverlapping(
-        &x_le as *const _ as *const u8,
-        self.0[40..].as_mut_ptr(),
-        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
-      );
-    }
-  }
-
-  pub fn local_damping(&self) -> bool {
+  pub fn circular_particles(&self) -> bool {
     let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[44..].as_ptr(),
+        self.0[0..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
@@ -2252,7 +480,7 @@ impl<'a> Physics_Settings {
     })
   }
 
-  pub fn set_local_damping(&mut self, x: bool) {
+  pub fn set_circular_particles(&mut self, x: bool) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2260,20 +488,263 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[44..].as_mut_ptr(),
+        self.0[0..].as_mut_ptr(),
         core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
       );
     }
   }
 
-  pub fn local_damping_alpha(&self) -> f32 {
+  pub fn render_rotation(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[1..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_render_rotation(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[1..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn render_bonds(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[2..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_render_bonds(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[2..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn colors(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[3..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_colors(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[3..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn random_colors(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[4..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_random_colors(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn color_code_rotation(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[5..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_color_code_rotation(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[5..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+}
+
+// struct Wall_Settings, aligned to 4
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct Wall_Settings(pub [u8; 12]);
+impl Default for Wall_Settings { 
+  fn default() -> Self { 
+    Self([0; 12])
+  }
+}
+impl core::fmt::Debug for Wall_Settings {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("Wall_Settings")
+      .field("maintain_ar", &self.maintain_ar())
+      .field("width", &self.width())
+      .field("height", &self.height())
+      .finish()
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for Wall_Settings {}
+impl<'a> flatbuffers::Follow<'a> for Wall_Settings {
+  type Inner = &'a Wall_Settings;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    <&'a Wall_Settings>::follow(buf, loc)
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for &'a Wall_Settings {
+  type Inner = &'a Wall_Settings;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<Wall_Settings>(buf, loc)
+  }
+}
+impl<'b> flatbuffers::Push for Wall_Settings {
+    type Output = Wall_Settings;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const Wall_Settings as *const u8, Self::size());
+        dst.copy_from_slice(src);
+    }
+}
+
+impl<'a> flatbuffers::Verifiable for Wall_Settings {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.in_buffer::<Self>(pos)
+  }
+}
+
+impl<'a> Wall_Settings {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    maintain_ar: bool,
+    width: f32,
+    height: f32,
+  ) -> Self {
+    let mut s = Self([0; 12]);
+    s.set_maintain_ar(maintain_ar);
+    s.set_width(width);
+    s.set_height(height);
+    s
+  }
+
+  pub fn maintain_ar(&self) -> bool {
+    let mut mem = core::mem::MaybeUninit::<<bool as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_maintain_ar(&mut self, x: bool) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<bool as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn width(&self) -> f32 {
     let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid value in this slot
     EndianScalar::from_little_endian(unsafe {
       core::ptr::copy_nonoverlapping(
-        self.0[48..].as_ptr(),
+        self.0[4..].as_ptr(),
         mem.as_mut_ptr() as *mut u8,
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
@@ -2281,7 +752,7 @@ impl<'a> Physics_Settings {
     })
   }
 
-  pub fn set_local_damping_alpha(&mut self, x: f32) {
+  pub fn set_width(&mut self, x: f32) {
     let x_le = x.to_little_endian();
     // Safety:
     // Created from a valid Table for this object
@@ -2289,7 +760,36 @@ impl<'a> Physics_Settings {
     unsafe {
       core::ptr::copy_nonoverlapping(
         &x_le as *const _ as *const u8,
-        self.0[48..].as_mut_ptr(),
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn height(&self) -> f32 {
+    let mut mem = core::mem::MaybeUninit::<<f32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[8..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_height(&mut self, x: f32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[8..].as_mut_ptr(),
         core::mem::size_of::<<f32 as EndianScalar>::Scalar>(),
       );
     }
@@ -2300,19 +800,18 @@ impl<'a> Physics_Settings {
 // struct Settings, aligned to 4
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq)]
-pub struct Settings(pub [u8; 204]);
+pub struct Settings(pub [u8; 56]);
 impl Default for Settings { 
   fn default() -> Self { 
-    Self([0; 204])
+    Self([0; 56])
   }
 }
 impl core::fmt::Debug for Settings {
   fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
     f.debug_struct("Settings")
-      .field("view_settings", &self.view_settings())
-      .field("setup_settings", &self.setup_settings())
-      .field("sim_settings", &self.sim_settings())
       .field("physics_settings", &self.physics_settings())
+      .field("render_settings", &self.render_settings())
+      .field("wall_settings", &self.wall_settings())
       .finish()
   }
 }
@@ -2354,65 +853,51 @@ impl<'a> flatbuffers::Verifiable for Settings {
 impl<'a> Settings {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
-    view_settings: &View_Settings,
-    setup_settings: &Setup_Settings,
-    sim_settings: &Simulation_Settings,
     physics_settings: &Physics_Settings,
+    render_settings: &Render_Settings,
+    wall_settings: &Wall_Settings,
   ) -> Self {
-    let mut s = Self([0; 204]);
-    s.set_view_settings(view_settings);
-    s.set_setup_settings(setup_settings);
-    s.set_sim_settings(sim_settings);
+    let mut s = Self([0; 56]);
     s.set_physics_settings(physics_settings);
+    s.set_render_settings(render_settings);
+    s.set_wall_settings(wall_settings);
     s
-  }
-
-  pub fn view_settings(&self) -> &View_Settings {
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid struct in this slot
-    unsafe { &*(self.0[0..].as_ptr() as *const View_Settings) }
-  }
-
-  #[allow(clippy::identity_op)]
-  pub fn set_view_settings(&mut self, x: &View_Settings) {
-    self.0[0..0 + 76].copy_from_slice(&x.0)
-  }
-
-  pub fn setup_settings(&self) -> &Setup_Settings {
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid struct in this slot
-    unsafe { &*(self.0[76..].as_ptr() as *const Setup_Settings) }
-  }
-
-  #[allow(clippy::identity_op)]
-  pub fn set_setup_settings(&mut self, x: &Setup_Settings) {
-    self.0[76..76 + 40].copy_from_slice(&x.0)
-  }
-
-  pub fn sim_settings(&self) -> &Simulation_Settings {
-    // Safety:
-    // Created from a valid Table for this object
-    // Which contains a valid struct in this slot
-    unsafe { &*(self.0[116..].as_ptr() as *const Simulation_Settings) }
-  }
-
-  #[allow(clippy::identity_op)]
-  pub fn set_sim_settings(&mut self, x: &Simulation_Settings) {
-    self.0[116..116 + 36].copy_from_slice(&x.0)
   }
 
   pub fn physics_settings(&self) -> &Physics_Settings {
     // Safety:
     // Created from a valid Table for this object
     // Which contains a valid struct in this slot
-    unsafe { &*(self.0[152..].as_ptr() as *const Physics_Settings) }
+    unsafe { &*(self.0[0..].as_ptr() as *const Physics_Settings) }
   }
 
   #[allow(clippy::identity_op)]
   pub fn set_physics_settings(&mut self, x: &Physics_Settings) {
-    self.0[152..152 + 52].copy_from_slice(&x.0)
+    self.0[0..0 + 36].copy_from_slice(&x.0)
+  }
+
+  pub fn render_settings(&self) -> &Render_Settings {
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid struct in this slot
+    unsafe { &*(self.0[36..].as_ptr() as *const Render_Settings) }
+  }
+
+  #[allow(clippy::identity_op)]
+  pub fn set_render_settings(&mut self, x: &Render_Settings) {
+    self.0[36..36 + 6].copy_from_slice(&x.0)
+  }
+
+  pub fn wall_settings(&self) -> &Wall_Settings {
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid struct in this slot
+    unsafe { &*(self.0[44..].as_ptr() as *const Wall_Settings) }
+  }
+
+  #[allow(clippy::identity_op)]
+  pub fn set_wall_settings(&mut self, x: &Wall_Settings) {
+    self.0[44..44 + 12].copy_from_slice(&x.0)
   }
 
 }
@@ -2433,20 +918,20 @@ impl<'a> flatbuffers::Follow<'a> for State<'a> {
 }
 
 impl<'a> State<'a> {
-  pub const VT_POS: flatbuffers::VOffsetT = 4;
-  pub const VT_VEL: flatbuffers::VOffsetT = 6;
-  pub const VT_ACC: flatbuffers::VOffsetT = 8;
-  pub const VT_ROT: flatbuffers::VOffsetT = 10;
-  pub const VT_ROT_VEL: flatbuffers::VOffsetT = 12;
-  pub const VT_ROT_ACC: flatbuffers::VOffsetT = 14;
-  pub const VT_FORCES: flatbuffers::VOffsetT = 16;
-  pub const VT_RADII: flatbuffers::VOffsetT = 18;
-  pub const VT_FIXITY: flatbuffers::VOffsetT = 20;
-  pub const VT_BONDS: flatbuffers::VOffsetT = 22;
-  pub const VT_CONTACTS: flatbuffers::VOffsetT = 24;
-  pub const VT_MATERIAL_POINTERS: flatbuffers::VOffsetT = 26;
-  pub const VT_MATERIALS: flatbuffers::VOffsetT = 28;
-  pub const VT_GROUPS: flatbuffers::VOffsetT = 30;
+  pub const VT_PARTICLES: flatbuffers::VOffsetT = 4;
+  pub const VT_POS: flatbuffers::VOffsetT = 6;
+  pub const VT_VEL: flatbuffers::VOffsetT = 8;
+  pub const VT_ACC: flatbuffers::VOffsetT = 10;
+  pub const VT_ROT: flatbuffers::VOffsetT = 12;
+  pub const VT_ROT_VEL: flatbuffers::VOffsetT = 14;
+  pub const VT_ROT_ACC: flatbuffers::VOffsetT = 16;
+  pub const VT_FORCES: flatbuffers::VOffsetT = 18;
+  pub const VT_RADII: flatbuffers::VOffsetT = 20;
+  pub const VT_FIXITY: flatbuffers::VOffsetT = 22;
+  pub const VT_BONDS: flatbuffers::VOffsetT = 24;
+  pub const VT_CONTACTS: flatbuffers::VOffsetT = 26;
+  pub const VT_MATERIAL_POINTERS: flatbuffers::VOffsetT = 28;
+  pub const VT_MATERIALS: flatbuffers::VOffsetT = 30;
   pub const VT_SETTINGS: flatbuffers::VOffsetT = 32;
 
   #[inline]
@@ -2460,7 +945,6 @@ impl<'a> State<'a> {
   ) -> flatbuffers::WIPOffset<State<'bldr>> {
     let mut builder = StateBuilder::new(_fbb);
     if let Some(x) = args.settings { builder.add_settings(x); }
-    if let Some(x) = args.groups { builder.add_groups(x); }
     if let Some(x) = args.materials { builder.add_materials(x); }
     if let Some(x) = args.material_pointers { builder.add_material_pointers(x); }
     if let Some(x) = args.contacts { builder.add_contacts(x); }
@@ -2474,10 +958,18 @@ impl<'a> State<'a> {
     if let Some(x) = args.acc { builder.add_acc(x); }
     if let Some(x) = args.vel { builder.add_vel(x); }
     if let Some(x) = args.pos { builder.add_pos(x); }
+    builder.add_particles(args.particles);
     builder.finish()
   }
 
 
+  #[inline]
+  pub fn particles(&self) -> i32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i32>(State::VT_PARTICLES, Some(0)).unwrap()}
+  }
   #[inline]
   pub fn pos(&self) -> Option<flatbuffers::Vector<'a, f32>> {
     // Safety:
@@ -2570,13 +1062,6 @@ impl<'a> State<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, f32>>>(State::VT_MATERIALS, None)}
   }
   #[inline]
-  pub fn groups(&self) -> Option<flatbuffers::Vector<'a, i32>> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, i32>>>(State::VT_GROUPS, None)}
-  }
-  #[inline]
   pub fn settings(&self) -> Option<&'a Settings> {
     // Safety:
     // Created from valid Table for this object
@@ -2592,6 +1077,7 @@ impl flatbuffers::Verifiable for State<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<i32>("particles", Self::VT_PARTICLES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("pos", Self::VT_POS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("vel", Self::VT_VEL, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("acc", Self::VT_ACC, false)?
@@ -2605,13 +1091,13 @@ impl flatbuffers::Verifiable for State<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("contacts", Self::VT_CONTACTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("material_pointers", Self::VT_MATERIAL_POINTERS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, f32>>>("materials", Self::VT_MATERIALS, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, i32>>>("groups", Self::VT_GROUPS, false)?
      .visit_field::<Settings>("settings", Self::VT_SETTINGS, false)?
      .finish();
     Ok(())
   }
 }
 pub struct StateArgs<'a> {
+    pub particles: i32,
     pub pos: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub vel: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub acc: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
@@ -2625,13 +1111,13 @@ pub struct StateArgs<'a> {
     pub contacts: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
     pub material_pointers: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     pub materials: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, f32>>>,
-    pub groups: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, i32>>>,
     pub settings: Option<&'a Settings>,
 }
 impl<'a> Default for StateArgs<'a> {
   #[inline]
   fn default() -> Self {
     StateArgs {
+      particles: 0,
       pos: None,
       vel: None,
       acc: None,
@@ -2645,7 +1131,6 @@ impl<'a> Default for StateArgs<'a> {
       contacts: None,
       material_pointers: None,
       materials: None,
-      groups: None,
       settings: None,
     }
   }
@@ -2656,6 +1141,10 @@ pub struct StateBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> StateBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_particles(&mut self, particles: i32) {
+    self.fbb_.push_slot::<i32>(State::VT_PARTICLES, particles, 0);
+  }
   #[inline]
   pub fn add_pos(&mut self, pos: flatbuffers::WIPOffset<flatbuffers::Vector<'b , f32>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_POS, pos);
@@ -2709,10 +1198,6 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> StateBuilder<'a, 'b, A> {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_MATERIALS, materials);
   }
   #[inline]
-  pub fn add_groups(&mut self, groups: flatbuffers::WIPOffset<flatbuffers::Vector<'b , i32>>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(State::VT_GROUPS, groups);
-  }
-  #[inline]
   pub fn add_settings(&mut self, settings: &Settings) {
     self.fbb_.push_slot_always::<&Settings>(State::VT_SETTINGS, settings);
   }
@@ -2734,6 +1219,7 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> StateBuilder<'a, 'b, A> {
 impl core::fmt::Debug for State<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("State");
+      ds.field("particles", &self.particles());
       ds.field("pos", &self.pos());
       ds.field("vel", &self.vel());
       ds.field("acc", &self.acc());
@@ -2747,7 +1233,6 @@ impl core::fmt::Debug for State<'_> {
       ds.field("contacts", &self.contacts());
       ds.field("material_pointers", &self.material_pointers());
       ds.field("materials", &self.materials());
-      ds.field("groups", &self.groups());
       ds.field("settings", &self.settings());
       ds.finish()
   }
