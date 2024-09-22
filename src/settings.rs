@@ -248,6 +248,7 @@ pub struct Settings {
     pub just_set_line: bool,
     pub world_pos: (f32, f32),
     pub curr_shader: usize,
+    pub json_scripts: bool,
     // pub groups: i32,
     // pub set_group: i32, // pub paths: ReadDir,
 }
@@ -431,6 +432,7 @@ impl Settings {
             just_set_line: false,
             world_pos: (0.0, 0.0),
             curr_shader: 0,
+            json_scripts: false,
         };
         settings.load_memory();
         return settings;
@@ -1714,157 +1716,169 @@ impl Settings {
                     }
                 });
                 ui.separator();
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(self.json_scripts, "JSON").clicked() {
+                        self.json_scripts = !self.json_scripts;
+                    }
+                    // if ui.button("Import").clicked() {}
+                    // if ui.button("Export").clicked() {}
+                });
+                ui.separator();
                 ui.heading("Actions");
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label("Trigger");
-                    egui::ComboBox::new("Trigger", "")
-                        .selected_text(format!("{}", script_manager.scripts[self.current_script].script_trigger.to_string()))
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::None, "None");
-                            ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::Click, "Click");
-                            ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::KeyDown(Key::Null), "KeyDown");
-                            ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::KeyPressed(Key::Null), "KeyPressed");
-                        });
-                    match script_manager.scripts[self.current_script].script_trigger {
-                        Trigger::KeyDown(key) | Trigger::KeyPressed(key) => {
-                            let mut k = script_manager.scripts[self.current_script].script_trigger.keycode();
-                            egui::ComboBox::new("Key", "").selected_text(format!("{:?}", k)).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut k, Key::Space, "Space");
-                                ui.selectable_value(&mut k, Key::W, "W");
-                                ui.selectable_value(&mut k, Key::A, "A");
-                                ui.selectable_value(&mut k, Key::S, "S");
-                                ui.selectable_value(&mut k, Key::D, "D");
+                if !self.json_scripts {
+                    ui.horizontal(|ui| {
+                        ui.label("Trigger");
+                        egui::ComboBox::new("Trigger", "")
+                            .selected_text(format!("{}", script_manager.scripts[self.current_script].script_trigger.to_string()))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::None, "None");
+                                ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::Click, "Click");
+                                ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::KeyDown(Key::Null), "KeyDown");
+                                ui.selectable_value(&mut script_manager.scripts[self.current_script].script_trigger, Trigger::KeyPressed(Key::Null), "KeyPressed");
                             });
-                            script_manager.scripts[self.current_script].script_trigger.set_key(k);
+                        match script_manager.scripts[self.current_script].script_trigger {
+                            Trigger::KeyDown(key) | Trigger::KeyPressed(key) => {
+                                let mut k = script_manager.scripts[self.current_script].script_trigger.keycode();
+                                egui::ComboBox::new("Key", "").selected_text(format!("{:?}", k)).show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut k, Key::Space, "Space");
+                                    ui.selectable_value(&mut k, Key::W, "W");
+                                    ui.selectable_value(&mut k, Key::A, "A");
+                                    ui.selectable_value(&mut k, Key::S, "S");
+                                    ui.selectable_value(&mut k, Key::D, "D");
+                                });
+                                script_manager.scripts[self.current_script].script_trigger.set_key(k);
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    }
 
-                    ui.checkbox(&mut script_manager.scripts[self.current_script].auto_run, "Auto-Run")
-                        .on_hover_text("Auto-run when script is loaded.");
-                });
-                ui.separator();
-                egui::ScrollArea::new([false, true]).show(ui, |ui| {
-                    if script_manager.scripts.len() > 0 {
-                        let mut i = 0;
-                        while i < script_manager.scripts[self.current_script].actions.len() {
-                            ui.horizontal(|ui| {
-                                let current_digits = ((i + 1) as f32).log(10.0) as i32;
-                                let max_digits = (script_manager.scripts[self.current_script].actions.len() as f32).log(10.0) as i32;
-                                let spaces = (max_digits - current_digits) * 2;
-                                let mut space_string = format!("");
-                                for j in 0..spaces {
-                                    space_string.push(' ');
-                                }
-                                ui.label(format!("{space_string}{}", i + 1));
-                                let mut changed_action = false;
-                                let action_index = i;
-                                egui::ComboBox::new(format!("{}", i).as_str(), "")
-                                    .selected_text(format!("{}", script_manager.scripts[self.current_script].actions[action_index].name.to_string()))
-                                    .show_ui(ui, |ui| {
-                                        if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::None, "None").clicked() {
-                                            changed_action = true;
-                                        }
-                                        if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Wait, "Wait").clicked() {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Simulate, "Simulate")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Advance, "Advance")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select, "Select")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Goto, "Goto").clicked() {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Backup, "Backup")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Restore, "Restore")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Call_Script, "Call Script")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Record, "Record")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
-                                        }
-                                        if ui
-                                            .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Export, "Export")
-                                            .clicked()
-                                        {
-                                            changed_action = true;
+                        ui.checkbox(&mut script_manager.scripts[self.current_script].auto_run, "Auto-Run")
+                            .on_hover_text("Auto-run when script is loaded.");
+                    });
+                    ui.separator();
+                    egui::ScrollArea::new([false, true]).show(ui, |ui| {
+                        if script_manager.scripts.len() > 0 {
+                            let mut i = 0;
+                            while i < script_manager.scripts[self.current_script].actions.len() {
+                                ui.horizontal(|ui| {
+                                    let current_digits = ((i + 1) as f32).log(10.0) as i32;
+                                    let max_digits = (script_manager.scripts[self.current_script].actions.len() as f32).log(10.0) as i32;
+                                    let spaces = (max_digits - current_digits) * 2;
+                                    let mut space_string = format!("");
+                                    for j in 0..spaces {
+                                        space_string.push(' ');
+                                    }
+                                    ui.label(format!("{space_string}{}", i + 1));
+                                    let mut changed_action = false;
+                                    let action_index = i;
+                                    egui::ComboBox::new(format!("{}", i).as_str(), "")
+                                        .selected_text(format!("{}", script_manager.scripts[self.current_script].actions[action_index].name.to_string()))
+                                        .show_ui(ui, |ui| {
+                                            if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::None, "None").clicked() {
+                                                changed_action = true;
+                                            }
+                                            if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Wait, "Wait").clicked() {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Simulate, "Simulate")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Advance, "Advance")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select, "Select")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui.selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Goto, "Goto").clicked() {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Backup, "Backup")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Restore, "Restore")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Call_Script, "Call Script")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Record, "Record")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Export, "Export")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                        });
+                                    if changed_action {
+                                        script_manager.scripts[self.current_script].actions[i].init_parameters(self.setup.particles);
+                                    }
+                                    let mut script_names = vec![];
+                                    for script in &script_manager.scripts {
+                                        script_names.push(script.name.clone());
+                                    }
+                                    let action_count = script_manager.scripts[self.current_script].actions.len();
+                                    script_manager.scripts[self.current_script].actions[action_index].ui(
+                                        ui,
+                                        format!("{}:{}", self.current_script, i),
+                                        (self.materials.len() / self.material_size) as usize,
+                                        action_count,
+                                        prog,
+                                        device,
+                                        queue,
+                                        script_names,
+                                    );
+                                    ui.with_layout(egui::Layout::right_to_left(Align::RIGHT), |ui| {
+                                        if ui.button("X").clicked() {
+                                            script_manager.scripts[self.current_script].delete_action(i);
                                         }
                                     });
-                                if changed_action {
-                                    script_manager.scripts[self.current_script].actions[i].init_parameters(self.setup.particles);
-                                }
-                                let mut script_names = vec![];
-                                for script in &script_manager.scripts {
-                                    script_names.push(script.name.clone());
-                                }
-                                let action_count = script_manager.scripts[self.current_script].actions.len();
-                                script_manager.scripts[self.current_script].actions[action_index].ui(
-                                    ui,
-                                    format!("{}:{}", self.current_script, i),
-                                    (self.materials.len() / self.material_size) as usize,
-                                    action_count,
-                                    prog,
-                                    device,
-                                    queue,
-                                    script_names,
-                                );
-                                ui.with_layout(egui::Layout::right_to_left(Align::RIGHT), |ui| {
-                                    if ui.button("X").clicked() {
-                                        script_manager.scripts[self.current_script].delete_action(i);
-                                    }
                                 });
-                            });
-                            i += 1;
+                                i += 1;
+                            }
                         }
-                    }
-                    ui.separator();
-                    if ui.button("Add Action").clicked() {
-                        script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
-                    }
-                });
+                        ui.separator();
+                        if ui.button("Add Action").clicked() {
+                            script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
+                        }
+                    });
+                } else {
+                    ui.text_edit_multiline(&mut script_manager.scripts[self.current_script].to_json());
+                }
             });
         }
     }
