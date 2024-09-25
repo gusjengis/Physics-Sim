@@ -34,6 +34,7 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use chrono::prelude::*;
+use copypasta::*;
 
 pub struct Client {
     pub canvas: window_init::Canvas,
@@ -80,6 +81,7 @@ pub struct Client {
     data_length_backup: usize,
     available_rect: Rect,
     boot_time: i64,
+    clipboard: ClipboardContext,
 }
 
 impl Client {
@@ -155,7 +157,8 @@ impl Client {
             data_length_backup: 1,
             available_rect: available_rect,
             boot_time: Local::now().timestamp_millis(), // max_framerate:  max_framerate,
-                                                        // prev_framerate: max_framerate
+            // prev_framerate: max_framerate
+            clipboard: ClipboardContext::new().unwrap(),
         };
         client.resize(client.canvas.size);
         client.platform.handle_event(&Event::WindowEvent {
@@ -170,37 +173,36 @@ impl Client {
         event_loop.run(move |event, _, control_flow| {
             client.platform.handle_event(&event);
 
-            if !client.platform.captures_event(&event) {
-                match event {
-                    Event::WindowEvent { ref event, window_id } if window_id == client.canvas.window.id() => {
-                        if !client.input(event) {
-                            match event {
-                                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                                WindowEvent::Resized(physical_size) => {
-                                    client.resize(*physical_size);
-                                }
-                                WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                                    // new_inner_size is &&mut so we have to dereference it twice
-                                    client.resize(**new_inner_size);
-                                }
-                                _ => {}
+            let egui_event = client.platform.captures_event(&event);
+            match event {
+                Event::WindowEvent { ref event, window_id } if window_id == client.canvas.window.id() => {
+                    if !client.input(event, egui_event) && !egui_event {
+                        match event {
+                            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                            WindowEvent::Resized(physical_size) => {
+                                client.resize(*physical_size);
                             }
+                            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                                // new_inner_size is &&mut so we have to dereference it twice
+                                client.resize(**new_inner_size);
+                            }
+                            _ => {}
                         }
                     }
-                    Event::RedrawRequested(window_id) if window_id == client.canvas.window.id() => match client.render() {
-                        Ok(_) => {}
-
-                        Err(wgpu::SurfaceError::Lost) => {
-                            client.resize(client.canvas.size.clone());
-                        }
-                        Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                        Err(e) => eprintln!("{:?}", e),
-                    },
-                    Event::MainEventsCleared => {
-                        client.canvas.window.request_redraw();
-                    }
-                    _ => {}
                 }
+                Event::RedrawRequested(window_id) if window_id == client.canvas.window.id() => match client.render() {
+                    Ok(_) => {}
+
+                    Err(wgpu::SurfaceError::Lost) => {
+                        client.resize(client.canvas.size.clone());
+                    }
+                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    Err(e) => eprintln!("{:?}", e),
+                },
+                Event::MainEventsCleared => {
+                    client.canvas.window.request_redraw();
+                }
+                _ => {}
             }
         });
         return client;
@@ -227,440 +229,481 @@ impl Client {
         }
     }
 
-    pub fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
-                ..
-            } => {
-                self.click_pos = self.cursor_pos;
-                self.middle = true;
-                if !self.shift {
-                    // println!("Click");
-                    self.wgpu_prog.shader_prog.buffers.click_input.updateUniform(
-                        &self.wgpu_config.device,
-                        bytemuck::cast_slice(&[
-                            bytemuck::cast::<_, f32>(self.cursor_pos.0),
-                            bytemuck::cast::<_, f32>(self.cursor_pos.1),
-                            bytemuck::cast::<_, f32>(0),
-                            bytemuck::cast::<_, f32>(self.ctrl as i32),
-                        ]),
-                    );
-                    self.wgpu_prog.shader_prog.click(&mut self.wgpu_config, &self.settings);
-                    if self.settings.simulation.d3 {
-                        self.mouse_captured = true;
+    pub fn input(&mut self, event: &WindowEvent, egui_event: bool) -> bool {
+        if !egui_event {
+            match event {
+                WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    self.click_pos = self.cursor_pos;
+                    self.middle = true;
+                    if !self.shift {
+                        // println!("Click");
+                        self.wgpu_prog.shader_prog.buffers.click_input.updateUniform(
+                            &self.wgpu_config.device,
+                            bytemuck::cast_slice(&[
+                                bytemuck::cast::<_, f32>(self.cursor_pos.0),
+                                bytemuck::cast::<_, f32>(self.cursor_pos.1),
+                                bytemuck::cast::<_, f32>(0),
+                                bytemuck::cast::<_, f32>(self.ctrl as i32),
+                            ]),
+                        );
+                        self.wgpu_prog.shader_prog.click(&mut self.wgpu_config, &self.settings);
+                        if self.settings.simulation.d3 {
+                            self.mouse_captured = true;
+                        }
                     }
-                }
-                if self.settings.create.create_mode {
-                    let world_pos = self.world_pos();
-                    self.wgpu_prog.shader_prog.spawn_particle(world_pos.0, world_pos.1, &mut self.wgpu_config, &mut self.settings);
-                }
-                return true;
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Released,
-                button: MouseButton::Left,
-                ..
-            } => {
-                self.middle = false;
-
-                if !self.shift {
-                    // println!("Release");
-                    self.wgpu_prog.shader_prog.buffers.release_input.updateUniform(
-                        &self.wgpu_config.device,
-                        bytemuck::cast_slice(&[
-                            bytemuck::cast::<_, f32>(self.cursor_pos.0),
-                            bytemuck::cast::<_, f32>(self.cursor_pos.1),
-                            2.0 * (self.canvas.size.width / self.canvas.size.height) as f32 * (self.cursor_delta.0) as f32 / self.canvas.size.width as f32 / self.settings.view.scale,
-                            -2.0 as f32 * (self.cursor_delta.1) as f32 / self.canvas.size.height as f32 / self.settings.view.scale,
-                            bytemuck::cast::<_, f32>(self.settings.simulation.gen_per_frame),
-                            0.0 as f32,
-                            0.0 as f32,
-                            0.0 as f32,
-                        ]),
-                    );
-                    self.wgpu_prog.shader_prog.release(&mut self.wgpu_config, &self.settings);
-                }
-                return true;
-            }
-            // Right click
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Right,
-                ..
-            } => {
-                self.r_mouse = true;
-                return true;
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Released,
-                button: MouseButton::Right,
-                ..
-            } => {
-                self.r_mouse = false;
-                return true;
-            }
-            WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
-                if self.settings.simulation.d3 {
+                    if self.settings.create.create_mode {
+                        let world_pos = self.world_pos();
+                        self.wgpu_prog.shader_prog.spawn_particle(world_pos.0, world_pos.1, &mut self.wgpu_config, &mut self.settings);
+                    }
                     return true;
                 }
-                let mut m_y = 0.0;
-                match delta {
-                    MouseScrollDelta::LineDelta(x, y) => {
-                        self.zoom(*y);
+                WindowEvent::MouseInput {
+                    state: ElementState::Released,
+                    button: MouseButton::Left,
+                    ..
+                } => {
+                    self.middle = false;
+
+                    if !self.shift {
+                        // println!("Release");
+                        self.wgpu_prog.shader_prog.buffers.release_input.updateUniform(
+                            &self.wgpu_config.device,
+                            bytemuck::cast_slice(&[
+                                bytemuck::cast::<_, f32>(self.cursor_pos.0),
+                                bytemuck::cast::<_, f32>(self.cursor_pos.1),
+                                2.0 * (self.canvas.size.width / self.canvas.size.height) as f32 * (self.cursor_delta.0) as f32 / self.canvas.size.width as f32 / self.settings.view.scale,
+                                -2.0 as f32 * (self.cursor_delta.1) as f32 / self.canvas.size.height as f32 / self.settings.view.scale,
+                                bytemuck::cast::<_, f32>(self.settings.simulation.gen_per_frame),
+                                0.0 as f32,
+                                0.0 as f32,
+                                0.0 as f32,
+                            ]),
+                        );
+                        self.wgpu_prog.shader_prog.release(&mut self.wgpu_config, &self.settings);
                     }
-                    _ => {}
+                    return true;
                 }
-                return true;
+                // Right click
+                WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: MouseButton::Right,
+                    ..
+                } => {
+                    self.r_mouse = true;
+                    return true;
+                }
+                WindowEvent::MouseInput {
+                    state: ElementState::Released,
+                    button: MouseButton::Right,
+                    ..
+                } => {
+                    self.r_mouse = false;
+                    return true;
+                }
+                WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
+                    if self.settings.simulation.d3 {
+                        return true;
+                    }
+                    let mut m_y = 0.0;
+                    match delta {
+                        MouseScrollDelta::LineDelta(x, y) => {
+                            self.zoom(*y);
+                        }
+                        _ => {}
+                    }
+                    return true;
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    let delta = (position.x as i32 - self.cursor_pos.0, position.y as i32 - self.cursor_pos.1);
+                    let world_delta = self.cursor_del_to_world_delta(delta);
+                    self.cursor_delta = delta;
+                    self.cursor_pos = (position.x as i32, position.y as i32);
+                    self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos), (self.post_ui_x_off(), self.post_ui_y_off()));
+                    if self.mouse_captured {
+                        let center = self.post_ui_center();
+                        self.mouse_delta = (position.x as i32 - center.0, position.y as i32 - center.1);
+
+                        self.canvas.window.set_cursor_position(PhysicalPosition::new(center.0, center.1));
+                    }
+                    if (self.middle && self.shift && !self.settings.simulation.d3) {
+                        self.x_off += (world_delta.0 as f32);
+                        self.y_off += (world_delta.1 as f32);
+                    }
+
+                    let ar = self.canvas.size.width as f32 / self.canvas.size.height as f32;
+                    self.world_delta = (self.world_delta.0 + world_delta.0 / ar, self.world_delta.1 + world_delta.1);
+                    return true;
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    match input {
+                        KeyboardInput {
+                            scancode: _,
+                            state: ElementState::Pressed,
+                            virtual_keycode: Some(key),
+                            modifiers: _,
+                        } => {
+                            // println!("{:?}", key);
+                            self.script_manager.key_pressed(*key, &mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
+                        }
+                        _ => {}
+                    }
+                    match input {
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::F11),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.fullscreen = !self.fullscreen;
+                            if self.fullscreen {
+                                self.canvas.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                            } else {
+                                self.canvas.window.set_fullscreen(None);
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Space),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.settings.simulating = !self.settings.simulating;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::B),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.backup();
+                            // self.data_length_backup = self.settings.data.len();
+                            return true;
+                        }
+
+                        //SHIFT
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::LShift),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.shift = true;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::LShift),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.shift = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::RShift),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.shift = true;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::RShift),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.shift = false;
+                            return true;
+                        }
+
+                        //CTRL
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::LControl),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.ctrl = true;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::LControl),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.ctrl = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::RControl),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.ctrl = true;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::RControl),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.ctrl = false;
+                            return true;
+                        }
+
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::R),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            if self.shift {
+                                self.reset();
+                            } else {
+                                self.restore();
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::C),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            // self.settings.toggle_create();
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Equals),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.zoom(1.0);
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Minus),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.zoom(-1.0);
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::H),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.home();
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::O),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            if self.ctrl {
+                                self.settings.load();
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::M),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.settings.view.settings_menu = !self.settings.view.settings_menu;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::L),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.hl = !self.hl;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.mouse_captured = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::W),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.key_w = true;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::A),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.key_a = true;
+                            if self.ctrl {
+                                // println!("{}, {}", self.canvas.size.width as i32, self.canvas.size.height as i32);
+                                // println!("{}, {}", self.wgpu_prog.shader_prog.hit_tex.dimensions.0 as i32, self.wgpu_prog.shader_prog.hit_tex.dimensions.1 as i32);
+                                self.select_all();
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::S),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.key_s = true;
+                            if self.ctrl {
+                                self.settings.save()
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::D),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.key_d = true;
+                            self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config, &self.settings);
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::F),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config, &self.settings);
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::T),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            // crate::scripts::script_test(&mut self.wgpu_prog.shader_prog);
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::W),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.key_w = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::A),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.key_a = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::S),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.key_s = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::D),
+                            state: ElementState::Released,
+                            ..
+                        } => {
+                            self.key_d = false;
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Down),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.temp -= 1.0;
+                            if (self.temp < 0.0) {
+                                self.temp = 0.0;
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Left),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            if (self.settings.simulation.gen_per_frame > 1) {
+                                self.settings.simulation.gen_per_frame -= 1;
+                            } else {
+                                self.generations += 10.0;
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Right),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            if self.settings.simulation.gen_per_frame < self.settings.simulation.max_gen_per_frame {
+                                self.settings.simulation.gen_per_frame += 1;
+                            }
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::F3),
+                            state: ElementState::Pressed,
+                            ..
+                        } => {
+                            self.log_framerate = !self.log_framerate;
+                            Client::clear_console();
+                            return true;
+                        }
+                        _ => false,
+                    }
+                }
+                _ => false,
             }
-            WindowEvent::CursorMoved { position, .. } => {
-                let delta = (position.x as i32 - self.cursor_pos.0, position.y as i32 - self.cursor_pos.1);
-                let world_delta = self.cursor_del_to_world_delta(delta);
-                self.cursor_delta = delta;
-                self.cursor_pos = (position.x as i32, position.y as i32);
-                self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos), (self.post_ui_x_off(), self.post_ui_y_off()));
-                if self.mouse_captured {
-                    let center = self.post_ui_center();
-                    self.mouse_delta = (position.x as i32 - center.0, position.y as i32 - center.1);
-
-                    self.canvas.window.set_cursor_position(PhysicalPosition::new(center.0, center.1));
+        } else {
+            return match event {
+                WindowEvent::KeyboardInput { input, .. } => {
+                    return match input {
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::C),
+                            state: ElementState::Pressed,
+                            modifiers: ModifiersState::CTRL,
+                            ..
+                        } => {
+                            self.platform.raw_input_mut().events.push(egui::Event::Copy);
+                            let selected_text = self.platform.context().output(|o| {
+                                return o.copied_text.clone();
+                            });
+                            if selected_text.len() > 0 {
+                                println!("selected text: {}", selected_text);
+                                self.clipboard.set_contents(selected_text).unwrap();
+                            }
+                            println!("selected text");
+                            return true;
+                        }
+                        KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::V),
+                            state: ElementState::Pressed,
+                            modifiers: ModifiersState::CTRL,
+                            ..
+                        } => {
+                            if let Ok(paste_text) = self.clipboard.get_contents() {
+                                println!("Paste: {}", paste_text);
+                                self.platform.raw_input_mut().events.push(egui::Event::Text(paste_text));
+                            }
+                            println!("Paste");
+                            return true;
+                        }
+                        _ => false,
+                    };
                 }
-                if (self.middle && self.shift && !self.settings.simulation.d3) {
-                    self.x_off += (world_delta.0 as f32);
-                    self.y_off += (world_delta.1 as f32);
-                }
-
-                let ar = self.canvas.size.width as f32 / self.canvas.size.height as f32;
-                self.world_delta = (self.world_delta.0 + world_delta.0 / ar, self.world_delta.1 + world_delta.1);
-                return true;
-            }
-            WindowEvent::KeyboardInput { input, .. } => {
-                match input {
-                    KeyboardInput {
-                        scancode: _,
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(key),
-                        modifiers: _,
-                    } => {
-                        // println!("{:?}", key);
-                        self.script_manager.key_pressed(*key, &mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
-                    }
-                    _ => {}
-                }
-                match input {
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::F11),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.fullscreen = !self.fullscreen;
-                        if self.fullscreen {
-                            self.canvas.window.set_fullscreen(Some(Fullscreen::Borderless(None)));
-                        } else {
-                            self.canvas.window.set_fullscreen(None);
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Space),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.settings.simulating = !self.settings.simulating;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::B),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.backup();
-                        // self.data_length_backup = self.settings.data.len();
-                        return true;
-                    }
-
-                    //SHIFT
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::LShift),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.shift = true;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::LShift),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.shift = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::RShift),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.shift = true;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::RShift),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.shift = false;
-                        return true;
-                    }
-
-                    //CTRL
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::LControl),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.ctrl = true;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::LControl),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.ctrl = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::RControl),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.ctrl = true;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::RControl),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.ctrl = false;
-                        return true;
-                    }
-
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::R),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        if self.shift {
-                            self.reset();
-                        } else {
-                            self.restore();
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::C),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        // self.settings.toggle_create();
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Equals),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.zoom(1.0);
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Minus),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.zoom(-1.0);
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::H),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.home();
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::O),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        if self.ctrl {
-                            self.settings.load();
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::M),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.settings.view.settings_menu = !self.settings.view.settings_menu;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::L),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.hl = !self.hl;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.mouse_captured = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::W),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.key_w = true;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::A),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.key_a = true;
-                        if self.ctrl {
-                            // println!("{}, {}", self.canvas.size.width as i32, self.canvas.size.height as i32);
-                            // println!("{}, {}", self.wgpu_prog.shader_prog.hit_tex.dimensions.0 as i32, self.wgpu_prog.shader_prog.hit_tex.dimensions.1 as i32);
-                            self.select_all();
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::S),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.key_s = true;
-                        if self.ctrl {
-                            self.settings.save()
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::D),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.key_d = true;
-                        self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config, &self.settings);
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::F),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config, &self.settings);
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::T),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        // crate::scripts::script_test(&mut self.wgpu_prog.shader_prog);
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::W),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.key_w = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::A),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.key_a = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::S),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.key_s = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::D),
-                        state: ElementState::Released,
-                        ..
-                    } => {
-                        self.key_d = false;
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Down),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.temp -= 1.0;
-                        if (self.temp < 0.0) {
-                            self.temp = 0.0;
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Left),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        if (self.settings.simulation.gen_per_frame > 1) {
-                            self.settings.simulation.gen_per_frame -= 1;
-                        } else {
-                            self.generations += 10.0;
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Right),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        if self.settings.simulation.gen_per_frame < self.settings.simulation.max_gen_per_frame {
-                            self.settings.simulation.gen_per_frame += 1;
-                        }
-                        return true;
-                    }
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::F3),
-                        state: ElementState::Pressed,
-                        ..
-                    } => {
-                        self.log_framerate = !self.log_framerate;
-                        Client::clear_console();
-                        return true;
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
+                _ => false,
+            };
         }
     }
 

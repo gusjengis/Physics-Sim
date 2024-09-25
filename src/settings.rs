@@ -1714,17 +1714,30 @@ impl Settings {
                         script_manager.new_script(format!("Script {}", script_manager.scripts.len() + 1).as_str());
                         self.current_script = script_manager.scripts.len() - 1;
                     }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Import").clicked() {
+                            script_manager.import_scripts();
+                        }
+                        if ui.button("Export All").clicked() {
+                            script_manager.export_scripts();
+                        }
+                    });
                 });
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui.selectable_label(self.json_scripts, "JSON").clicked() {
                         self.json_scripts = !self.json_scripts;
                     }
-                    // if ui.button("Import").clicked() {}
-                    // if ui.button("Export").clicked() {}
                 });
                 ui.separator();
-                ui.heading("Actions");
+                ui.horizontal(|ui| {
+                    ui.heading("Actions");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Export All").clicked() {
+                            script_manager.export_scripts();
+                        }
+                    });
+                });
                 ui.separator();
                 if !self.json_scripts {
                     ui.horizontal(|ui| {

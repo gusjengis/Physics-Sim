@@ -328,7 +328,7 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
         force = vec2(0.0, 0.0);
         moment = 0.0;
     }
-    data[u32(a) * DATA_SIZE   ] += force.y;
+    data[u32(a) * DATA_SIZE   ] += -normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].bond_tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
 
@@ -363,9 +363,11 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent * shear_stiffness, -friction_limit, friction_limit);
     var moment = -(radii[a]) * contacts[i].tangent_force;
     let force = (normal * normal_force + tangent * contacts[i].tangent_force);
-    data[u32(a) * DATA_SIZE   ] += force.y;
+    data[u32(a) * DATA_SIZE   ] += normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
+    // data[u32(a) * DATA_SIZE + 3u] = normal.;
+
 
     return vec3(force, moment);
 }
@@ -407,7 +409,7 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
         moment = 0.0;
     }
 
-    data[u32(a) * DATA_SIZE   ] = normal_force;
+    data[u32(a) * DATA_SIZE   ] = -normal_force;
     data[u32(a) * DATA_SIZE + 1u] = contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] = moment;
 
