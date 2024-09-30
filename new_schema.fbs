@@ -1,0 +1,105 @@
+struct View_Settings {
+  circular_particles: bool;
+  render_rot: bool;
+  render_bonds: bool;
+  render_outline: bool;
+  render_bp_grid: bool;
+  color_code_rot: bool;
+  use_particle_color_outline: bool;
+  outline_color_r: float;
+  outline_color_g: float;
+  outline_color_b: float;
+  background_color_r: float;
+  background_color_g: float;
+  background_color_b: float;
+  color_source: int;
+  dim_slow_particles: bool;
+  max_brightness_vel: float;
+  crt_res: int;
+  grain: bool;
+  grain_strength: float;
+  grain_size: int;
+  sobel: bool;
+  colored_sobel: bool;
+  invert: bool;
+  chrom_ab: bool;
+  abb_strength: float;
+  bond_highlight_strength: float;
+  render_unbonded_contacts: bool;
+  lighting: bool;
+  show_hit_tex: bool;
+}
+
+struct Setup_Settings {
+  particles: int;
+  max_radius: float;
+  variable_rad: bool;
+  holeyness: float;
+  max_h_velocity: float;
+  min_h_velocity: float;
+  max_v_velocity: float;
+  min_v_velocity: float;
+  grid_width: float;
+  hex_grid: bool;
+}
+
+struct Simulation_Settings {
+  timestep: float;
+  gen_per_frame: int;
+  auto_width: bool;
+  width: float;
+  height: float;
+  maintain_ar: bool;
+  round_walls: bool;
+  wall_radius: float;
+  d3: bool;
+  x_timesteps: int;
+  use_f64: bool;
+}
+
+struct Physics_Settings {
+  gravity: bool;
+  g_force: float;
+  planet_mode: bool;
+  mouse_gravity: bool;
+  collisions: bool;
+  collision_interval: int;
+  friction_coef: float;
+  bond: int;
+  bond_tearing: bool;
+  bond_normal_stiffness: float;
+  bond_shear_stiffness: float;
+  bond_normal_strength: float;
+  bond_shear_strength: float;
+  moment_contribution_factor: float;
+  local_damping: bool;
+  local_damping_alpha: float;
+}
+
+struct Settings {
+  view_settings: View_Settings;
+  setup_settings: Setup_Settings;
+  sim_settings: Simulation_Settings;
+  physics_settings: Physics_Settings;
+}
+
+table State {
+  pos: [float];
+  vel: [float];
+  acc: [float];
+  rot: [float];
+  rot_vel: [float];
+  rot_acc: [float];
+  forces: [float];
+  radii: [float];
+  fixity: [int];
+  bonds: [int];
+  contacts: [float];
+  material_pointers: [int];
+  materials: [float];
+  groups: [int];
+  scripts: string;
+  settings: Settings;
+}
+
+root_type State;

@@ -1,0 +1,10 @@
+table Frame {
+  pos: [float];
+  vel: [float];
+  rot: [float];
+  rot_vel: [float];
+  stress_tensor: [float];
+  bond_changes: [int];
+}
+
+root_type Frame;

@@ -1,0 +1,10 @@
+# Set the maximum allowed line width (default is 100)
+max_width = 200
+
+# Always expand method calls
+# chain_one_line_max = 100
+# fn_call_args_layout = "Vertical"  # Always break function arguments vertically
+
+# Control how function parameters are formatted
+# fn_call_width = 0
+# fn_args_layout = "Horizontal"  # Always break function arguments vertically
