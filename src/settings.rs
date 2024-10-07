@@ -168,6 +168,7 @@ pub struct SimulationSettings {
     pub d3: bool,
     pub advance_x_timesteps: bool,
     pub x_timesteps: i32,
+    pub deterministic: bool,
 }
 
 pub struct PhysicsSettings {
@@ -332,6 +333,7 @@ impl Settings {
                 d3: false,
                 advance_x_timesteps: false,
                 x_timesteps: 1,
+                deterministic: true,
             },
             physics: PhysicsSettings {
                 gravity: true,
@@ -1088,6 +1090,13 @@ impl Settings {
                     self.changed_collision_settings = true;
                 }
             }
+            if ui
+                .checkbox(&mut self.simulation.deterministic, "Deterministic")
+                .on_hover_text("Provides consistent results, impacts performance.")
+                .changed()
+            {
+                self.changed_collision_settings = true;
+            }
             ui.add_enabled_ui(self.f64_support, |ui| {
                 if self.f64_support {
                     if ui
@@ -1812,13 +1821,25 @@ impl Settings {
                                                 changed_action = true;
                                             }
                                             if ui
-                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Select_All, "Select All")
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::SelectAll, "Select All")
                                                 .clicked()
                                             {
                                                 changed_action = true;
                                             }
                                             if ui
                                                 .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Properties, "Set Properties")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Physics, "Set Physics")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Bonds, "Set Bonds")
                                                 .clicked()
                                             {
                                                 changed_action = true;

@@ -308,7 +308,7 @@ impl State {
         State::update_i32(&mut config.device, &mut config.queue, &mut self.selections, &mut buffers.selection_buffers.buffers[0]);
         State::update_i32(&mut config.device, &mut config.queue, &mut self.groups, &mut buffers.selection_buffers.buffers[1]);
         State::update_f32(&mut config.device, &mut config.queue, &mut self.data, &mut buffers.data_buffer.buffer);
-        self.print_state();
+        //self.print_state();
         // State::update_i32(config.device, config.queue, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
         // for n in self.grid.iter() {
         //     println!("{}", n);
@@ -338,9 +338,9 @@ impl State {
                             let normalized_delta = (delta.0 / magnitude, delta.1 / magnitude);
                             let angle = normalized_delta.0.atan2(normalized_delta.1);
                             // println!("({}, {}) vs ({}, {})", normalized_delta.0, normalized_delta.1, angle.sin(), angle.cos());
-                            // bonds[bond_index * 3] = 1 as i32; // torn
-                            // bonds[bond_index * 3 + 1] = (angle).to_bits() as i32;
-                            // bonds[bond_index * 3 + 2] = (magnitude).to_bits() as i32;
+                            bonds[bond_index * 3] = 1 as i32; // torn
+                            bonds[bond_index * 3 + 1] = (angle).to_bits() as i32;
+                            bonds[bond_index * 3 + 2] = (magnitude).to_bits() as i32;
                             // println!("{}, {}, {}", bonds[(i*MAX_BONDS+col_num)*3], angle, magnitude);
 
                             // CREATE CONTACTS
@@ -357,7 +357,7 @@ impl State {
                                     contacts[CONTACT_SIZE * k + 8] = 0.0; // theta b
                                     contacts[CONTACT_SIZE * k + 9] = bytemuck::cast(1 as i32); // bond_type
                                     contacts[CONTACT_SIZE * k + 10] = magnitude; // bond length
-                                    contacts[CONTACT_SIZE * k + 11] = angle; // bond angle
+                                    contacts[CONTACT_SIZE * k + 11] = 0.0; //angle; // bond angle
                                     break;
                                 }
                             }
@@ -373,7 +373,7 @@ impl State {
                                     contacts[CONTACT_SIZE * k + 8] = 0.0; // theta b
                                     contacts[CONTACT_SIZE * k + 9] = bytemuck::cast(1 as i32); // bond_type
                                     contacts[CONTACT_SIZE * k + 10] = magnitude; // bond length
-                                    contacts[CONTACT_SIZE * k + 11] = angle; // bond angle
+                                    contacts[CONTACT_SIZE * k + 11] = 0.0; //angle; // bond angle
                                     break;
                                 }
                             }
@@ -388,12 +388,12 @@ impl State {
                 }
             }
         }
-        // if found_bonds {
-        // bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
-        // }
-        // if bonds.is_empty() {
-        // bonds = vec![-1; 1];
-        // }
+        if found_bonds {
+            bonds = (bonds).into_iter().filter(|num| *num != -1).collect();
+        }
+        if bonds.is_empty() {
+            bonds = vec![-1; 1];
+        }
         // for num in bonds.clone() {
         //     println!("Bonds: {}", num);
         // }

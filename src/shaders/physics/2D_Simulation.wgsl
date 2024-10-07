@@ -226,6 +226,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 contacts[empty_index].moment  = 0.0;
                 contacts[empty_index].s_force = vec2(0.0);
                 contacts[empty_index].theta_b = 0.0;        
+                contacts[empty_index].bond_angle = 0.0;        
             }
         } 
     }  
@@ -310,7 +311,8 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
     let del_theta_b = del_rot[a] - del_rot[b];
     contacts[i].theta_b += del_theta_b;
 
-    var moment = -normal_stiffness * I * contacts[i].theta_b - contacts[i].s_force.y;// * (radii[a]);
+    var moment = -contacts[i].s_force.y;
+    contacts[i].bond_angle =  -normal_stiffness * I * contacts[i].theta_b;
     var force = (normal * normal_force + tangent * contacts[i].s_force.y);
 
     // TEAR BOND
@@ -325,9 +327,14 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
         force = vec2(0.0, 0.0);
         moment = 0.0;
     }
+    
     data[u32(a) * DATA_SIZE   ] += -normal_force;
-    data[u32(a) * DATA_SIZE + 1u] += contacts[i].s_force.y;
-    data[u32(a) * DATA_SIZE + 2u] += moment;
+    data[u32(a) * DATA_SIZE + 1u] += contacts[i].s_force.y; 
+    data[u32(a) * DATA_SIZE + 2u] += moment * radii[a] + contacts[i].bond_angle;
+    
+    data[u32(b) * DATA_SIZE   ] += normal_force;
+    data[u32(b) * DATA_SIZE + 1u] += contacts[i].s_force.y; 
+    data[u32(b) * DATA_SIZE + 2u] += moment * radii[b] + contacts[i].bond_angle;
 
     return  vec3(force, moment) + linear_model(a, b, i, bonded); 
 }
@@ -358,11 +365,18 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
 
     var friction_limit = abs(normal_force) * settings.friction_coefficient;
     contacts[i].s_force.x = clamp(contacts[i].s_force.x + rel_tangent * shear_stiffness, -friction_limit, friction_limit);
-    var moment = -(radii[a]) * contacts[i].s_force.x;
+    var moment = -contacts[i].s_force.x;
     let force = (normal * normal_force + tangent * contacts[i].s_force.x);
     data[u32(a) * DATA_SIZE   ] += normal_force;
-    data[u32(a) * DATA_SIZE + 1u] += contacts[i].s_force.x;
-    data[u32(a) * DATA_SIZE + 2u] += moment;
+    data[u32(a) * DATA_SIZE + 1u] += contacts[i].s_force.y; 
+    data[u32(a) * DATA_SIZE + 2u] += moment * radii[a];
+    
+    data[u32(b) * DATA_SIZE   ] += -normal_force;
+    data[u32(b) * DATA_SIZE + 1u] += contacts[i].s_force.y; 
+    data[u32(b) * DATA_SIZE + 2u] += moment * radii[b];
+    //data[u32(a) * DATA_SIZE   ] += normal_force;
+    //data[u32(a) * DATA_SIZE + 1u] += contacts[i].s_force.x;
+    //data[u32(a) * DATA_SIZE + 2u] += moment;
     // data[u32(a) * DATA_SIZE + 3u] = normal.;
 
 
@@ -391,7 +405,7 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
 
     contacts[i].s_force.x += rel_tangent * shear_stiffness;
     var force = settings.contact_damping * (normal * normal_force + tangent * contacts[i].s_force.x);
-    var moment = -(radii[a]) * contacts[i].s_force.x; 
+    var moment = -contacts[i].s_force.x; 
 
     // TEAR BOND
     var shear_limit = settings.bond_shear_strength;
@@ -404,9 +418,9 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
         moment = 0.0;
     }
 
-    data[u32(a) * DATA_SIZE   ] = -normal_force;
-    data[u32(a) * DATA_SIZE + 1u] = contacts[i].s_force.x; 
-    data[u32(a) * DATA_SIZE + 2u] = moment;
+    //data[u32(a) * DATA_SIZE   ] = -normal_force;
+    //data[u32(a) * DATA_SIZE + 1u] = contacts[i].s_force.x; 
+    //data[u32(a) * DATA_SIZE + 2u] = moment;
 
     return vec3(force, moment);
 }

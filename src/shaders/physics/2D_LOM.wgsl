@@ -107,7 +107,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
     let mat_id = material_pointers[id];
      
-    sum_forces(id, mat_id);
+    if coll_cont[2] != 0 { sum_forces(id, mat_id); }
 
     let grid_info = grid_info_buffer[0];
     
@@ -171,7 +171,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         if fixity[id].rot_vel != 1 {
             rot_vel[id] = rot_vel[id] * 0.9;
         }    
-        }
+    }
     // }
 
     positions[id] += del_pos[id];
@@ -231,20 +231,64 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
 fn sum_forces(id: u32, mat_id: i32) {
     var net_force = vec3(0.0);
-    
+    var contact_indices = array<u32, MAX_CONTACTS>();
+    var contact_count = 0u;
+
+    // Collect valid contact indices
     for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
+        if contacts[i].b >= 0 {
+            contact_indices[contact_count] = i;
+            contact_count += 1u;
+        }
+    }
+    if (contact_count > 1u) {
+        // Sort the contact indices based on the other particle's ID using a simple sorting algorithm
+        for (var i = 0u; i < contact_count - 1u; i++) {
+            for (var j = i + 1u; j < contact_count; j++) {
+                let a_id = contacts[(contact_indices[i])].b;
+                let b_id = contacts[(contact_indices[j])].b;
+                if a_id > b_id {
+                    // Swap indices to sort in ascending order
+                    let temp = contact_indices[i];
+                    contact_indices[i] = contact_indices[j];
+                    contact_indices[j] = temp;
+                }
+            }
+        }
+    }
+
+    // Sum forces in the sorted order
+    for (var idx = 0u; idx < contact_count; idx++) {
+        let i = contact_indices[idx];
         if contacts[i].b > i32(id) {
             net_force += vec3(contacts[i].forces, contacts[i].moment);
+            if settings.bonds == 3 { net_force.z += contacts[i].bond_angle; }
         } else if contacts[i].b >= 0 {  
+            // For contacts where the other particle has a lower ID, ensure consistent force retrieval
             for (var j = u32(contacts[i].b) * MAX_CONTACTS; j < (u32(contacts[i].b) + 1u) * MAX_CONTACTS; j++) {
                 if u32(contacts[j].b) == id {
                     net_force += vec3(-contacts[j].forces, contacts[j].moment);
+                    if settings.bonds == 3 { net_force.z += contacts[i].bond_angle; }
                     break; 
                 }   
             }   
-        }     
+        }       
     }    
-
+    //for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
+    //    if contacts[i].b > i32(id) {
+    //       net_force += vec3(contacts[i].forces, contacts[i].moment);
+    //    } else if contacts[i].b >= 0 {  
+    //        for (var j = u32(contacts[i].b) * MAX_CONTACTS; j < (u32(contacts[i].b) + 1u) * MAX_CONTACTS; j++) {
+    //            if u32(contacts[j].b) == id {
+    //                net_force += vec3(-contacts[j].forces, contacts[j].moment);
+    //                break; 
+    //            }   
+    //        }   
+    //    }     
+    //}    
+    //data[id * DATA_SIZE + 0u] = net_force.x;
+    //data[id * DATA_SIZE + 1u] = net_force.y;
+    //data[id * DATA_SIZE + 2u] = net_force.z;
     // Apply sum of forces and gravity to velocities
     let density = materials[mat_id].density;
     let mass = density * PI * radii[id] * radii[id];

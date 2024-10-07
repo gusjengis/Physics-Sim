@@ -1,4 +1,4 @@
-use crate::settings::{Data, Properties, Settings};
+use crate::settings::{BondType, Data, Properties, Settings};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use chrono::Local;
 use egui::Ui;
@@ -222,7 +222,9 @@ impl Thread {
             // println!("]");
             if self.action() < scripts[self.script()].actions.len() as i64 - 1 {
                 let script_action = self.inc_action(scripts);
-                self.execute_action(scripts, script_action.1 as usize, script_action.0, prog, config, settings, canvas);
+                if self.execute_action(scripts, script_action.1 as usize, script_action.0, prog, config, settings, canvas) {
+                    break;
+                }
                 if self.stack.is_empty() {
                     self.executing = false;
                 }
@@ -230,13 +232,13 @@ impl Thread {
         }
     }
 
-    fn execute_action(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
+    fn execute_action(&mut self, scripts: &Vec<Script>, action_index: usize, script_index: usize, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) -> bool {
         match scripts[script_index].actions[action_index].name {
             Command::None => {}
             Command::Wait => {
                 self.wait(scripts[script_index].actions[action_index].parameters[0].to_string(), script_index);
             } //f64::from_str(action.parameters.as_str()).unwrap(), script_index); }
-            Command::Select_All => {
+            Command::SelectAll => {
                 self.select_all(prog, config, canvas);
             }
             Command::Set_Properties => {
@@ -266,6 +268,7 @@ impl Thread {
             }
             Command::Advance => {
                 self.advance(scripts, action_index, script_index, settings);
+                return true;
             }
             Command::Export => {
                 settings.save_data(Some(scripts[script_index].actions[action_index].parameters[0].as_path().clone()));
@@ -273,7 +276,70 @@ impl Thread {
             Command::Record => {
                 self.record(scripts, action_index, script_index, settings);
             }
+            Command::Set_Physics => {
+                self.set_physics(settings, scripts, script_index, action_index);
+            }
+            Command::Set_Bonds => {
+                self.set_bonds(settings, scripts, script_index, action_index);
+            }
         }
+        return false;
+    }
+
+    fn set_physics(&mut self, settings: &mut Settings, scripts: &Vec<Script>, script_index: usize, action_index: usize) {
+        let params = &scripts[script_index].actions[action_index].parameters;
+        if params[0].truthy() {
+            settings.physics.gravity = params[8].truthy();
+        }
+        if params[1].truthy() {
+            settings.physics.planet_mode = params[9].truthy();
+        }
+        if params[2].truthy() {
+            settings.physics.gravity_acceleration = params[10].as_f32();
+        }
+        if params[3].truthy() {
+            settings.physics.mouse_gravity = params[11].truthy();
+        }
+        if params[4].truthy() {
+            settings.physics.collisions = params[12].truthy();
+        }
+        if params[5].truthy() {
+            settings.physics.friction_coefficient = params[13].as_f32();
+        }
+        if params[6].truthy() {
+            settings.physics.local_damping = params[14].truthy();
+        }
+        if params[7].truthy() {
+            settings.physics.local_damping_alpha = params[15].as_f32();
+        }
+        settings.changed_collision_settings = true;
+    }
+
+    fn set_bonds(&mut self, settings: &mut Settings, scripts: &Vec<Script>, script_index: usize, action_index: usize) {
+        let params = &scripts[script_index].actions[action_index].parameters;
+        if params[0].truthy() {
+            settings.physics.bonds = params[7].as_i32();
+            settings.physics.bondenum = BondType::from_i32(params[7].as_i32());
+        }
+        if params[1].truthy() {
+            settings.physics.bond_normal_stiffness = params[8].as_f32();
+        }
+        if params[2].truthy() {
+            settings.physics.bond_shear_stiffness = params[9].as_f32();
+        }
+        if params[3].truthy() {
+            settings.physics.bond_tearing = params[10].truthy();
+        }
+        if params[4].truthy() {
+            settings.physics.bond_normal_strength = params[11].as_f32();
+        }
+        if params[5].truthy() {
+            settings.physics.bond_shear_strength = params[12].as_f32();
+        }
+        if params[6].truthy() {
+            settings.physics.moment_contribution_factor = params[13].as_f32();
+        }
+        settings.changed_collision_settings = true;
     }
 
     fn wait(&mut self, duration_string: String, script_index: usize) {
@@ -435,7 +501,7 @@ impl Action {
             Command::Wait => {
                 self.parameters = vec![Parameter::Float(format!("Duration"), 0.0)];
             }
-            Command::Select_All => {
+            Command::SelectAll => {
                 self.parameters = vec![];
             }
             Command::Set_Properties => {
@@ -497,6 +563,44 @@ impl Action {
             Command::Record => {
                 self.parameters = vec![Parameter::Boolean(format!("Record"), false)];
             }
+            Command::Set_Physics => {
+                self.parameters = vec![
+                    Parameter::Boolean(format!("Set Gravity"), false),
+                    Parameter::Boolean(format!("Set Planet Mode"), false),
+                    Parameter::Boolean(format!("Set G Force"), false),
+                    Parameter::Boolean(format!("Set Mouse Gravity"), false),
+                    Parameter::Boolean(format!("Set Collisions"), false),
+                    Parameter::Boolean(format!("Set Friction Coefficient"), false),
+                    Parameter::Boolean(format!("Set Local Damping"), false),
+                    Parameter::Boolean(format!("Set Local Damping Alpha"), false),
+                    Parameter::Boolean(format!("Gravity"), false),
+                    Parameter::Boolean(format!("Planet Mode"), false),
+                    Parameter::Float(format!("G Force"), 1.0),
+                    Parameter::Boolean(format!("Mouse Gravity"), false),
+                    Parameter::Boolean(format!("Collisions"), false),
+                    Parameter::Float(format!("Friction Coefficient"), 0.5),
+                    Parameter::Boolean(format!("Local Damping"), false),
+                    Parameter::Float(format!("Local Damping Alpha"), 0.1),
+                ];
+            }
+            Command::Set_Bonds => {
+                self.parameters = vec![
+                    Parameter::Boolean(format!("Set Bond Type"), false),
+                    Parameter::Boolean(format!("Set Normal Stiffness"), false),
+                    Parameter::Boolean(format!("Set Shear Stiffness"), false),
+                    Parameter::Boolean(format!("Set Bond Tearing"), false),
+                    Parameter::Boolean(format!("Set Normal Strength"), false),
+                    Parameter::Boolean(format!("Set Shear Strength"), false),
+                    Parameter::Boolean(format!("Set Moment Cont."), false),
+                    Parameter::Integer(format!("Bond Type"), 0),
+                    Parameter::Float(format!("Normal Stiffness"), 10.0),
+                    Parameter::Float(format!("Shear Stiffness"), 10.0),
+                    Parameter::Boolean(format!("Bond Tearing"), false),
+                    Parameter::Float(format!("Normal Strength"), 0.5),
+                    Parameter::Float(format!("Shear Strength"), 0.5),
+                    Parameter::Float(format!("Moment Cont."), 1.0),
+                ];
+            }
         }
     }
 
@@ -507,7 +611,7 @@ impl Action {
                 ui.label("Duration: ");
                 self.parameters[0].ui(ui, "s", true, Some(0.0..=f64::MAX));
             }
-            Command::Select_All => {}
+            Command::SelectAll => {}
             Command::Set_Properties => {
                 egui::CollapsingHeader::new("Properties").id_source(id).show(ui, |ui| {
                     ui.label("Position");
@@ -644,6 +748,95 @@ impl Action {
             Command::Record => {
                 self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
             }
+            Command::Set_Physics => {
+                egui::CollapsingHeader::new("Physics Settings").id_source(id).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[7].ui(ui, "", true, Some(0.0..=f64::MAX));
+                        });
+                        ui.vertical(|ui| {
+                            let mut enabled = self.parameters[0].truthy();
+                            self.parameters[8].ui(ui, "Gravity", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[1].truthy();
+                            self.parameters[9].ui(ui, "Planet Mode", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[2].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[10].ui(ui, "", enabled, Some(0.0..=1.0));
+                                ui.add_enabled(enabled, egui::Label::new("G Force"));
+                            });
+                            enabled = self.parameters[3].truthy();
+                            self.parameters[11].ui(ui, "Mouse Gravity", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[4].truthy();
+                            self.parameters[12].ui(ui, "Collisions", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[5].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0));
+                                ui.add_enabled(enabled, egui::Label::new("Friction Coefficient"));
+                            });
+                            enabled = self.parameters[6].truthy();
+                            self.parameters[14].ui(ui, "Local Damping", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[7].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[15].ui(ui, "", enabled, Some(0.0..=1.0));
+                                ui.add_enabled(enabled, egui::Label::new("Damping Strength"));
+                            });
+                        });
+                    });
+                });
+            }
+            Command::Set_Bonds => {
+                egui::CollapsingHeader::new("Bond Settings").id_source(id).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX));
+                        });
+                        ui.vertical(|ui| {
+                            let mut enabled = self.parameters[0].truthy();
+                            self.parameters[7].ui(ui, "Bond Type", enabled, Some(0.0..=3.0));
+                            enabled = self.parameters[1].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[8].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                ui.add_enabled(enabled, egui::Label::new("Normal Stiffness"));
+                            });
+                            enabled = self.parameters[2].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[9].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                ui.add_enabled(enabled, egui::Label::new("Shear Stiffness"));
+                            });
+                            enabled = self.parameters[3].truthy();
+                            self.parameters[10].ui(ui, "Bond Tearing", enabled, Some(0.0..=f64::MAX));
+                            enabled = self.parameters[4].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[11].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                ui.add_enabled(enabled, egui::Label::new("Normal Strength"));
+                            });
+                            enabled = self.parameters[5].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[12].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                ui.add_enabled(enabled, egui::Label::new("Shear Strength"));
+                            });
+                            enabled = self.parameters[6].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0));
+                                ui.add_enabled(enabled, egui::Label::new("Moment Contribution Factor"));
+                            });
+                        });
+                    });
+                });
+            }
         }
     }
 
@@ -706,7 +899,7 @@ impl Trigger {
 pub enum Command {
     None,
     Wait,
-    Select_All,
+    SelectAll,
     Set_Properties,
     Goto,
     Select,
@@ -717,6 +910,8 @@ pub enum Command {
     Advance,
     Export,
     Record,
+    Set_Physics,
+    Set_Bonds,
     // Load_File,
     // Record
 }
@@ -726,7 +921,7 @@ impl Command {
         match self {
             Command::None => String::from_str("None").unwrap(),
             Command::Wait => String::from_str("Wait").unwrap(),
-            Command::Select_All => String::from_str("Select All").unwrap(),
+            Command::SelectAll => String::from_str("Select All").unwrap(),
             Command::Set_Properties => String::from_str("Set Properties").unwrap(),
             Command::Goto => String::from_str("Goto").unwrap(),
             Command::Select => String::from_str("Select").unwrap(),
@@ -736,7 +931,9 @@ impl Command {
             Command::Call_Script => String::from_str("Call Script").unwrap(),
             Command::Advance => String::from_str("Advance").unwrap(),
             Command::Export => String::from_str("Export").unwrap(),
-            Command::Record => String::from_str("Record").unwrap(), // Command::Load_File => { String::from_str("Load File").unwrap() }
+            Command::Record => String::from_str("Record").unwrap(),           // Command::Load_File => { String::from_str("Load File").unwrap() }
+            Command::Set_Physics => String::from_str("Set Physics").unwrap(), // Command::Load_File => { String::from_str("Load File").unwrap() }
+            Command::Set_Bonds => String::from_str("Set Bonds").unwrap(),     // Command::Load_File => { String::from_str("Load File").unwrap() }
         }
     }
 }
@@ -938,4 +1135,3 @@ impl Key {
         }
     }
 }
-

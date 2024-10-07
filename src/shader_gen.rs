@@ -90,10 +90,12 @@ fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
             "3D" => {
                 res |= settings.simulation.d3;
             }
+            "DETERMINISTIC" => {
+                res |= settings.simulation.deterministic;
+            }
             _ => {}
         }
     }
 
     return res;
 }
-
