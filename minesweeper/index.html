@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minesweeper</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #overlay-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        #play-again {
+            margin-top: 10px;
+            padding: 5px 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #game {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-gap: 1px;
+            background-color: #bdbdbd;
+            border: 2px solid #7b7b7b;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: #c0c0c0;
+            border: 1px solid #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .revealed {
+            background-color: #e0e0e0;
+        }
+        .mine {
+            background-color: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div id="game"></div>
+    <div id="overlay" style="display: none;">
+        <div id="overlay-content">
+            <h2 id="game-result"></h2>
+            <button id="play-again">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const game = document.getElementById('game');
+        const overlay = document.getElementById('overlay');
+        const gameResult = document.getElementById('game-result');
+        const playAgainButton = document.getElementById('play-again');
+        const gridSize = 10;
+        const totalMines = 15;
+        let mineLocations = [];
+        let revealedCells = 0;
+        let audioContext;
+        let musicInterval;
+        let gameOver = false;
+
+        playAgainButton.addEventListener('click', resetGame);
+
+        function createBoard() {
+            mineLocations = placeMines();
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.dataset.index = i;
+                cell.addEventListener('click', handleClick);
+                game.appendChild(cell);
+            }
+            initAudio();
+        }
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            startRandomMusic();
+        }
+
+        function startRandomMusic() {
+            musicInterval = setInterval(() => {
+                const note = 220 * Math.pow(2, Math.floor(Math.random() * 12) / 12);
+                playNote(note, 0.5, 0.5);
+            }, 500);
+        }
+
+        function playNote(frequency, duration, volume) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playBombSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(100, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(10, audioContext.currentTime + 0.5);
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.5);
+        }
+
+        function placeMines() {
+            const mines = [];
+            while (mines.length < totalMines) {
+                const mine = Math.floor(Math.random() * gridSize * gridSize);
+                if (!mines.includes(mine)) {
+                    mines.push(mine);
+                }
+            }
+            return mines;
+        }
+
+        function handleClick(e) {
+            if (gameOver) return;
+            const index = parseInt(e.target.dataset.index);
+            if (mineLocations.includes(index)) {
+                revealMines();
+                playBombSound();
+                clearInterval(musicInterval);
+                endGame('Game Over!');
+            } else {
+                revealCell(index);
+                if (revealedCells === gridSize * gridSize - totalMines) {
+                    clearInterval(musicInterval);
+                    endGame('You Win!');
+                }
+            }
+        }
+
+        function endGame(message) {
+            gameOver = true;
+            gameResult.textContent = message;
+            overlay.style.display = 'flex';
+        }
+
+        function resetGame() {
+            gameOver = false;
+            revealedCells = 0;
+            overlay.style.display = 'none';
+            game.innerHTML = '';
+            createBoard();
+        }
+
+        function revealCell(index) {
+            const cell = game.children[index];
+            if (cell.classList.contains('revealed')) return;
+            
+            cell.classList.add('revealed');
+            revealedCells++;
+
+            const mineCount = countAdjacentMines(index);
+            if (mineCount > 0) {
+                cell.textContent = mineCount;
+            } else {
+                // Reveal adjacent cells if no mines nearby
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        const row = Math.floor(index / gridSize) + i;
+                        const col = (index % gridSize) + j;
+                        if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+                            const adjacentIndex = row * gridSize + col;
+                            revealCell(adjacentIndex);
+                        }
+                    }
+                }
+            }
+        }
+
+        function countAdjacentMines(index) {
+            let count = 0;
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    const row = Math.floor(index / gridSize) + i;
+                    const col = (index % gridSize) + j;
+                    if (row >= 0 && row < gridSize && col >= 0 && col < gridSize) {
+                        const adjacentIndex = row * gridSize + col;
+                        if (mineLocations.includes(adjacentIndex)) {
+                            count++;
+                        }
+                    }
+                }
+            }
+            return count;
+        }
+
+        function revealMines() {
+            mineLocations.forEach(index => {
+                const cell = game.children[index];
+                cell.classList.add('mine');
+                cell.textContent = '💣';
+            });
+        }
+
+        createBoard();
+    </script>
+</body>
+</html>

@@ -268,7 +268,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
                 }
             }
             $ BONDS {
-                if contacts[i].b > i32(in.id) && (contacts[i].bond_type > -1 || settings.render_unbonded_contacts == 1) {
+                if (contacts[i].bond_type > -1 || settings.render_unbonded_contacts == 1) {
                     let scaled_displacement = displacement / radii[in.id] * settings.bond_highlight_strength;
                     if dot(dir, normalize(in.position)) > 0.99 {
                         color = vec4(1.0 - scaled_displacement, 1.0 + clamp(scaled_displacement * 0.8, -0.8, 1.0) + 0.2 * clamp(scaled_displacement, 0.0, 1.0), 1.0 - abs(scaled_displacement), 1.0);

@@ -1,5 +1,9 @@
 // use core::slice::SlicePattern;
 use std::fmt::DebugTuple;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 
 use crate::particle_def::Particle_Definition;
 use crate::scripts::ScriptManager;
@@ -16,12 +20,14 @@ use bytemuck::bytes_of;
 use image::EncodableLayout;
 use naga::back::spv;
 use naga::ShaderStage;
+use native_dialog::FileDialog;
 use rand::Rng;
 use wgpu::ColorTargetState;
 use wgpu::Device;
 use wgpu::PipelineLayout;
 use wgpu::Queue;
 use wgpu::RenderPipeline;
+use wgpu::SurfaceTexture;
 use wgpu::TextureFormat;
 
 extern crate flatbuffers;
@@ -591,6 +597,76 @@ impl WGPUProg {
             }
             Err(e) => {}
         };
+    }
+
+    pub fn export_screenshot(&mut self, config: &mut WGPUConfig, path_param: Option<PathBuf>, frame: &SurfaceTexture) {
+        let path = match path_param {
+            Some(p) => p,
+            None => FileDialog::new()
+                .set_location("~")
+                .add_filter("PNG File", &["png"])
+                .show_save_single_file()
+                .unwrap()
+                .expect("No file selected"),
+        };
+
+        let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        let output_buffer_size = (config.size.width * config.size.height * 4) as wgpu::BufferAddress;
+        let output_buffer_desc = wgpu::BufferDescriptor {
+            size: output_buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            label: None,
+            mapped_at_creation: false,
+        };
+        let output_buffer = config.device.create_buffer(&output_buffer_desc);
+
+        encoder.copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                texture: &frame.texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyBuffer {
+                buffer: &output_buffer,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * config.size.width),
+                    rows_per_image: Some(config.size.height),
+                },
+            },
+            wgpu::Extent3d {
+                width: config.size.width,
+                height: config.size.height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        config.queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = output_buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            tx.send(result).unwrap();
+        });
+        config.device.poll(wgpu::Maintain::Wait);
+
+        if rx.recv().unwrap().is_ok() {
+            let data = buffer_slice.get_mapped_range();
+            let mut rgba_data: Vec<u8> = vec![0; data.len()];
+            rgba_data.copy_from_slice(&data);
+            drop(data);
+            output_buffer.unmap();
+
+            // Swap R and B channels
+            for pixel in rgba_data.chunks_mut(4) {
+                pixel.swap(0, 2);
+            }
+
+            let image = image::RgbaImage::from_raw(config.size.width, config.size.height, rgba_data).unwrap();
+            image.save(path).expect("Failed to save image");
+        }
     }
 }
 
@@ -1260,6 +1336,7 @@ impl WGPUComputeProg {
         self.buffers.data_buffer.updateUniform(&config.device, bytemuck::cast_slice(self.state.data.as_slice()));
         self.buffers.selection_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.selections.as_slice()), 0);
         self.buffers.selection_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.groups.as_slice()), 1);
+        self.state.up_to_date = true;
     }
 
     // fn save_state(&self , state: &State) {
@@ -1472,6 +1549,7 @@ impl WGPUComputeProg {
         }
 
         config.queue.submit(Some(encoder.finish()));
+        self.state.up_to_date = false;
     }
 
     fn print_particle(i: usize, pos: &[f32], vel: &[f32], radii: &[f32], color: &[f32]) {

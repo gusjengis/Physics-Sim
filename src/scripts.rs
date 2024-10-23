@@ -1,4 +1,4 @@
-use crate::settings::{BondType, Data, Properties, Settings};
+use crate::settings::{self, BondType, Data, Properties, Settings};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use chrono::Local;
 use egui::Ui;
@@ -273,6 +273,13 @@ impl Thread {
             Command::Export => {
                 settings.save_data(Some(scripts[script_index].actions[action_index].parameters[0].as_path().clone()));
             }
+            Command::Export_Screenshot => {
+                // prog.export_screenshot(config, Some(scripts[script_index].actions[action_index].parameters[0].as_path().clone()));
+                // settings.simulating = false;
+                settings.export_param_indices = (script_index, action_index);
+                settings.export_screenshot = true;
+                return true;
+            }
             Command::Record => {
                 self.record(scripts, action_index, script_index, settings);
             }
@@ -282,8 +289,27 @@ impl Thread {
             Command::Set_Bonds => {
                 self.set_bonds(settings, scripts, script_index, action_index);
             }
+            Command::Set_Material => {
+                self.set_material(settings, scripts, script_index, action_index);
+            }
         }
         return false;
+    }
+
+    fn set_material(&mut self, settings: &mut Settings, scripts: &Vec<Script>, script_index: usize, action_index: usize) {
+        let params = &scripts[script_index].actions[action_index].parameters;
+        let m_size = settings.material_size;
+        let bi = params[0].as_i32() as usize * m_size; // base index
+        if params[1].truthy() {
+            settings.materials[bi + 3] = params[4].as_f32();
+        }
+        if params[2].truthy() {
+            settings.materials[bi + 4] = params[5].as_f32();
+        }
+        if params[3].truthy() {
+            settings.materials[bi + 5] = params[6].as_f32();
+        }
+        settings.materials_changed = true;
     }
 
     fn set_physics(&mut self, settings: &mut Settings, scripts: &Vec<Script>, script_index: usize, action_index: usize) {
@@ -560,6 +586,9 @@ impl Action {
             Command::Export => {
                 self.parameters = vec![Parameter::Path(format!("Path"), PathBuf::new())];
             }
+            Command::Export_Screenshot => {
+                self.parameters = vec![Parameter::Path(format!("Path"), PathBuf::new())];
+            }
             Command::Record => {
                 self.parameters = vec![Parameter::Boolean(format!("Record"), false)];
             }
@@ -601,6 +630,17 @@ impl Action {
                     Parameter::Float(format!("Moment Cont."), 1.0),
                 ];
             }
+            Command::Set_Material => {
+                self.parameters = vec![
+                    Parameter::Integer(format!("Material ID"), 0),
+                    Parameter::Boolean(format!("Set Denisty"), false),
+                    Parameter::Boolean(format!("Set Normal Stiffness"), false),
+                    Parameter::Boolean(format!("Set Shear Stiffness"), false),
+                    Parameter::Float(format!("Density"), 0.01),
+                    Parameter::Float(format!("Normal Stiffness"), 100.0),
+                    Parameter::Float(format!("Shear Stiffness"), 50.0),
+                ];
+            }
         }
     }
 
@@ -609,110 +649,109 @@ impl Action {
             Command::None => {}
             Command::Wait => {
                 ui.label("Duration: ");
-                self.parameters[0].ui(ui, "s", true, Some(0.0..=f64::MAX));
+                self.parameters[0].ui(ui, "s", true, Some(0.0..=f64::MAX), None);
             }
             Command::SelectAll => {}
             Command::Set_Properties => {
                 egui::CollapsingHeader::new("Properties").id_source(id).show(ui, |ui| {
                     ui.label("Position");
                     ui.horizontal(|ui| {
-                        self.parameters[0].ui(ui, "", true, None);
+                        self.parameters[0].ui(ui, "", true, None, None);
                         let enabled = self.parameters[0].truthy();
-                        self.parameters[14].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[14].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("X Position");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[1].ui(ui, "", true, None);
+                        self.parameters[1].ui(ui, "", true, None, None);
                         let enabled = self.parameters[1].truthy();
-                        self.parameters[15].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[15].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Y Position");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[2].ui(ui, "", true, None);
+                        self.parameters[2].ui(ui, "", true, None, None);
                         let enabled = self.parameters[2].truthy();
-                        self.parameters[16].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[16].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Rotation");
                     });
                     ui.label("Velocity");
                     ui.horizontal(|ui| {
-                        self.parameters[3].ui(ui, "", true, None);
+                        self.parameters[3].ui(ui, "", true, None, None);
                         let enabled = self.parameters[3].truthy();
-                        self.parameters[17].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[17].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("X Velocity");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[4].ui(ui, "", true, None);
+                        self.parameters[4].ui(ui, "", true, None, None);
                         let enabled = self.parameters[4].truthy();
-                        self.parameters[18].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[18].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Y Velocity");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[5].ui(ui, "", true, None);
+                        self.parameters[5].ui(ui, "", true, None, None);
                         let enabled = self.parameters[5].truthy();
-                        self.parameters[19].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[19].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Rotational Velocity");
                     });
                     ui.label("Forces");
                     ui.horizontal(|ui| {
-                        self.parameters[6].ui(ui, "", true, None);
+                        self.parameters[6].ui(ui, "", true, None, None);
                         let enabled = self.parameters[6].truthy();
-                        self.parameters[20].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[20].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("X Force");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[7].ui(ui, "", true, None);
+                        self.parameters[7].ui(ui, "", true, None, None);
                         let enabled = self.parameters[7].truthy();
-                        self.parameters[21].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[21].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Y Force");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[8].ui(ui, "", true, None);
+                        self.parameters[8].ui(ui, "", true, None, None);
                         let enabled = self.parameters[8].truthy();
-                        self.parameters[22].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64));
+                        self.parameters[22].ui(ui, "", enabled, Some(f32::MIN as f64..=f32::MAX as f64), None);
                         ui.label("Rotational Force");
                     });
                     ui.label("Radius");
                     ui.horizontal(|ui| {
-                        self.parameters[9].ui(ui, "", true, None);
+                        self.parameters[9].ui(ui, "", true, None, None);
                         let enabled = self.parameters[9].truthy();
-                        self.parameters[23].ui(ui, "", enabled, Some(0.0..=f32::MAX as f64));
+                        self.parameters[23].ui(ui, "", enabled, Some(0.0..=f32::MAX as f64), None);
                         ui.label("Radius");
                     });
                     ui.label("Fixity");
                     ui.horizontal(|ui| {
-                        self.parameters[10].ui(ui, "", true, None);
+                        self.parameters[10].ui(ui, "", true, None, None);
                         let enabled = self.parameters[10].truthy();
-                        self.parameters[24].ui(ui, "", enabled, None);
+                        self.parameters[24].ui(ui, "", enabled, None, None);
                         ui.label("X Fixity");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[11].ui(ui, "", true, None);
+                        self.parameters[11].ui(ui, "", true, None, None);
                         let enabled = self.parameters[11].truthy();
-                        self.parameters[25].ui(ui, "", enabled, None);
+                        self.parameters[25].ui(ui, "", enabled, None, None);
                         ui.label("Y Fixity");
                     });
                     ui.horizontal(|ui| {
-                        self.parameters[12].ui(ui, "", true, None);
+                        self.parameters[12].ui(ui, "", true, None, None);
                         let enabled = self.parameters[12].truthy();
-                        self.parameters[26].ui(ui, "", enabled, None);
+                        self.parameters[26].ui(ui, "", enabled, None, None);
                         ui.label("Rotational Fixity");
                     });
                     ui.label("Material");
                     ui.horizontal(|ui| {
-                        self.parameters[13].ui(ui, "", true, None);
+                        self.parameters[13].ui(ui, "", true, None, None);
                         let enabled = self.parameters[13].truthy();
                         ui.add(egui::Slider::new(self.parameters[27].as_i32_ref().unwrap(), 0..=mat_count as i32 - 1))
                     });
                 });
             }
             Command::Goto => {
-                self.parameters[0].ui(ui, "", true, Some(1.0..=action_count as f64));
+                self.parameters[0].ui(ui, "", true, Some(1.0..=action_count as f64), None);
             }
             Command::Select => {
                 if ui.button("Set").clicked() {
                     prog.shader_prog.update_selections(device, queue);
                     self.parameters[0].set_list(prog.shader_prog.state.selections.clone());
-                    // self.parameters[0].set_list()
                 }
                 if ui.button("Restore").clicked() {
                     prog.shader_prog
@@ -722,7 +761,7 @@ impl Action {
                 }
             }
             Command::Simulate => {
-                self.parameters[0].ui(ui, "", true, None);
+                self.parameters[0].ui(ui, "", true, None, None);
             }
             Command::Backup => {}
             Command::Restore => {}
@@ -739,52 +778,56 @@ impl Action {
             }
             Command::Advance => {
                 ui.label("Ticks: ");
-                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
+                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), None);
             }
             Command::Export => {
                 ui.label("Path: ");
-                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
+                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), Some(String::from("csv")));
+            }
+            Command::Export_Screenshot => {
+                ui.label("Path: ");
+                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), Some(String::from("png")));
             }
             Command::Record => {
-                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
+                self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), None);
             }
             Command::Set_Physics => {
                 egui::CollapsingHeader::new("Physics Settings").id_source(id).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[7].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[7].ui(ui, "", true, Some(0.0..=f64::MAX), None);
                         });
                         ui.vertical(|ui| {
                             let mut enabled = self.parameters[0].truthy();
-                            self.parameters[8].ui(ui, "Gravity", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[8].ui(ui, "Gravity", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[1].truthy();
-                            self.parameters[9].ui(ui, "Planet Mode", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[9].ui(ui, "Planet Mode", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[2].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[10].ui(ui, "", enabled, Some(0.0..=1.0));
+                                self.parameters[10].ui(ui, "", enabled, Some(0.0..=1.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("G Force"));
                             });
                             enabled = self.parameters[3].truthy();
-                            self.parameters[11].ui(ui, "Mouse Gravity", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[11].ui(ui, "Mouse Gravity", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[4].truthy();
-                            self.parameters[12].ui(ui, "Collisions", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[12].ui(ui, "Collisions", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[5].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0));
+                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Friction Coefficient"));
                             });
                             enabled = self.parameters[6].truthy();
-                            self.parameters[14].ui(ui, "Local Damping", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[14].ui(ui, "Local Damping", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[7].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[15].ui(ui, "", enabled, Some(0.0..=1.0));
+                                self.parameters[15].ui(ui, "", enabled, Some(0.0..=1.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Damping Strength"));
                             });
                         });
@@ -795,43 +838,75 @@ impl Action {
                 egui::CollapsingHeader::new("Bond Settings").id_source(id).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX));
-                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX));
+                            self.parameters[0].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[4].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[5].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[6].ui(ui, "", true, Some(0.0..=f64::MAX), None);
                         });
                         ui.vertical(|ui| {
                             let mut enabled = self.parameters[0].truthy();
-                            self.parameters[7].ui(ui, "Bond Type", enabled, Some(0.0..=3.0));
+                            self.parameters[7].ui(ui, "Bond Type", enabled, Some(0.0..=3.0), None);
                             enabled = self.parameters[1].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[8].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                self.parameters[8].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Normal Stiffness"));
                             });
                             enabled = self.parameters[2].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[9].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                self.parameters[9].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Shear Stiffness"));
                             });
                             enabled = self.parameters[3].truthy();
-                            self.parameters[10].ui(ui, "Bond Tearing", enabled, Some(0.0..=f64::MAX));
+                            self.parameters[10].ui(ui, "Bond Tearing", enabled, Some(0.0..=f64::MAX), None);
                             enabled = self.parameters[4].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[11].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                self.parameters[11].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Normal Strength"));
                             });
                             enabled = self.parameters[5].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[12].ui(ui, "", enabled, Some(0.0..=1000000000000.0));
+                                self.parameters[12].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Shear Strength"));
                             });
                             enabled = self.parameters[6].truthy();
                             ui.horizontal(|ui| {
-                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0));
+                                self.parameters[13].ui(ui, "", enabled, Some(0.0..=1.0), None);
                                 ui.add_enabled(enabled, egui::Label::new("Moment Contribution Factor"));
+                            });
+                        });
+                    });
+                });
+            }
+            Command::Set_Material => {
+                egui::CollapsingHeader::new("Material Settings").id_source(id).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("Material ID:");
+                        self.parameters[0].ui(ui, "", true, Some(0.0..=(mat_count - 1) as f64), None);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            self.parameters[1].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[2].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                            self.parameters[3].ui(ui, "", true, Some(0.0..=f64::MAX), None);
+                        });
+                        ui.vertical(|ui| {
+                            let mut enabled = self.parameters[1].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[4].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
+                                ui.add_enabled(enabled, egui::Label::new("Density"));
+                            });
+                            enabled = self.parameters[2].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[5].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
+                                ui.add_enabled(enabled, egui::Label::new("Normal Stiffness"));
+                            });
+                            enabled = self.parameters[3].truthy();
+                            ui.horizontal(|ui| {
+                                self.parameters[6].ui(ui, "", enabled, Some(0.0..=1000000000000.0), None);
+                                ui.add_enabled(enabled, egui::Label::new("Shear Stiffness"));
                             });
                         });
                     });
@@ -909,9 +984,11 @@ pub enum Command {
     Call_Script,
     Advance,
     Export,
+    Export_Screenshot,
     Record,
     Set_Physics,
     Set_Bonds,
+    Set_Material,
     // Load_File,
     // Record
 }
@@ -931,9 +1008,11 @@ impl Command {
             Command::Call_Script => String::from_str("Call Script").unwrap(),
             Command::Advance => String::from_str("Advance").unwrap(),
             Command::Export => String::from_str("Export").unwrap(),
+            Command::Export_Screenshot => String::from_str("Export Screenshot").unwrap(),
             Command::Record => String::from_str("Record").unwrap(),           // Command::Load_File => { String::from_str("Load File").unwrap() }
             Command::Set_Physics => String::from_str("Set Physics").unwrap(), // Command::Load_File => { String::from_str("Load File").unwrap() }
             Command::Set_Bonds => String::from_str("Set Bonds").unwrap(),     // Command::Load_File => { String::from_str("Load File").unwrap() }
+            Command::Set_Material => String::from_str("Set Material").unwrap(), // Command::Load_File => { String::from_str("Load File").unwrap() }
         }
     }
 }
@@ -949,7 +1028,7 @@ pub enum Parameter {
 }
 
 impl Parameter {
-    fn to_string(&self) -> String {
+    pub fn to_string(&self) -> String {
         match self {
             Parameter::Float(_, value) => {
                 return value.to_string();
@@ -977,7 +1056,7 @@ impl Parameter {
         }
     }
 
-    fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>) {
+    pub fn ui(&mut self, ui: &mut Ui, label: &str, enabled: bool, range: Option<RangeInclusive<f64>>, file_type: Option<String>) {
         match self {
             Parameter::Float(_, value) => {
                 ui.add_enabled(enabled, egui::DragValue::new(&mut *value).clamp_range(range.unwrap()).suffix(label));
@@ -997,7 +1076,11 @@ impl Parameter {
                             None => "",
                         }));
                         if ui.button("Browse").clicked() {
-                            let new_path = FileDialog::new().set_location("").add_filter("CSV", &["csv"]).show_open_single_file().unwrap();
+                            let new_path = FileDialog::new()
+                                .set_location("")
+                                .add_filter(file_type.clone().unwrap().as_str(), &[file_type.unwrap().as_str()])
+                                .show_open_single_file()
+                                .unwrap();
                             match new_path {
                                 Some(p) => {
                                     path.clear();
@@ -1012,7 +1095,7 @@ impl Parameter {
         }
     }
 
-    fn truthy(&self) -> bool {
+    pub fn truthy(&self) -> bool {
         match self {
             Parameter::Float(_, value) => true,
             Parameter::Integer(_, value) => true,
@@ -1022,7 +1105,7 @@ impl Parameter {
         }
     }
 
-    fn as_f32(&self) -> f32 {
+    pub fn as_f32(&self) -> f32 {
         match self {
             Parameter::Float(_, value) => *value,
             Parameter::Integer(_, value) => bytemuck::cast(*value),
@@ -1032,7 +1115,7 @@ impl Parameter {
         }
     }
 
-    fn as_i32(&self) -> i32 {
+    pub fn as_i32(&self) -> i32 {
         match self {
             Parameter::Float(_, value) => bytemuck::cast(*value),
             Parameter::Integer(_, value) => *value,
@@ -1042,7 +1125,7 @@ impl Parameter {
         }
     }
 
-    fn as_i32_vec(&self) -> Vec<i32> {
+    pub fn as_i32_vec(&self) -> Vec<i32> {
         match self {
             Parameter::Float(_, value) => {
                 vec![*value as i32; 1]
@@ -1060,7 +1143,7 @@ impl Parameter {
         }
     }
 
-    fn set_list(&mut self, list: Vec<i32>) {
+    pub fn set_list(&mut self, list: Vec<i32>) {
         match self {
             Parameter::Float(_, _) => {}
             Parameter::Integer(_, _) => {}
@@ -1072,7 +1155,7 @@ impl Parameter {
         }
     }
 
-    fn as_i32_ref(&mut self) -> Option<&mut i32> {
+    pub fn as_i32_ref(&mut self) -> Option<&mut i32> {
         match self {
             Parameter::Float(_, _) => None,
             Parameter::Integer(_, value) => Some(&mut *value),
@@ -1082,7 +1165,7 @@ impl Parameter {
         }
     }
 
-    fn as_path(&self) -> PathBuf {
+    pub fn as_path(&self) -> PathBuf {
         match self {
             Parameter::Path(_, path) => path.clone(),
             _ => PathBuf::new(),

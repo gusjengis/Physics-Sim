@@ -65,6 +65,7 @@ pub struct Data {
     pub data3: Vec<[f64; 2]>,
     pub data4: Vec<[f64; 2]>,
     pub fps: Vec<[f64; 2]>,
+    pub torn_bonds: Vec<[f64; 2]>,
 }
 
 impl Data {
@@ -81,10 +82,11 @@ impl Data {
             data3: Vec::new(),
             data4: Vec::new(),
             fps: Vec::new(),
+            torn_bonds: Vec::new(),
         };
     }
 
-    pub fn push(&mut self, timestamp: f64, datum: [f64; 10], fps: f64) {
+    pub fn push(&mut self, timestamp: f64, datum: [f64; 11], fps: f64) {
         self.x_pos_data.push([timestamp, datum[0]]);
         self.y_pos_data.push([timestamp, datum[1]]);
         self.x_vel_data.push([timestamp, datum[2]]);
@@ -96,6 +98,7 @@ impl Data {
         self.data3.push([timestamp, datum[8]]);
         self.data4.push([timestamp, datum[9]]);
         self.fps.push([timestamp, fps]);
+        self.torn_bonds.push([timestamp, datum[10]]);
     }
 }
 
@@ -154,6 +157,7 @@ pub struct SetupSettings {
 
 pub struct SimulationSettings {
     pub timestep: f32,
+    pub auto_timestep: bool,
     pub round_timestep: bool,
     pub gen_per_frame: i32,
     pub max_gen_per_frame: i32,
@@ -250,6 +254,9 @@ pub struct Settings {
     pub world_pos: (f32, f32),
     pub curr_shader: usize,
     pub json_scripts: bool,
+    pub export_screenshot: bool,
+    pub export_param_indices: (usize, usize),
+    pub update_critical_timestep: bool,
     // pub groups: i32,
     // pub set_group: i32, // pub paths: ReadDir,
 }
@@ -319,6 +326,7 @@ impl Settings {
             },
             simulation: SimulationSettings {
                 timestep: 1.0 / 12600.0,
+                auto_timestep: false,
                 round_timestep: true,
                 gen_per_frame: 105,
                 max_gen_per_frame: 213,
@@ -435,6 +443,9 @@ impl Settings {
             world_pos: (0.0, 0.0),
             curr_shader: 0,
             json_scripts: false,
+            export_screenshot: false,
+            export_param_indices: (0, 0),
+            update_critical_timestep: true,
         };
         settings.load_memory();
         return settings;
@@ -465,7 +476,7 @@ impl Settings {
             self.gather_data = false;
             self.recording = false;
         }
-        if self.view.settings_menu {
+        if self.view.settings_menu && !self.export_screenshot {
             egui::TopBottomPanel::top("Settings Menu").show(ctx, |ui| {
                 // ui.heading("Menu");
                 egui::menu::bar(ui, |ui| {
@@ -498,7 +509,7 @@ impl Settings {
             self.script_panel(ctx, script_manager, prog, &mut config.device, &mut config.queue);
             self.code_editor(ctx, prog, config);
         }
-        if self.simulation.auto_width {
+        if self.simulation.auto_width && !self.export_screenshot {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
             self.changed_collision_settings = true;
         }
@@ -1077,13 +1088,18 @@ impl Settings {
                 ui.label("timesteps");
             });
             ui.separator();
-            ui.label(format!("Quality | {} ticks/s", (1.0 / self.simulation.timestep).round() as i32));
-            if ui.add(egui::Slider::new(&mut self.simulation.timestep, 0.0000000001..=1.0 / self.hz).logarithmic(true)).changed() {
-                if self.simulation.round_timestep {
-                    self.simulation.timestep = 1.0 / (((1.0 / self.simulation.timestep as f32) / 120.0).ceil() * 120.0);
-                }
-                self.changed_collision_settings = true;
+            if ui.checkbox(&mut self.simulation.auto_timestep, "Auto Timestep").changed() {
+                self.update_critical_timestep = true;
             }
+            ui.add_enabled_ui(!self.simulation.auto_timestep, |ui| {
+                ui.label(format!("Quality | {} ticks/s", (1.0 / self.simulation.timestep).round() as i32));
+                if ui.add(egui::Slider::new(&mut self.simulation.timestep, 0.0000000001..=1.0 / self.hz).logarithmic(true)).changed() {
+                    if self.simulation.round_timestep {
+                        self.simulation.timestep = 1.0 / (((1.0 / self.simulation.timestep as f32) / 120.0).ceil() * 120.0);
+                    }
+                    self.changed_collision_settings = true;
+                }
+            });
             if ui.checkbox(&mut self.simulation.round_timestep, "Round Timestep").changed() {
                 if self.simulation.round_timestep {
                     self.simulation.timestep = 1.0 / (((1.0 / self.simulation.timestep as f32) / 120.0).ceil() * 120.0);
@@ -1597,6 +1613,7 @@ impl Settings {
                         ui.selectable_value(&mut self.plotted_prop, Property::Moment, "Moment");
                         // ui.selectable_value(&mut self.plotted_prop, Property::Data_4, "Data 4");
                         ui.selectable_value(&mut self.plotted_prop, Property::FPS, "FPS");
+                        ui.selectable_value(&mut self.plotted_prop, Property::Torn_Bonds, "Torn_Bonds");
                     });
                     reset_button = Some(ui.add(egui::Button::new("Reset View")));
                 });
@@ -1636,6 +1653,9 @@ impl Settings {
                         // Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
                         Property::FPS => {
                             plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));
+                        }
+                        Property::Torn_Bonds => {
+                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.torn_bonds.to_owned())));
                         }
                     }
                 });
@@ -1839,6 +1859,12 @@ impl Settings {
                                                 changed_action = true;
                                             }
                                             if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Material, "Set Material")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
                                                 .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Set_Bonds, "Set Bonds")
                                                 .clicked()
                                             {
@@ -1873,6 +1899,12 @@ impl Settings {
                                             }
                                             if ui
                                                 .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Export, "Export")
+                                                .clicked()
+                                            {
+                                                changed_action = true;
+                                            }
+                                            if ui
+                                                .selectable_value(&mut script_manager.scripts[self.current_script].actions[i].name, Command::Export_Screenshot, "Export Screenshot")
                                                 .clicked()
                                             {
                                                 changed_action = true;
@@ -2058,17 +2090,18 @@ impl Settings {
                 let data2 = self.data.data2[i][1];
                 let data3 = self.data.data3[i][1];
                 let data4 = self.data.data4[i][1];
+                let bonds_torn = self.data.torn_bonds[i][1];
                 let fps = self.data.fps[i][1];
 
                 writeln!(
                     file,
-                    "{},{},{},{},{},{},{},{},{},{},{},{}",
-                    timestamp, x_pos, y_pos, x_vel, y_vel, rot, rot_vel, data1, data2, data3, data4, fps
+                    "{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                    timestamp, x_pos, y_pos, x_vel, y_vel, rot, rot_vel, data1, data2, data3, data4, bonds_torn, fps
                 )
                 .expect("Unable to write data row");
             }
 
-            println!("Data saved to: {:?}", file_path);
+            println!("{} ticks of data saved to: {:?}", self.data.x_pos_data.len(), file_path);
         }
     }
 
@@ -2208,6 +2241,10 @@ impl Settings {
             bytemuck::cast(self.properties.material as i32),
         ];
     }
+
+    pub(crate) fn set_timestep(&self, critical_timestep: f32) { //-> () {
+                                                                //todo!()
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -2269,8 +2306,8 @@ pub enum Property {
     Normal_Force,
     Shear_Force,
     Moment,
-    // Data_4,
     FPS,
+    Torn_Bonds,
 }
 
 #[derive(Serialize, Deserialize)]

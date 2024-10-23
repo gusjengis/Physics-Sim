@@ -1,6 +1,6 @@
-use crate::window_init;
 use crate::settings;
 use crate::wgpu_structs::*;
+use crate::window_init;
 use wgpu::util::DeviceExt;
 
 pub struct WGPUConfig {
@@ -17,15 +17,12 @@ pub struct WGPUConfig {
     pub f64_support: bool,
     // dim_uniform: Uniform,
     // cursor_uniform: Uniform,
-
-
 }
 
 impl WGPUConfig {
     // Creating some of the wgpu types requires async code
-    
+
     pub async fn new(canvas: &window_init::Canvas) -> Self {
-        
         let size = canvas.size;
 
         // The instance is a handle to our GPU
@@ -34,34 +31,32 @@ impl WGPUConfig {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: Default::default(),
         });
-        
+
         // # Safety
         //
         // The surface needs to live as long as the canvas that created it.
         // State owns the canvas so this should be safe.
         let surface = unsafe { instance.create_surface(&canvas.window) }.unwrap();
 
-        
-
-        #[cfg(not(target_arch="wasm32"))] 
+        #[cfg(not(target_arch = "wasm32"))]
         let adapter = instance
-        .enumerate_adapters(wgpu::Backends::all())
-        .filter(|adapter| {
-            // Check if this adapter supports our surface
-            adapter.is_surface_supported(&surface)
-        })
-        .next()
-        .unwrap();
+            .enumerate_adapters(wgpu::Backends::all())
+            .filter(|adapter| {
+                // Check if this adapter supports our surface
+                adapter.is_surface_supported(&surface)
+            })
+            .next()
+            .unwrap();
 
-        #[cfg(target_arch="wasm32")] 
+        #[cfg(target_arch = "wasm32")]
         let adapter = instance
-        .enumerate_adapters(wgpu::Backends::BROWSER_WEBGPU)
-        .filter(|adapter| {
-            // Check if this adapter supports our surface
-            adapter.is_surface_supported(&surface)
-        })
-        .next()
-        .unwrap();
+            .enumerate_adapters(wgpu::Backends::BROWSER_WEBGPU)
+            .filter(|adapter| {
+                // Check if this adapter supports our surface
+                adapter.is_surface_supported(&surface)
+            })
+            .next()
+            .unwrap();
         // let adapter = instance.request_adapter(
         //     &wgpu::RequestAdapterOptions {
         //         power_preference: wgpu::PowerPreference::default(),
@@ -78,7 +73,8 @@ impl WGPUConfig {
         //     },
         //     label: None,
         // };
-        let limits = wgpu::Limits { //downlevel_defaults()
+        let limits = wgpu::Limits {
+            //downlevel_defaults()
             max_texture_dimension_1d: 2048,
             max_texture_dimension_2d: 8192,
             max_texture_dimension_3d: 256,
@@ -110,30 +106,38 @@ impl WGPUConfig {
             max_buffer_size: 1 << 28,
         };
 
-        let result = adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
-                limits: limits.clone(),
-                label: None,
-            },
-            None, // Trace path
-        ).await;
+        let result = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
+                    limits: limits.clone(),
+                    label: None,
+                },
+                None, // Trace path
+            )
+            .await;
 
         let mut dev_temp = None;
         let mut que_temp = None;
         let mut f64_support = true;
         match result {
-            Ok((dev, que)) => {dev_temp = Some(dev); que_temp = Some(que)},
+            Ok((dev, que)) => {
+                dev_temp = Some(dev);
+                que_temp = Some(que)
+            }
             Err(_) => {
                 println!("Warning: GPU doesn't support f64 compute, this feature will be unavailable.");
-                let temp = adapter.request_device(
-                    &wgpu::DeviceDescriptor {
-                        features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
-                        limits: limits.clone(),
-                        label: None,
-                    },
-                    None, // Trace path
-                ).await.unwrap();
+                let temp = adapter
+                    .request_device(
+                        &wgpu::DeviceDescriptor {
+                            features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+                            limits: limits.clone(),
+                            label: None,
+                        },
+                        None, // Trace path
+                    )
+                    .await
+                    .unwrap();
                 dev_temp = Some(temp.0);
                 que_temp = Some(temp.1);
                 f64_support = false;
@@ -142,19 +146,19 @@ impl WGPUConfig {
 
         let (device, queue) = (dev_temp.unwrap(), que_temp.unwrap());
 
-        
-
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
         // one will result all the colors coming out darker. If you want to support non
         // sRGB surfaces, you'll need to account for that when drawing to the frame.
-        let surface_format = surface_caps.formats.iter()
+        let surface_format = surface_caps
+            .formats
+            .iter()
             .copied()
-            .filter(|f| f.is_srgb())// this line is sus, changed f.describe().srgb to f.is_srgb(), describe was not a thing
+            .filter(|f| f.is_srgb()) // this line is sus, changed f.describe().srgb to f.is_srgb(), describe was not a thing
             .next()
             .unwrap_or(surface_caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             format: surface_format,
             width: size.width,
             height: size.height,
@@ -163,7 +167,7 @@ impl WGPUConfig {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
-         
+
         Self {
             instance,
             adapter,
@@ -173,10 +177,7 @@ impl WGPUConfig {
             config,
             size,
             surface_format,
-            f64_support
+            f64_support,
         }
     }
 }
-
-
-

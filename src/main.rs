@@ -1,18 +1,23 @@
 #![allow(warnings)]
-pub mod window_init;
+
+use std::env;
 pub mod client;
-pub mod wgpu_config;
-pub mod wgpu_structs;
-pub mod wgpu_prog;
+pub mod particle_def;
+pub mod scripts;
 pub mod settings;
 pub mod setup;
-pub mod state;
-pub mod scripts;
 pub mod shader_gen;
-pub mod particle_def;
+pub mod state;
+pub mod wgpu_config;
+pub mod wgpu_prog;
+pub mod wgpu_structs;
+pub mod window_init;
 
-pub  fn main(){
+pub fn main() {
     env_logger::init();
+    let args: Vec<String> = env::args().collect();
+    dbg!(args);
     let mut client = async_std::task::block_on(client::Client::new());
     client.resize(client.canvas.size);
 }
+

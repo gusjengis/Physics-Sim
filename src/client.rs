@@ -886,6 +886,10 @@ impl Client {
             self.wgpu_prog.rebuild_shaders(&mut self.wgpu_config, &self.settings);
             settings!().rebuild_shaders = false
         }
+        if settings!().update_critical_timestep {
+            self.update_critical_timestep();
+            settings!().update_critical_timestep = false
+        }
         if settings!().simulation.advance_x_timesteps {
             self.advance();
         }
@@ -953,6 +957,13 @@ impl Client {
             self.generation += self.settings.simulation.gen_per_frame;
         }
         self.settings.simulation.gen_per_frame = temp;
+    }
+
+    fn update_critical_timestep(&mut self) {
+        if !self.wgpu_prog.shader_prog.state.up_to_date {
+            self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config, &mut self.settings);
+        }
+        self.settings.set_timestep(self.wgpu_prog.shader_prog.state.critical_timestep());
     }
 
     fn collect_data(&mut self) {
@@ -1105,6 +1116,7 @@ impl Client {
                 self.settings
             };
         }
+        // println!("{}", self.wgpu_prog.shader_prog.state.up_to_date);
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
         let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
@@ -1396,6 +1408,17 @@ impl Client {
             self.egui_rpass.execute(&mut encoder, &output_view, &paint_jobs, &screen_descriptor, None).unwrap();
 
             self.wgpu_config.queue.submit(iter::once(encoder.finish()));
+
+            if settings!().export_screenshot {
+                let script_index = settings!().export_param_indices.0;
+                let action_index = settings!().export_param_indices.1;
+                self.wgpu_prog.export_screenshot(
+                    &mut self.wgpu_config,
+                    Some(self.script_manager.scripts[script_index].actions[action_index].parameters[0].as_path().clone()),
+                    &output_frame,
+                );
+                settings!().export_screenshot = false
+            }
 
             output_frame.present();
 

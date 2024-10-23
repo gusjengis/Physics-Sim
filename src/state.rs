@@ -64,10 +64,11 @@ impl GridInfo {
     }
 }
 
-pub const DATA_SIZE: usize = 7;
+pub const DATA_SIZE: usize = 8;
 pub const CONTACT_SIZE: usize = 12;
 
 pub struct State {
+    pub up_to_date: bool,
     pub p_count: usize,
     pub new_p: usize,
     pub pos: Vec<f32>,
@@ -123,6 +124,7 @@ impl State {
         let grid_info_return = grid_capacity(&settings);
 
         let mut state = State {
+            up_to_date: true,
             p_count,
             new_p: 0,
             pos,
@@ -149,7 +151,7 @@ impl State {
         };
 
         // state.load_from_csv(PathBuf::from("./saved_states/particle_state.csv"), settings);
-        // state.regen_bonds(config, settings);
+        state.regen_bonds(config, settings);
         state.save(config, settings, Some(script_manager));
 
         return state;
@@ -314,6 +316,7 @@ impl State {
         //     println!("{}", n);
 
         // }
+        self.up_to_date = true;
     }
 
     pub fn regen_bonds(&mut self, config: &mut WGPUConfig, settings: &Settings) {
@@ -322,6 +325,9 @@ impl State {
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); CONTACT_SIZE * settings.setup.max_contacts * self.p_count * PREALLOC];
         let mut found_bonds = true;
         let mut bond_index = 0;
+        for i in 0..contacts.len() / CONTACT_SIZE {
+            contacts[i * CONTACT_SIZE] = bytemuck::cast(0 as i32);
+        }
         for i in 0..self.p_count {
             let mut col_num = 0;
             for j in i..self.p_count {
@@ -743,9 +749,10 @@ impl State {
         self.grid_info = GridInfo::new(grid_info_return.0, grid_info_return.1, grid_info_return.2, grid_info_return.3, grid_info_return.4);
     }
 
-    pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64; 10]> {
-        let mut sums = [0.0; 10];
+    pub fn get_datum(&self, prop: &crate::settings::Property) -> Option<[f64; 11]> {
+        let mut sums = [0.0; 11];
         let mut count = 0;
+        let mut torn_bonds = 0.0;
         for i in 0..self.selections.len() {
             if self.selections[i] != 0 {
                 count += 1;
@@ -755,22 +762,24 @@ impl State {
                 sums[3] += self.data[i * DATA_SIZE + 5] as f64;
                 sums[4] += self.rot[i] as f64;
                 sums[5] += self.data[i * DATA_SIZE + 6] as f64;
-                sums[6] += (self.data[i * DATA_SIZE] as f64).abs();
+                sums[6] += self.data[i * DATA_SIZE] as f64;
                 sums[7] += self.data[i * DATA_SIZE + 1] as f64;
                 sums[8] += self.data[i * DATA_SIZE + 2] as f64;
                 sums[9] += self.data[i * DATA_SIZE + 3] as f64;
             }
+            torn_bonds += self.data[i * DATA_SIZE + 7] as f64;
         }
 
         if count == 0 {
             return None;
         }
         for i in 0..sums.len() {
-            if i == 6 {
+            if i == 9 {
                 continue;
             }
             sums[i] /= count as f64;
         }
+        sums[10] = torn_bonds;
         return Some(sums);
     }
 
@@ -894,5 +903,13 @@ impl State {
         }
         // After you're done with the data, unmap the buffer
         staging_buffer.unmap();
+    }
+
+    pub fn critical_timestep(&self) -> f32 {
+        // for i in 0..self.contacts.len()/12 {
+        //     println!();
+        // }
+        //
+        return 0.0;
     }
 }
