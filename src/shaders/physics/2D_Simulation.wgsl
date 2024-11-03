@@ -64,6 +64,7 @@ struct Settings {
     local_damping: i32,
     local_damping_alpha: f32,
     particles: i32,
+    update_contacts: i32,
 }
 
 struct Material {
@@ -154,12 +155,12 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                         if u32(b) != id {
                             var already_found = false;
                             for (var j = 0u; j < count; j++) {
-                                if collisions[j] == b + 1 {
+                                if collisions[j] == b {
                                     already_found = true;
                                 }
                             }
                             if !already_found && length(positions[b] - positions[id]) < (radii[b] + radii[id]) {
-                                collisions[count] = b + 1;  
+                                collisions[count] = b; 
                                 count += 1u;  
                                 if count == MAX_CONTACTS {
                                     break; 
@@ -173,10 +174,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
   
         // delete contacts that don't exist
         for (var j = id * MAX_CONTACTS; j < (id + 1u) * MAX_CONTACTS; j++) {
-            if contacts[j].b == 0 { 
+            if contacts[j].b == $ CSO {  0 } 
+                                $ NCS { -1 } { 
                 continue; 
             } 
-            var b = contacts[j].b;
+            var b = contacts[j].b; 
             if b < 0 {
                 b = i32(u32((-b - 1))/MAX_CONTACTS) + 1;
             }   
@@ -189,7 +191,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
             if !found_collision && (contacts[j].bond_type < 0 || settings.bonds == 0) {
                 // delete
-                contacts[j].b = 0;
+                contacts[j].b = $ CSO {  0 } 
+                                $ NCS { -1 };
             } else if !found_collision && contacts[j].bond_type > 0 && settings.bonds <= 1 {
                 contacts[j].s_force.x = 0.0;
             }
@@ -201,13 +204,15 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             var empty_index = -1;  
             for (var j = id * MAX_CONTACTS; j < (id + 1u) * MAX_CONTACTS; j++) {
                 var b = contacts[j].b;
-                if b < 0 {
-                        b = i32(u32((-b - 1))/MAX_CONTACTS) + 1;
+                $ CSO {
+                    if b < 0 {
+                            b = i32(u32((-b - 1))/MAX_CONTACTS) + 1;
+                    }
                 }
                 if b == collisions[i] {
                     existing_index = i32(j);
                     break; 
-                } else if contacts[j].b == 0 && empty_index == -1 {
+                } else if contacts[j].b == $ CSO { 0 } $ NCS { -1 } && empty_index == -1 {
                     empty_index = i32(j);
                 }
             }
@@ -225,34 +230,35 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         } 
     }  
- 
-    //compute forces at each contact
-    for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
-        if contacts[i].b == 0 || contacts[i].b < i32(id) + 1 { continue; }
-        let a = i32(id); 
-        let b = contacts[i].b - 1; 
-        var bonded = contacts[i].bond_type;
-        var forces = vec3(0.0, 0.0, 0.0);
-        if bonded < 0 || settings.bonds == 0 {
-            forces = linear_model(a, b, i, -1);
-        } else {
-            if settings.bonds == 1 {
-                forces = normal_bonds(a, b, i, bonded);
-            } else if settings.bonds == 2 {
-                forces = linear_contact_bonds(a, b, i, bonded);
-            } else if settings.bonds == 3 {
-                forces = linear_parallel_bonds(a, b, i, bonded);
+    if settings.update_contacts == 0 { 
+        //compute forces at each contact
+        for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
+            if contacts[i].b == $ CSO { 0 } $ NCS { -1 } || contacts[i].b < i32(id) $ CSO { + 1 } { continue; }
+            let a = i32(id); 
+            let b = contacts[i].b $ CSO { - 1 } ; 
+            var bonded = contacts[i].bond_type;
+            var forces = vec3(0.0, 0.0, 0.0);
+            if bonded < 0 || settings.bonds == 0 {
+                forces = linear_model(a, b, i, -1);
+            } else {
+                if settings.bonds == 1 {
+                    forces = normal_bonds(a, b, i, bonded);
+                } else if settings.bonds == 2 {
+                    forces = linear_contact_bonds(a, b, i, bonded);
+                } else if settings.bonds == 3 {
+                    forces = linear_parallel_bonds(a, b, i, bonded);
+                }
             }
+
+            contacts[i].forces = forces.xy;
+            contacts[i].moment = forces.z;
         }
 
-        contacts[i].forces = forces.xy;
-        contacts[i].moment = forces.z;
     }
-
-    if id == 0u {
-        coll_cont[2] += 1;
-        coll_cont[3] = 0;
-    }
+        if id == 0u {
+            coll_cont[2] += 1;
+            coll_cont[3] = 0;
+        }
 }
 
 fn distance(a: i32, b: i32) -> f32 {
@@ -340,7 +346,7 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
     if bonded == -1 {
         normal_displacement = min(0.0, distance(a, b));
     }    
-    if normal_displacement == 0.0 {
+    if normal_displacement == 0.0 {  
         return vec3(0.0, 0.0, 0.0);
     }
 

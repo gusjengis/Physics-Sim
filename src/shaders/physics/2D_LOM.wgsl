@@ -73,6 +73,7 @@ struct Settings {
     local_damping: i32,
     local_damping_alpha: f32,
     particles: i32,
+    update_contacts: i32,
 }
     
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
@@ -106,81 +107,82 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
     if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
     let mat_id = material_pointers[id];
-     
-    if coll_cont[2] != 0 { sum_forces(id, mat_id); }
-
     let grid_info = grid_info_buffer[0];
     
-    var int_vel = velocities[id];
-    var int_rot_vel = rot_vel[id];
+    if settings.update_contacts == 0 {
 
-    if fixity[id].x_vel == 0 { int_vel.x += accelerations[id].x * settings.dT * 0.5; }
-    if fixity[id].y_vel == 0 { int_vel.y += accelerations[id].y * settings.dT * 0.5; }
-    if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc[id] * settings.dT * 0.5; }
+        if coll_cont[2] != 0 { sum_forces(id, mat_id); }
+        
+        var int_vel = velocities[id];
+        var int_rot_vel = rot_vel[id];
 
-    data[id * DATA_SIZE + 3u] = 0.0;
-    data[id * DATA_SIZE + 4u] = int_vel.x;
-    data[id * DATA_SIZE + 5u] = int_vel.y;
-    data[id * DATA_SIZE + 6u] = int_rot_vel;
+        if fixity[id].x_vel == 0 { int_vel.x += accelerations[id].x * settings.dT * 0.5; }
+        if fixity[id].y_vel == 0 { int_vel.y += accelerations[id].y * settings.dT * 0.5; }
+        if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc[id] * settings.dT * 0.5; }
 
-    if coll_cont[3] == 0 {
-        del_pos[id] = int_vel * settings.dT;
-        del_rot[id] = int_rot_vel * settings.dT;
-    }
+        data[id * DATA_SIZE + 3u] = 0.0;
+        data[id * DATA_SIZE + 4u] = int_vel.x;
+        data[id * DATA_SIZE + 5u] = int_vel.y;
+        data[id * DATA_SIZE + 6u] = int_rot_vel;
 
-    // Walls
-    // if settings.walls == 1 {
-    let new_pos = positions[id] + del_pos[id];
-    if settings.round_bounds == 0 {
-        let yH = settings.vert_bound / 2.0;
-        let xW = settings.hor_bound / 2.0;
+        if coll_cont[3] == 0 {
+            del_pos[id] = int_vel * settings.dT;
+            del_rot[id] = int_rot_vel * settings.dT;
+        }
 
-        if fixity[id].y_vel != 1 {
-            if new_pos.y - radii[id] < -yH {
-                int_vel.y = -int_vel.y * 0.5;
-                positions[id].y += -yH - (new_pos.y - radii[id]);
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
-            } else if new_pos.y + radii[id] > yH {
-                int_vel.y = -int_vel.y * 0.5;
-                    positions[id].y -= (new_pos.y + radii[id]) - yH;
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+        // Walls
+        // if settings.walls == 1 {
+        let new_pos = positions[id] + del_pos[id];
+        if settings.round_bounds == 0 {
+            let yH = settings.vert_bound / 2.0;
+            let xW = settings.hor_bound / 2.0;
+
+            if fixity[id].y_vel != 1 {
+                if new_pos.y - radii[id] < -yH {
+                    int_vel.y = -int_vel.y * 0.5;
+                    positions[id].y += -yH - (new_pos.y - radii[id]);
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+                } else if new_pos.y + radii[id] > yH {
+                    int_vel.y = -int_vel.y * 0.5;
+                        positions[id].y -= (new_pos.y + radii[id]) - yH;
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+                }
             }
-        }
-        if fixity[id].x_vel != 1 {
-            if new_pos.x - radii[id] < -xW {
-                int_vel.x = -int_vel.x * 0.5;
-                positions[id].x += -xW - (new_pos.x - radii[id]);
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
-            } else if new_pos.x + radii[id] > xW {
-                int_vel.x = -int_vel.x * 0.5;
-                positions[id].x -= (new_pos.x + radii[id]) - xW;
-                if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+            if fixity[id].x_vel != 1 {
+                if new_pos.x - radii[id] < -xW {
+                    int_vel.x = -int_vel.x * 0.5;
+                    positions[id].x += -xW - (new_pos.x - radii[id]);
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+                } else if new_pos.x + radii[id] > xW {
+                    int_vel.x = -int_vel.x * 0.5;
+                    positions[id].x -= (new_pos.x + radii[id]) - xW;
+                    if fixity[id].rot_vel != 1 { rot_vel[id] = rot_vel[id] * 0.9; }
+                }
             }
+        } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
+            let norm_pos = normalize(new_pos);
+            let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
+            let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
+            if fixity[id].x_vel != 1 {
+                positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
+                int_vel.x = -comp_v_p.x * 0.5;
+            }
+            if fixity[id].y_vel != 1 {
+                positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
+                int_vel.y = -comp_v_p.y * 0.5;
+            }
+            if fixity[id].rot_vel != 1 {
+                rot_vel[id] = rot_vel[id] * 0.9;
+            }    
         }
-    } else if length(new_pos) + radii[id] > settings.bound_radius { // circular bounds
-        let norm_pos = normalize(new_pos);
-        let del_comp = dot(del_pos[id], norm_pos) * norm_pos;
-        let comp_v_p = dot(int_vel, norm_pos) * norm_pos;
-        if fixity[id].x_vel != 1 {
-            positions[id].x = norm_pos.x * (settings.bound_radius - radii[id]) - del_comp.x;
-            int_vel.x = -comp_v_p.x * 0.5;
-        }
-        if fixity[id].y_vel != 1 {
-            positions[id].y = norm_pos.y * (settings.bound_radius - radii[id]) - del_comp.y;
-            int_vel.y = -comp_v_p.y * 0.5;
-        }
-        if fixity[id].rot_vel != 1 {
-            rot_vel[id] = rot_vel[id] * 0.9;
-        }    
+        // }
+
+        positions[id] += del_pos[id];
+        rot[id] += del_rot[id];
+
+        velocities[id] = int_vel;
+        rot_vel[id] = int_rot_vel;
     }
-    // }
-
-    positions[id] += del_pos[id];
-    rot[id] += del_rot[id];
-
-    velocities[id] = int_vel;
-    rot_vel[id] = int_rot_vel;
-
     // determine if simulation shader is going to search for new collisions
     if id == 0u {
         coll_cont[1] += 1;
@@ -238,7 +240,8 @@ fn sum_forces(id: u32, mat_id: i32) {
 
     // Collect valid contact indices
     for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
-        if contacts[i].b != 0 {
+        if $ CSO { contacts[i].b != 0 }
+           $ NCS { contacts[i].b >= 0 } {
             contact_indices[contact_count] = i;
             contact_count += 1u;
         }
@@ -262,26 +265,39 @@ fn sum_forces(id: u32, mat_id: i32) {
     // Sum forces in the sorted order
     for (var idx = 0u; idx < contact_count; idx++) {
         let i = contact_indices[idx];
-        if contacts[i].b > i32(id) + 1 {
+        if contacts[i].b > i32(id) $ CSO { + 1 } {
             net_force += vec3(contacts[i].forces, contacts[i].moment);
             if settings.bonds == 3 { bond_angle_sum += contacts[i].bond_angle; }
-        } else if contacts[i].b < i32(id) + 1 {  
-            if contacts[i].b < 0 {
-                let index = -contacts[i].b - 1;
-                net_force += vec3(-contacts[index].forces, contacts[index].moment);
-                contacts[i].bond_type = contacts[index].bond_type;
-                if settings.bonds == 3 { bond_angle_sum -= contacts[index].bond_angle; }
-            } else if contacts[i].b > 0 {
-                // For contacts where the other particle has a lower ID, ensure consistent force retrieval
-                for (var j = u32(contacts[i].b - 1) * MAX_CONTACTS; j < (u32(contacts[i].b - 1) + 1u) * MAX_CONTACTS; j++) {
-                    if u32(contacts[j].b - 1) == id {
-                        contacts[i].b = -(i32(j) + 1);
+        } else if $ CSO {contacts[i].b <  i32(id) + 1 }
+                  $ NCS {contacts[i].b >= 0           } {  
+            $ CSO { 
+                if contacts[i].b < 0 {
+                    let index = -contacts[i].b - 1;
+                    net_force += vec3(-contacts[index].forces, contacts[index].moment);
+                    contacts[i].bond_type = contacts[index].bond_type;
+                    if settings.bonds == 3 { bond_angle_sum -= contacts[index].bond_angle; }
+                } else if contacts[i].b > 0 {           
+                    // For contacts where the other particle has a lower ID, ensure consistent force retrieval
+                    for (var j = u32(contacts[i].b - 1) * MAX_CONTACTS; j < (u32(contacts[i].b - 1) + 1u) * MAX_CONTACTS; j++) {
+                        if u32(contacts[j].b - 1) == id {
+                            contacts[i].b = -(i32(j) + 1);
+                            net_force += vec3(-contacts[j].forces, contacts[j].moment);
+                            contacts[i].bond_type = contacts[j].bond_type;
+                            if settings.bonds == 3 { bond_angle_sum -= contacts[j].bond_angle; }
+                            break; 
+                        }   
+                    }   
+                } 
+            }
+            $ NCS {
+                for (var j = u32(contacts[i].b) * MAX_CONTACTS; j < (u32(contacts[i].b) + 1u) * MAX_CONTACTS; j++) {
+                    if u32(contacts[j].b) == id {
                         net_force += vec3(-contacts[j].forces, contacts[j].moment);
                         contacts[i].bond_type = contacts[j].bond_type;
                         if settings.bonds == 3 { bond_angle_sum -= contacts[j].bond_angle; }
                         break; 
-                    }   
-                }   
+                    }
+                }
             }
         }       
     }    

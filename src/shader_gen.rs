@@ -93,6 +93,12 @@ fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
             "DETERMINISTIC" => {
                 res |= settings.simulation.deterministic;
             }
+            "CSO" => {
+                res |= settings.contact_search_optimization;
+            }
+            "NCS" => {
+                res |= !settings.contact_search_optimization;
+            }
             _ => {}
         }
     }

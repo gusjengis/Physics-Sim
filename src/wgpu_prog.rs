@@ -753,7 +753,6 @@ impl GridInfo {
 pub struct WGPUComputeProg {
     pub state: State,
     pub buffers: BufferContainer,
-    pub broad_phase_compute_pipeline: wgpu::ComputePipeline,
     pub click_compute_shader: wgpu::ShaderModule,
     pub click_compute_pipeline: wgpu::ComputePipeline,
     pub selectangle_compute_shader: wgpu::ShaderModule,
@@ -920,11 +919,6 @@ impl WGPUComputeProg {
             source: wgpu::ShaderSource::Wgsl(assemble_shader(lom_shader, settings).into()),
         });
         // println!("2");
-        let broad_phase_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: None,
-            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/physics/2D_Broad_Phase.wgsl"), settings).into()),
-        });
-        // println!("3");
         let sim_shader = include_str!("./shaders/physics/2D_Simulation.wgsl");
         let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -969,7 +963,7 @@ impl WGPUComputeProg {
         // println!("11");
         let set_group_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Group.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/event_handling/Set_Group.wgsl").into()),
         });
         ////create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -981,16 +975,6 @@ impl WGPUComputeProg {
                 &buffers.collision_settings.bind_group_layout,
                 &buffers.data_buffer.bind_group_layout,
                 &buffers.material_buffer.bind_group_layout,
-            ],
-            push_constant_ranges: &[],
-        });
-
-        let broad_phase_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Broad phase compute"),
-            bind_group_layouts: &[
-                &buffers.pos_buffers.bind_group_layout,
-                &buffers.mov_buffers.bind_group_layout,
-                &buffers.contact_buffers.bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -1109,13 +1093,6 @@ impl WGPUComputeProg {
             entry_point: "main",
         });
         // println!("2");
-        let broad_phase_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: None,
-            layout: Some(&broad_phase_compute_pipeline_layout),
-            module: &broad_phase_compute_shader,
-            entry_point: "main",
-        });
-        // println!("3");
         let compute_pipeline2 = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&compute_pipeline_layout2),
@@ -1182,7 +1159,6 @@ impl WGPUComputeProg {
         Self {
             state,
             buffers,
-            broad_phase_compute_pipeline,
             click_compute_shader,
             click_compute_pipeline,
             selectangle_compute_shader,
@@ -1495,12 +1471,12 @@ impl WGPUComputeProg {
         config.queue.submit(Some(encoder.finish()));
     }
 
-    pub fn compute(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+    pub fn compute(&mut self, config: &mut WGPUConfig, settings: &Settings, ticks: usize) {
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
 
-        for i in 0..settings.simulation.gen_per_frame {
+        for i in 0..ticks {
             // LAWS OF MOTION
             {
                 let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
@@ -1516,19 +1492,6 @@ impl WGPUComputeProg {
 
                 compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             }
-
-            // // BROAD PHASE, now handeled in LOM
-            // {
-            //     let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
-
-            //     compute_pass.set_pipeline(&self.broad_phase_compute_pipeline);
-
-            //     compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
-            //     compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
-            //     compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);
-
-            //     compute_pass.dispatch_workgroups(1, 1, 1);//(self.grid_info.total_cells as f32 / 256.0).ceil() as u32, 1, 1);
-            // }
 
             // SIMULATION/COLLISIONS/BONDS
 

@@ -1,9 +1,3 @@
-use std::fmt::DebugTuple;
-use std::fs::File;
-use std::io::prelude::*;
-use std::mem;
-use std::path::PathBuf;
-
 use crate::particle_def::Particle_Definition;
 use crate::scripts::ScriptManager;
 use crate::settings;
@@ -12,23 +6,25 @@ use crate::settings::ColorSource;
 use crate::settings::Settings;
 use crate::settings::Structure;
 use crate::setup;
-use bytemuck::{bytes_of, cast_slice};
-use csv::*;
-use flatbuffers::WIPOffset;
-use naga::proc::index;
-use rand::Rng;
-use wgpu::Device;
-use wgpu::Queue;
-// use crate::
-// use winit::*;
 use crate::setup::*;
 use crate::wgpu_config::*;
 use crate::wgpu_prog::*;
 use crate::wgpu_structs::*;
-
+use bytemuck::{bytes_of, cast_slice};
+use cgmath::num_traits::Float;
+use csv::*;
+use flatbuffers::WIPOffset;
+use naga::proc::index;
+use rand::Rng;
+use std::f32::consts::PI;
+use std::fmt::DebugTuple;
+use std::fs::File;
+use std::io::prelude::*;
+use std::mem;
+use std::path::PathBuf;
 use wgpu::util::DeviceExt;
-
-// import the flatbuffers runtime library
+use wgpu::Device;
+use wgpu::Queue;
 extern crate flatbuffers;
 
 // import the generated code
@@ -66,6 +62,7 @@ impl GridInfo {
 
 pub const DATA_SIZE: usize = 8;
 pub const CONTACT_SIZE: usize = 12;
+pub const MAX_CONTACTS: usize = 14;
 
 pub struct State {
     pub up_to_date: bool,
@@ -153,16 +150,16 @@ impl State {
         // state.load_from_csv(PathBuf::from("./saved_states/particle_state.csv"), settings);
         state.regen_bonds(config, settings);
         state.save(config, settings, Some(script_manager));
+        settings.update_critical_timestep = true;
 
         return state;
     }
 
     pub fn print_state(&self) {
-        for i in 0..1 {
-            //self.p_count {
+        for i in 0..self.p_count {
             print!("{}:\n", i);
             for j in 0..CONTACT_SIZE * 2 {
-                let mut base = i * 14 * CONTACT_SIZE; // + j * CONTACT_SIZE;
+                let mut base = i * MAX_CONTACTS * CONTACT_SIZE; // + j * CONTACT_SIZE;
 
                 // let b = bytemuck::cast::<f32, i32>(self.contacts[base]);
                 // if b != -1 {
@@ -325,8 +322,10 @@ impl State {
         let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); CONTACT_SIZE * settings.setup.max_contacts * self.p_count * PREALLOC];
         let mut found_bonds = true;
         let mut bond_index = 0;
-        for i in 0..contacts.len() / CONTACT_SIZE {
-            contacts[i * CONTACT_SIZE] = bytemuck::cast(0 as i32);
+        if settings.contact_search_optimization {
+            for i in 0..contacts.len() / CONTACT_SIZE {
+                contacts[i * CONTACT_SIZE] = bytemuck::cast(0 as i32);
+            }
         }
         for i in 0..self.p_count {
             let mut col_num = 0;
@@ -408,6 +407,7 @@ impl State {
         // }
         self.bonds = bonds;
         self.contacts = contacts;
+        self.print_state();
     }
 
     pub fn save(&mut self, config: &mut WGPUConfig, settings: &Settings, script_manager: Option<&ScriptManager>) {
@@ -905,11 +905,37 @@ impl State {
         staging_buffer.unmap();
     }
 
-    pub fn critical_timestep(&self) -> f32 {
-        // for i in 0..self.contacts.len()/12 {
-        //     println!();
-        // }
-        //
-        return 0.0;
+    pub fn critical_timestep(&self, settings: &Settings) -> f32 {
+        let mut min_critical_timestep = f32::MAX;
+
+        for i in 0..self.p_count {
+            let b: i32 = bytemuck::cast(self.contacts[i * CONTACT_SIZE + 0]);
+            if b <= 0 {
+                continue;
+            }
+            let a = (i / MAX_CONTACTS) as i32;
+            let density_a = settings.materials[(self.material_pointers[a as usize] as usize * 6) + 3];
+            let density_b = settings.materials[(self.material_pointers[b as usize] as usize * 6) + 3];
+            let mass_a = self.radii[a as usize].powf(2.0) * density_a * PI;
+            let mass_b = self.radii[b as usize].powf(2.0) * density_b * PI;
+            let mass = (mass_a + mass_b) / 2.0;
+
+            let mut stiffness =
+                1.0 / (1.0 / settings.materials[(self.material_pointers[a as usize] as usize * 6) + 4] + 1.0 / settings.materials[(self.material_pointers[b as usize] as usize * 6) + 4]);
+
+            if settings.physics.bonds != 0 {
+                if settings.physics.bonds == 3 || settings.physics.bonds == 1 {
+                    stiffness += settings.physics.bond_normal_stiffness;
+                } else {
+                    stiffness = settings.physics.bond_normal_stiffness;
+                }
+            }
+
+            min_critical_timestep = min_critical_timestep.min((mass / stiffness).sqrt() / 2.0);
+        }
+
+        println!("timestep: {}", min_critical_timestep);
+
+        return min_critical_timestep;
     }
 }

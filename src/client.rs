@@ -886,7 +886,16 @@ impl Client {
             self.wgpu_prog.rebuild_shaders(&mut self.wgpu_config, &self.settings);
             settings!().rebuild_shaders = false
         }
-        if settings!().update_critical_timestep {
+        if settings!().update_critical_timestep && settings!().simulation.auto_timestep {
+            self.settings.update_contacts = true;
+            self.wgpu_prog
+                .shader_prog
+                .buffers
+                .collision_settings
+                .updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&self.settings.collision_settings()));
+
+            self.wgpu_prog.shader_prog.compute(&mut self.wgpu_config, &mut self.settings, 1);
+            self.settings.update_contacts = false;
             self.update_critical_timestep();
             settings!().update_critical_timestep = false
         }
@@ -945,15 +954,21 @@ impl Client {
             self.settings.simulation.gen_per_frame = 1;
 
             for i in 0..ticks {
-                self.wgpu_prog.shader_prog.compute(&mut self.wgpu_config, &self.settings);
+                self.wgpu_prog
+                    .shader_prog
+                    .compute(&mut self.wgpu_config, &self.settings, self.settings.simulation.gen_per_frame as usize);
                 self.generation += 1;
                 self.collect_data();
             }
-            self.wgpu_prog.shader_prog.compute(&mut self.wgpu_config, &self.settings);
+            self.wgpu_prog
+                .shader_prog
+                .compute(&mut self.wgpu_config, &self.settings, self.settings.simulation.gen_per_frame as usize);
         } else {
             self.settings.simulation.gen_per_frame = ticks;
 
-            self.wgpu_prog.shader_prog.compute(&mut self.wgpu_config, &self.settings);
+            self.wgpu_prog
+                .shader_prog
+                .compute(&mut self.wgpu_config, &self.settings, self.settings.simulation.gen_per_frame as usize);
             self.generation += self.settings.simulation.gen_per_frame;
         }
         self.settings.simulation.gen_per_frame = temp;
@@ -963,7 +978,8 @@ impl Client {
         if !self.wgpu_prog.shader_prog.state.up_to_date {
             self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config, &mut self.settings);
         }
-        self.settings.set_timestep(self.wgpu_prog.shader_prog.state.critical_timestep());
+
+        self.settings.set_timestep(self.wgpu_prog.shader_prog.state.critical_timestep(&self.settings));
     }
 
     fn collect_data(&mut self) {
@@ -1142,7 +1158,10 @@ impl Client {
                         .updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().collision_settings()));
                 }
                 // for i in 0..settings!().simulation.genPerFrame {
-                self.wgpu_prog.shader_prog.compute(&mut self.wgpu_config, &self.settings);
+                self.wgpu_prog
+                    .shader_prog
+                    .compute(&mut self.wgpu_config, &self.settings, self.settings.simulation.gen_per_frame as usize);
+
                 self.generation += settings!().simulation.gen_per_frame;
                 // }
             }

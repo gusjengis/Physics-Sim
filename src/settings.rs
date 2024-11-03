@@ -257,6 +257,8 @@ pub struct Settings {
     pub export_screenshot: bool,
     pub export_param_indices: (usize, usize),
     pub update_critical_timestep: bool,
+    pub update_contacts: bool,
+    pub contact_search_optimization: bool,
     // pub groups: i32,
     // pub set_group: i32, // pub paths: ReadDir,
 }
@@ -446,6 +448,8 @@ impl Settings {
             export_screenshot: false,
             export_param_indices: (0, 0),
             update_critical_timestep: true,
+            update_contacts: false,
+            contact_search_optimization: false,
         };
         settings.load_memory();
         return settings;
@@ -1698,6 +1702,11 @@ impl Settings {
             if ui.selectable_label(self.view.code_editor, "Code Editor").clicked() {
                 self.view.code_editor = !self.view.code_editor;
             }
+            ui.separator();
+            ui.label("Performance");
+            if ui.checkbox(&mut self.contact_search_optimization, "CSO").changed() {
+                self.rebuild_shaders = true;
+            }
         });
     }
 
@@ -2139,6 +2148,7 @@ impl Settings {
 
     pub fn collision_settings(&mut self) -> Vec<f32> {
         self.changed_collision_settings = false;
+        // self.update_critical_timestep = true;
         return vec![
             bytemuck::cast(self.simulation.walls as i32),
             self.simulation.hor_bound,
@@ -2169,6 +2179,7 @@ impl Settings {
             bytemuck::cast(self.physics.local_damping as i32),
             self.physics.local_damping_alpha,
             bytemuck::cast(self.setup.particles as i32),
+            bytemuck::cast(self.update_contacts as i32),
         ];
     }
 
@@ -2242,8 +2253,12 @@ impl Settings {
         ];
     }
 
-    pub(crate) fn set_timestep(&self, critical_timestep: f32) { //-> () {
-                                                                //todo!()
+    pub fn set_timestep(&mut self, critical_timestep: f32) {
+        self.simulation.timestep = critical_timestep;
+        if self.simulation.round_timestep {
+            self.simulation.timestep = 1.0 / (((1.0 / self.simulation.timestep as f32) / 120.0).ceil() * 120.0);
+        }
+        self.changed_collision_settings = true;
     }
 }
 

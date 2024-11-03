@@ -57,6 +57,7 @@ struct Settings {
     local_damping: i32,
     local_damping_alpha: f32,
     particles: i32,
+    update_contacts: i32,
 }
 
 @group(0) @binding(0) var<uniform> input: Input;
