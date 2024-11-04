@@ -109,9 +109,14 @@ impl Client {
         });
         let available_rect = platform.context().available_rect();
         platform.context().set_pixels_per_point(2.0);
-        let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
-        let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
 
+        let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
+
+        let mut max_framerate = 120.0 / 1000.0;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        }
         let mut client = Client {
             canvas,
             wgpu_config,
@@ -1135,7 +1140,11 @@ impl Client {
         // println!("{}", self.wgpu_prog.shader_prog.state.up_to_date);
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
-        let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        let mut max_framerate = 120.0 / 1000.0;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        }
         if !self.minimized {
             settings!().simulation.max_gen_per_frame = ((1.0 / settings!().simulation.timestep) / max_framerate).round() as i32;
             if settings!().simulation.max_gen_per_frame < settings!().simulation.gen_per_frame {
@@ -1466,7 +1475,7 @@ impl Client {
 
             if (time_since >= 0.25) {
                 Client::clear_console();
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(not(target_arch = "wasm32-unknown-unknown"))]
                 {
                     println!("FPS: {}", settings!().fps);
                 }
@@ -1501,7 +1510,7 @@ impl Client {
     }
 
     fn clear_console() {
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_arch = "wasm32-unknown-unknown"))]
         {
             print!("\x1B[2J\x1B[1;1H");
         }

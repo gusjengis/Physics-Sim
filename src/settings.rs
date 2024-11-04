@@ -18,6 +18,7 @@ use std::*;
 use std::{fmt::Debug, io::Read};
 use wgpu::{Device, Queue};
 
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use crate::{state::State, wgpu_structs::Uniform, window_init::Canvas};
@@ -559,18 +560,21 @@ impl Settings {
                     }
                 }
 
-                if ui.button("Select Folder").clicked() {
-                    match FileDialog::new()
-                        //.set_location(&self.current_dir)
-                        .show_open_single_dir()
-                        .unwrap()
-                    {
-                        Some(path) => {
-                            self.current_dir = path.clone();
-                            self.update_memory();
-                        }
-                        None => {}
-                    };
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    if ui.button("Select Folder").clicked() {
+                        match FileDialog::new()
+                            //.set_location(&self.current_dir)
+                            .show_open_single_dir()
+                            .unwrap()
+                        {
+                            Some(path) => {
+                                self.current_dir = path.clone();
+                                self.update_memory();
+                            }
+                            None => {}
+                        };
+                    }
                 }
             });
 
@@ -2047,70 +2051,79 @@ impl Settings {
     }
 
     pub fn load(&mut self) {
-        let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                self.load = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    self.load = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save(&mut self) {
-        let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                // let mut ancestors = path.ancestors();
-                // println!("{}", ancestors.next().unwrap().to_str().unwrap());
-                // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
-                self.save = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    // let mut ancestors = path.ancestors();
+                    // println!("{}", ancestors.next().unwrap().to_str().unwrap());
+                    // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
+                    self.save = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save_data(&mut self, path_param: Option<PathBuf>) {
-        let path = match path_param {
-            Some(p) => Some(p),
-            None => FileDialog::new().set_location("~").add_filter("CSV File", &["csv"]).show_save_single_file().unwrap(),
-        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = match path_param {
+                Some(p) => Some(p),
+                None => FileDialog::new().set_location("~").add_filter("CSV File", &["csv"]).show_save_single_file().unwrap(),
+            };
 
-        if let Some(path) = path {
-            let file_path = Path::new(&path);
-            let mut file = File::create(file_path).expect("Unable to create file");
+            if let Some(path) = path {
+                let file_path = Path::new(&path);
+                let mut file = File::create(file_path).expect("Unable to create file");
 
-            // Write the header
-            writeln!(file, "Timestamp,X Position,Y Position,X Velocity,Y Velocity,Rotation,Rotation Velocity,Data1,Data2,Data3,Data4,FPS").expect("Unable to write header");
+                // Write the header
+                writeln!(file, "Timestamp,X Position,Y Position,X Velocity,Y Velocity,Rotation,Rotation Velocity,Data1,Data2,Data3,Data4,FPS").expect("Unable to write header");
 
-            // Write the data rows
-            for i in 0..self.data.x_pos_data.len() {
-                let timestamp = self.data.x_pos_data[i][0];
-                let x_pos = self.data.x_pos_data[i][1];
-                let y_pos = self.data.y_pos_data[i][1];
-                let x_vel = self.data.x_vel_data[i][1];
-                let y_vel = self.data.y_vel_data[i][1];
-                let rot = self.data.rot_data[i][1];
-                let rot_vel = self.data.rot_vel_data[i][1];
-                let data1 = self.data.data1[i][1];
-                let data2 = self.data.data2[i][1];
-                let data3 = self.data.data3[i][1];
-                let data4 = self.data.data4[i][1];
-                let bonds_torn = self.data.torn_bonds[i][1];
-                let fps = self.data.fps[i][1];
+                // Write the data rows
+                for i in 0..self.data.x_pos_data.len() {
+                    let timestamp = self.data.x_pos_data[i][0];
+                    let x_pos = self.data.x_pos_data[i][1];
+                    let y_pos = self.data.y_pos_data[i][1];
+                    let x_vel = self.data.x_vel_data[i][1];
+                    let y_vel = self.data.y_vel_data[i][1];
+                    let rot = self.data.rot_data[i][1];
+                    let rot_vel = self.data.rot_vel_data[i][1];
+                    let data1 = self.data.data1[i][1];
+                    let data2 = self.data.data2[i][1];
+                    let data3 = self.data.data3[i][1];
+                    let data4 = self.data.data4[i][1];
+                    let bonds_torn = self.data.torn_bonds[i][1];
+                    let fps = self.data.fps[i][1];
 
-                writeln!(
-                    file,
-                    "{},{},{},{},{},{},{},{},{},{},{},{},{}",
-                    timestamp, x_pos, y_pos, x_vel, y_vel, rot, rot_vel, data1, data2, data3, data4, bonds_torn, fps
-                )
-                .expect("Unable to write data row");
+                    writeln!(
+                        file,
+                        "{},{},{},{},{},{},{},{},{},{},{},{},{}",
+                        timestamp, x_pos, y_pos, x_vel, y_vel, rot, rot_vel, data1, data2, data3, data4, bonds_torn, fps
+                    )
+                    .expect("Unable to write data row");
+                }
+
+                println!("{} ticks of data saved to: {:?}", self.data.x_pos_data.len(), file_path);
             }
-
-            println!("{} ticks of data saved to: {:?}", self.data.x_pos_data.len(), file_path);
         }
     }
 

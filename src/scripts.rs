@@ -2,6 +2,7 @@ use crate::settings::{self, BondType, Data, Properties, Settings};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use chrono::Local;
 use egui::Ui;
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::FileDialog;
 use serde::{self, Deserialize, Serialize};
 use serde_json::*;
@@ -133,18 +134,24 @@ impl ScriptManager {
     }
 
     pub fn export_scripts(&self) {
-        if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
-            let json_data = self.to_json(); // Export all scripts
-            std::fs::write(path, json_data).expect("Unable to write to file");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
+                let json_data = self.to_json(); // Export all scripts
+                std::fs::write(path, json_data).expect("Unable to write to file");
+            }
         }
     }
 
     // Export a single script by index to a JSON file
     pub fn export_single_script(&self, script_index: usize) {
         if script_index < self.scripts.len() {
-            if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
-                let script_json = self.scripts[script_index].to_json(); // Serialize only one script
-                std::fs::write(path, script_json).expect("Unable to write to file");
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
+                    let script_json = self.scripts[script_index].to_json(); // Serialize only one script
+                    std::fs::write(path, script_json).expect("Unable to write to file");
+                }
             }
         } else {
             eprintln!("Invalid script index: {}", script_index);
@@ -152,20 +159,23 @@ impl ScriptManager {
     }
 
     pub fn import_scripts(&mut self) {
-        if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_open_single_file().unwrap() {
-            let json_data = std::fs::read_to_string(path).expect("Unable to read file");
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_open_single_file().unwrap() {
+                let json_data = std::fs::read_to_string(path).expect("Unable to read file");
 
-            // Try to deserialize as a list of scripts or a single script
-            if let Ok(new_scripts) = serde_json::from_str::<Vec<Script>>(&json_data) {
-                // Append the scripts if the JSON contains multiple scripts
-                for script in new_scripts {
-                    self.push_script(script);
+                // Try to deserialize as a list of scripts or a single script
+                if let Ok(new_scripts) = serde_json::from_str::<Vec<Script>>(&json_data) {
+                    // Append the scripts if the JSON contains multiple scripts
+                    for script in new_scripts {
+                        self.push_script(script);
+                    }
+                } else if let Ok(single_script) = serde_json::from_str::<Script>(&json_data) {
+                    // Append the single script if the JSON contains only one script
+                    self.push_script(single_script);
+                } else {
+                    eprintln!("Invalid JSON format for scripts.");
                 }
-            } else if let Ok(single_script) = serde_json::from_str::<Script>(&json_data) {
-                // Append the single script if the JSON contains only one script
-                self.push_script(single_script);
-            } else {
-                eprintln!("Invalid JSON format for scripts.");
             }
         }
     }
@@ -1076,17 +1086,20 @@ impl Parameter {
                             None => "",
                         }));
                         if ui.button("Browse").clicked() {
-                            let new_path = FileDialog::new()
-                                .set_location("")
-                                .add_filter(file_type.clone().unwrap().as_str(), &[file_type.unwrap().as_str()])
-                                .show_open_single_file()
-                                .unwrap();
-                            match new_path {
-                                Some(p) => {
-                                    path.clear();
-                                    path.push(p);
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let new_path = FileDialog::new()
+                                    .set_location("")
+                                    .add_filter(file_type.clone().unwrap().as_str(), &[file_type.unwrap().as_str()])
+                                    .show_open_single_file()
+                                    .unwrap();
+                                match new_path {
+                                    Some(p) => {
+                                        path.clear();
+                                        path.push(p);
+                                    }
+                                    None => {}
                                 }
-                                None => {}
                             }
                         }
                     });

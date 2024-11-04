@@ -36,7 +36,7 @@ env_logger = "0.10.0"
 log = "0.4.17"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.117"
-wgpu = "0.16.1"
+wgpu = "=0.16.1"
 naga = { version = "0.12.2", features = ["wgsl-in", "spv-out"] }
 pollster = "0.3"
 async-std = { version = "1.12", features = ["attributes", "tokio1"] }
@@ -46,20 +46,22 @@ chrono = "0.4.24"
 cgmath = "0.18"
 getrandom = { version = "0.2.9", features = ["js"] }
 bytemuck = { version = "1.12", features = [ "derive" ] }
-native-dialog = "0.7.0"
 [dependencies.image]
 version = "0.24"
 default-features = false
 features = ["png", "jpeg"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = "=0.16.1"
 console_error_panic_hook = "0.1.0"
 console_log = "1.0.0"
-wgpu = { version = "0.16.1", features = []}
 wasm-bindgen = "0.2.84"
 wasm-bindgen-futures = "0.4.34"
-web-sys = { version = "0.3.64", features = [
+web-sys = { version = "=0.3.64", features = [
     "Document",
     "Element",
     "Window",
 ]}
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+native-dialog = "0.7.0"

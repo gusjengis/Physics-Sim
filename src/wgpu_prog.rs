@@ -20,6 +20,7 @@ use bytemuck::bytes_of;
 use image::EncodableLayout;
 use naga::back::spv;
 use naga::ShaderStage;
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::FileDialog;
 use rand::Rng;
 use wgpu::ColorTargetState;
@@ -600,72 +601,75 @@ impl WGPUProg {
     }
 
     pub fn export_screenshot(&mut self, config: &mut WGPUConfig, path_param: Option<PathBuf>, frame: &SurfaceTexture) {
-        let path = match path_param {
-            Some(p) => p,
-            None => FileDialog::new()
-                .set_location("~")
-                .add_filter("PNG File", &["png"])
-                .show_save_single_file()
-                .unwrap()
-                .expect("No file selected"),
-        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = match path_param {
+                Some(p) => p,
+                None => FileDialog::new()
+                    .set_location("~")
+                    .add_filter("PNG File", &["png"])
+                    .show_save_single_file()
+                    .unwrap()
+                    .expect("No file selected"),
+            };
 
-        let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let output_buffer_size = (config.size.width * config.size.height * 4) as wgpu::BufferAddress;
-        let output_buffer_desc = wgpu::BufferDescriptor {
-            size: output_buffer_size,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            label: None,
-            mapped_at_creation: false,
-        };
-        let output_buffer = config.device.create_buffer(&output_buffer_desc);
+            let output_buffer_size = (config.size.width * config.size.height * 4) as wgpu::BufferAddress;
+            let output_buffer_desc = wgpu::BufferDescriptor {
+                size: output_buffer_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                label: None,
+                mapped_at_creation: false,
+            };
+            let output_buffer = config.device.create_buffer(&output_buffer_desc);
 
-        encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
-                texture: &frame.texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::ImageCopyBuffer {
-                buffer: &output_buffer,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * config.size.width),
-                    rows_per_image: Some(config.size.height),
+            encoder.copy_texture_to_buffer(
+                wgpu::ImageCopyTexture {
+                    texture: &frame.texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-            },
-            wgpu::Extent3d {
-                width: config.size.width,
-                height: config.size.height,
-                depth_or_array_layers: 1,
-            },
-        );
+                wgpu::ImageCopyBuffer {
+                    buffer: &output_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(4 * config.size.width),
+                        rows_per_image: Some(config.size.height),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: config.size.width,
+                    height: config.size.height,
+                    depth_or_array_layers: 1,
+                },
+            );
 
-        config.queue.submit(Some(encoder.finish()));
+            config.queue.submit(Some(encoder.finish()));
 
-        let buffer_slice = output_buffer.slice(..);
-        let (tx, rx) = std::sync::mpsc::channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
-        });
-        config.device.poll(wgpu::Maintain::Wait);
+            let buffer_slice = output_buffer.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+                tx.send(result).unwrap();
+            });
+            config.device.poll(wgpu::Maintain::Wait);
 
-        if rx.recv().unwrap().is_ok() {
-            let data = buffer_slice.get_mapped_range();
-            let mut rgba_data: Vec<u8> = vec![0; data.len()];
-            rgba_data.copy_from_slice(&data);
-            drop(data);
-            output_buffer.unmap();
+            if rx.recv().unwrap().is_ok() {
+                let data = buffer_slice.get_mapped_range();
+                let mut rgba_data: Vec<u8> = vec![0; data.len()];
+                rgba_data.copy_from_slice(&data);
+                drop(data);
+                output_buffer.unmap();
 
-            // Swap R and B channels
-            for pixel in rgba_data.chunks_mut(4) {
-                pixel.swap(0, 2);
+                // Swap R and B channels
+                for pixel in rgba_data.chunks_mut(4) {
+                    pixel.swap(0, 2);
+                }
+
+                let image = image::RgbaImage::from_raw(config.size.width, config.size.height, rgba_data).unwrap();
+                image.save(path).expect("Failed to save image");
             }
-
-            let image = image::RgbaImage::from_raw(config.size.width, config.size.height, rgba_data).unwrap();
-            image.save(path).expect("Failed to save image");
         }
     }
 }
