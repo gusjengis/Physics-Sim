@@ -1,3 +1,5 @@
+use crate::audio_controller;
+use crate::audio_controller::*;
 use crate::scripts;
 use crate::scripts::ScriptManager;
 use crate::settings::Data;
@@ -111,6 +113,8 @@ impl Client {
         platform.context().set_pixels_per_point(2.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
         let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+
+        audio_controller::main();
 
         let mut client = Client {
             canvas,
