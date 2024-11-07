@@ -1,3 +1,4 @@
+use crate::audio_controller;
 use crate::scripts;
 use crate::scripts::ScriptManager;
 use crate::settings::Data;
@@ -117,6 +118,9 @@ impl Client {
         {
             max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
         }
+
+        audio_controller::main();
+
         let mut client = Client {
             canvas,
             wgpu_config,
