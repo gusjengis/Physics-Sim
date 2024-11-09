@@ -1,8 +1,8 @@
 use std::f32::consts::PI;
 
 pub struct Sound {
-    sources: Vec<Source>,
-    effects: Vec<Effect>,
+    pub sources: Vec<Source>,
+    pub effects: Vec<Effect>,
 }
 
 impl Sound {
@@ -23,7 +23,7 @@ impl Sound {
         for source in &self.sources {
             sample += match source {
                 Source::Wave(wave, freq, amp) => wave.compute_sample(sample_rate, sample_clock, *freq, *amp),
-                Source::Recording => 0.0,
+                Source::File => 0.0,
             }
         }
         return sample;
@@ -44,12 +44,19 @@ impl SoundInstance {
 
 pub enum Source {
     Wave(Wave, f32, f32),
-    Recording,
+    File,
 }
 
 impl Source {
     pub fn Sine(freq: f32, amp: f32) -> Self {
         Source::Wave(Wave::Sine, freq, amp)
+    }
+
+    pub fn as_type_string(&self) -> &str {
+        match self {
+            Source::Wave(wave, _, _) => "Wave",
+            Source::File => "File",
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::audio_controller::*;
 use crate::particle_def::Particle_Definition;
 use crate::scripts::{self, Key, ScriptManager};
 use crate::wgpu_config::WGPUConfig;
@@ -135,6 +136,7 @@ pub struct ViewSettings {
     pub data_menu: bool,
     pub script_menu: bool,
     pub code_editor: bool,
+    pub audio_menu: bool,
 }
 
 pub struct SetupSettings {
@@ -308,6 +310,7 @@ impl Settings {
                 data_menu: false,
                 script_menu: false,
                 code_editor: false,
+                audio_menu: false,
             },
             setup: SetupSettings {
                 particles,
@@ -472,7 +475,7 @@ impl Settings {
         }
     }
 
-    pub fn ui(&mut self, ctx: &Context, prog: &mut WGPUProg, script_manager: &mut ScriptManager, config: &mut WGPUConfig, window_size: (u32, u32)) -> bool {
+    pub fn ui(&mut self, ctx: &Context, prog: &mut WGPUProg, script_manager: &mut ScriptManager, config: &mut WGPUConfig, window_size: (u32, u32), ac: &mut AudioController) -> bool {
         let mut reset = false;
         if !self.current_file.exists() && self.save {
             self.save();
@@ -513,6 +516,7 @@ impl Settings {
             }
             self.script_panel(ctx, script_manager, prog, &mut config.device, &mut config.queue);
             self.code_editor(ctx, prog, config);
+            self.audio_menu(ctx, ac);
         }
         if self.simulation.auto_width && !self.export_screenshot {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
@@ -1711,6 +1715,10 @@ impl Settings {
             if ui.checkbox(&mut self.contact_search_optimization, "CSO").changed() {
                 self.rebuild_shaders = true;
             }
+            ui.separator();
+            if ui.selectable_label(self.view.audio_menu, "Audio").clicked() {
+                self.view.audio_menu = !self.view.audio_menu;
+            }
         });
     }
 
@@ -2272,6 +2280,24 @@ impl Settings {
             self.simulation.timestep = 1.0 / (((1.0 / self.simulation.timestep as f32) / 120.0).ceil() * 120.0);
         }
         self.changed_collision_settings = true;
+    }
+
+    fn audio_menu(&self, ctx: &Context, ac: &mut AudioController) {
+        if self.view.audio_menu {
+            egui::Window::new("Audio").resizable(true).show(ctx, |ui| {
+                let mut sounds = ac.sounds.lock().unwrap();
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        let mut sid = 0;
+                        for sid in 0..sounds.len() {
+                            ui.label(format!("{}", sid));
+                            ui.label(sounds[sid].sources[0].as_type_string());
+                        }
+                    });
+                    ui.vertical(|ui| {});
+                });
+            });
+        }
     }
 }
 
