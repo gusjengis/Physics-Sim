@@ -121,12 +121,15 @@ impl Client {
             max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
         }
 
+        let mut ac = AudioController::new();
+        ac.ringtone();
+
         let mut client = Client {
             canvas,
             wgpu_config,
             settings,
             script_manager,
-            ac: AudioController::new(),
+            ac,
             last_draw: Local::now(),
             log_framerate: false,
             wgpu_prog,

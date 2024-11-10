@@ -5,6 +5,7 @@ use crate::wgpu_config::WGPUConfig;
 use crate::wgpu_prog::WGPUProg;
 use egui::color_picker::Alpha;
 use egui::*;
+use plot::Plot;
 use scripts::*;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
@@ -2290,11 +2291,50 @@ impl Settings {
                     ui.vertical(|ui| {
                         let mut sid = 0;
                         for sid in 0..sounds.len() {
-                            ui.label(format!("{}", sid));
-                            ui.label(sounds[sid].sources[0].as_type_string());
+                            egui::CollapsingHeader::new(format!("Sound {}", sid)).show(ui, |ui| {
+                                for i in 0..sounds[sid].sources.len() {
+                                    sounds[sid].sources[i].ui(ui, format!("{}:{}", sid, i).as_str());
+                                }
+
+                                for i in 0..sounds[sid].effects.len() {
+                                    sounds[sid].effects[i].ui(ui);
+                                }
+                            });
                         }
                     });
-                    ui.vertical(|ui| {});
+                    ui.vertical(|ui| {
+                        let ar = ac.ar.lock().unwrap();
+                        let record = ar.get_record();
+
+                        let l_values = egui::plot::PlotPoints::from_ys_f32(&record.0);
+                        let l_line = egui::plot::Line::new(l_values);
+
+                        let r_values = egui::plot::PlotPoints::from_ys_f32(&record.1);
+                        let r_line = egui::plot::Line::new(r_values);
+                        let plot_l = egui::plot::Plot::new("left channel plot")
+                            .auto_bounds_x()
+                            .auto_bounds_y()
+                            .clamp_grid(true)
+                            .height(300.0)
+                            .allow_drag(false)
+                            .show_x(false)
+                            .show_y(false)
+                            .show(ui, |plot_ui| {
+                                plot_ui.line(l_line);
+                            });
+
+                        let plot_r = egui::plot::Plot::new("right channel plot")
+                            .auto_bounds_x()
+                            .auto_bounds_y()
+                            .clamp_grid(true)
+                            .height(300.0)
+                            .allow_drag(false)
+                            .show_x(false)
+                            .show_y(false)
+                            .show(ui, |plot_ui| {
+                                plot_ui.line(r_line);
+                            });
+                    });
                 });
             });
         }
