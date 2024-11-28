@@ -21,6 +21,7 @@ impl AudioController {
         let config = device.default_output_config().unwrap();
 
         let sample_rate = config.sample_rate().0 as u64;
+        println!("SR: {}", sample_rate);
         let mut sample_clock: u64 = 0;
 
         let ar = Arc::new(Mutex::new(AudioRecord::new()));
@@ -36,7 +37,7 @@ impl AudioController {
                 &config.into(),
                 move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                     let active_sounds = active_sounds_clone.lock().unwrap();
-                    let sounds = sounds_clone.lock().unwrap();
+                    let mut sounds = sounds_clone.lock().unwrap();
                     let mut ar = ar_clone.lock().unwrap();
                     let mut left_record = vec![];
                     let mut right_record = vec![];
@@ -50,8 +51,8 @@ impl AudioController {
                             let left_gain = (1.0 - sound.pan) * sound.volume;
                             let right_gain = (1.0 + sound.pan) * sound.volume;
 
-                            left_sample += sample * left_gain;
-                            right_sample += sample * right_gain;
+                            left_sample += sample.0 * left_gain;
+                            right_sample += sample.1 * right_gain;
                         }
 
                         frame[0] = left_sample; // Left channel
@@ -85,12 +86,8 @@ impl AudioController {
         self.sounds.lock().unwrap().push(sound);
     }
 
-    fn play_sound(&mut self, sid: usize, pan: f32, volume: f32) {
-        self.active_sounds.lock().unwrap().push(SoundInstance::new(sid, pan, volume));
-    }
-
-    fn play(&mut self) {
-        self.stream.play().expect("Failed to play stream");
+    fn play_sound(&mut self, sid: usize, pan: f32, volume: f32, duration: u64) {
+        self.active_sounds.lock().unwrap().push(SoundInstance::new(sid, pan, volume, duration));
     }
 
     fn pause(&mut self) {
@@ -99,16 +96,27 @@ impl AudioController {
 
     pub fn ringtone(&mut self) {
         let mut ringtone_a = Sound::new();
+        ringtone_a.set_name("Left");
         let mut ringtone_b = Sound::new();
-        ringtone_a.push_source(Source::Sine(100.0, 0.0));
-        ringtone_a.push_source(Source::Square(100.0, 0.0));
-        ringtone_b.push_source(Source::Triangle(100.0, 0.0));
-        ringtone_b.push_source(Source::Sawtooth(100.0, 0.0));
+        ringtone_b.set_name("Right");
+        ringtone_a.push_source(Source::sine(100.0, 0.0));
+        ringtone_a.push_source(Source::square(100.0, 0.0));
+        ringtone_b.push_source(Source::triangle(100.0, 0.0));
+        ringtone_b.push_source(Source::sawtooth(100.0, 0.0));
 
         self.push_sound(ringtone_a);
         self.push_sound(ringtone_b);
-        self.play_sound(0, -1.0, 1.0);
-        self.play_sound(1, 1.0, 1.0);
+        self.play_sound(0, -1.0, 1.0, 0);
+        self.play_sound(1, 1.0, 1.0, 0);
+    }
+
+    pub fn new_sound(&self) {
+        self.sounds.lock().unwrap().push(Sound::new());
+    }
+
+    pub fn play(&mut self, sid: usize) {
+        let mut sounds = self.sounds.lock().unwrap();
+        let mut duration = self.active_sounds.lock().unwrap().push(SoundInstance::new(sid, 0.0, 1.0, sounds[sid].duration()));
     }
 }
 

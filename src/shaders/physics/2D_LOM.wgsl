@@ -111,7 +111,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     
     if settings.update_contacts == 0 {
 
-        if coll_cont[2] != 0 { sum_forces(id, mat_id); }
+        $ DETERMINISTIC { if coll_cont[2] != 0 { sum_forces(id, mat_id); } }
         
         var int_vel = velocities[id];
         var int_rot_vel = rot_vel[id];
@@ -231,120 +231,121 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
 }
+$ DETERMINISTIC {
+    fn sum_forces(id: u32, mat_id: i32) {
+        var net_force = vec3(0.0);
+        var bond_angle_sum = 0.0;
+        var contact_indices = array<u32, MAX_CONTACTS>();
+        var contact_count = 0u;
 
-fn sum_forces(id: u32, mat_id: i32) {
-    var net_force = vec3(0.0);
-    var bond_angle_sum = 0.0;
-    var contact_indices = array<u32, MAX_CONTACTS>();
-    var contact_count = 0u;
-
-    // Collect valid contact indices
-    for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
-        if $ CSO { contacts[i].b != 0 }
-           $ NCS { contacts[i].b >= 0 } {
-            contact_indices[contact_count] = i;
-            contact_count += 1u;
+        // Collect valid contact indices
+        for (var i = id * MAX_CONTACTS; i < (id + 1u) * MAX_CONTACTS; i++) {
+            if $ CSO { contacts[i].b != 0 }
+               $ NCS { contacts[i].b >= 0 } {
+                contact_indices[contact_count] = i;
+                contact_count += 1u;
+            }
         }
-    }
-    if (contact_count > 1u) {
-        // Sort the contact indices based on the other particle's ID using a simple sorting algorithm
-        for (var i = 0u; i < contact_count - 1u; i++) {
-            for (var j = i + 1u; j < contact_count; j++) {
-                let a_id = contacts[(contact_indices[i])].b;
-                let b_id = contacts[(contact_indices[j])].b;
-                if a_id > b_id {
-                    // Swap indices to sort in ascending order
-                    let temp = contact_indices[i];
-                    contact_indices[i] = contact_indices[j];
-                    contact_indices[j] = temp;
+        if (contact_count > 1u) {
+            // Sort the contact indices based on the other particle's ID using a simple sorting algorithm
+            for (var i = 0u; i < contact_count - 1u; i++) {
+                for (var j = i + 1u; j < contact_count; j++) {
+                    let a_id = contacts[(contact_indices[i])].b;
+                    let b_id = contacts[(contact_indices[j])].b;
+                    if a_id > b_id {
+                        // Swap indices to sort in ascending order
+                        let temp = contact_indices[i];
+                        contact_indices[i] = contact_indices[j];
+                        contact_indices[j] = temp;
+                    }
                 }
             }
         }
-    }
 
-    // Sum forces in the sorted order
-    for (var idx = 0u; idx < contact_count; idx++) {
-        let i = contact_indices[idx];
-        if contacts[i].b > i32(id) $ CSO { + 1 } {
-            net_force += vec3(contacts[i].forces, contacts[i].moment);
-            if settings.bonds == 3 { bond_angle_sum += contacts[i].bond_angle; }
-        } else if $ CSO {contacts[i].b <  i32(id) + 1 }
-                  $ NCS {contacts[i].b >= 0           } {  
-            $ CSO { 
-                if contacts[i].b < 0 {
-                    let index = -contacts[i].b - 1;
-                    net_force += vec3(-contacts[index].forces, contacts[index].moment);
-                    contacts[i].bond_type = contacts[index].bond_type;
-                    if settings.bonds == 3 { bond_angle_sum -= contacts[index].bond_angle; }
-                } else if contacts[i].b > 0 {           
-                    // For contacts where the other particle has a lower ID, ensure consistent force retrieval
-                    for (var j = u32(contacts[i].b - 1) * MAX_CONTACTS; j < (u32(contacts[i].b - 1) + 1u) * MAX_CONTACTS; j++) {
-                        if u32(contacts[j].b - 1) == id {
-                            contacts[i].b = -(i32(j) + 1);
+        // Sum forces in the sorted order
+        for (var idx = 0u; idx < contact_count; idx++) {
+            let i = contact_indices[idx];
+            if contacts[i].b > i32(id) $ CSO { + 1 } {
+                net_force += vec3(contacts[i].forces, contacts[i].moment);
+                if settings.bonds == 3 { bond_angle_sum += contacts[i].bond_angle; }
+            } else if $ CSO {contacts[i].b <  i32(id) + 1 }
+                      $ NCS {contacts[i].b >= 0           } {  
+                $ CSO { 
+                    if contacts[i].b < 0 {
+                        let index = -contacts[i].b - 1;
+                        net_force += vec3(-contacts[index].forces, contacts[index].moment);
+                        contacts[i].bond_type = contacts[index].bond_type;
+                        if settings.bonds == 3 { bond_angle_sum -= contacts[index].bond_angle; }
+                    } else if contacts[i].b > 0 {           
+                        // For contacts where the other particle has a lower ID, ensure consistent force retrieval
+                        for (var j = u32(contacts[i].b - 1) * MAX_CONTACTS; j < (u32(contacts[i].b - 1) + 1u) * MAX_CONTACTS; j++) {
+                            if u32(contacts[j].b - 1) == id {
+                                contacts[i].b = -(i32(j) + 1);
+                                net_force += vec3(-contacts[j].forces, contacts[j].moment);
+                                contacts[i].bond_type = contacts[j].bond_type;
+                                if settings.bonds == 3 { bond_angle_sum -= contacts[j].bond_angle; }
+                                break; 
+                            }   
+                        }   
+                    } 
+                }
+                $ NCS {
+                    for (var j = u32(contacts[i].b) * MAX_CONTACTS; j < (u32(contacts[i].b) + 1u) * MAX_CONTACTS; j++) {
+                        if u32(contacts[j].b) == id {
                             net_force += vec3(-contacts[j].forces, contacts[j].moment);
                             contacts[i].bond_type = contacts[j].bond_type;
                             if settings.bonds == 3 { bond_angle_sum -= contacts[j].bond_angle; }
                             break; 
-                        }   
-                    }   
-                } 
-            }
-            $ NCS {
-                for (var j = u32(contacts[i].b) * MAX_CONTACTS; j < (u32(contacts[i].b) + 1u) * MAX_CONTACTS; j++) {
-                    if u32(contacts[j].b) == id {
-                        net_force += vec3(-contacts[j].forces, contacts[j].moment);
-                        contacts[i].bond_type = contacts[j].bond_type;
-                        if settings.bonds == 3 { bond_angle_sum -= contacts[j].bond_angle; }
-                        break; 
+                        }
                     }
                 }
+            }       
+        }    
+
+        data[id * DATA_SIZE + 3u] = net_force.y;
+
+        // Apply sum of forces and gravity to velocities
+        let density = materials[mat_id].density;
+        let mass = density * PI * radii[id] * radii[id];
+        let rot_inertia = 0.5 * mass * radii[id] * radii[id];
+      
+        var force = net_force.xy + vec2(forces[id].x, forces[id].y);
+        var moment = net_force.z * radii[id] + bond_angle_sum + forces[id].rot;
+        
+        // gravity
+        var gravity = vec2(0.0, 0.0);
+        if settings.gravity == 1 && settings.planet_mode == 1 {
+            var center_of_gravity = vec2(0.0, 0.0);
+            if settings.mouse_gravity == 1 {
+                center_of_gravity = vec2(settings.gravity_x, settings.gravity_y);
             }
-        }       
-    }    
-
-    data[id * DATA_SIZE + 3u] = net_force.y;
-
-    // Apply sum of forces and gravity to velocities
-    let density = materials[mat_id].density;
-    let mass = density * PI * radii[id] * radii[id];
-    let rot_inertia = 0.5 * mass * radii[id] * radii[id];
-  
-    var force = net_force.xy + vec2(forces[id].x, forces[id].y);
-    var moment = net_force.z * radii[id] + bond_angle_sum + forces[id].rot;
-    
-    // gravity
-    var gravity = vec2(0.0, 0.0);
-    if settings.gravity == 1 && settings.planet_mode == 1 {
-        var center_of_gravity = vec2(0.0, 0.0);
-        if settings.mouse_gravity == 1 {
-            center_of_gravity = vec2(settings.gravity_x, settings.gravity_y);
+            let delta = (center_of_gravity - positions[id]);
+            if delta.x != 0.0 || delta.y != 0.0 {
+                force += (delta / length(delta) * 9.81 * settings.gravity_acc) * mass;
+            }
+        } else if settings.gravity == 1 {
+            let gravity_acc = 9.81 * settings.gravity_acc;
+            force += vec2(0.0, -gravity_acc * mass);
         }
-        let delta = (center_of_gravity - positions[id]);
-        if delta.x != 0.0 || delta.y != 0.0 {
-            force += (delta / length(delta) * 9.81 * settings.gravity_acc) * mass;
-        }
-    } else if settings.gravity == 1 {
-        let gravity_acc = 9.81 * settings.gravity_acc;
-        force += vec2(0.0, -gravity_acc * mass);
+
+        //damping
+        // if settings.local_damping == 1 {
+        //     let alpha = settings.local_damping_alpha;
+        //     force  += vec2(abs(force.x), abs(force.y))  * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
+        //     moment += moment         * alpha * -sign(rot_vel[id]);
+        // }
+
+        // natural accelerations
+        accelerations[id] = (force) / mass;
+        rot_acc[id] = (moment) / rot_inertia;
+
+
+        if fixity[id].x_vel == 0 { velocities[id].x += 0.5 * accelerations[id].x * settings.dT; }
+        if fixity[id].y_vel == 0 { velocities[id].y += 0.5 * accelerations[id].y * settings.dT; }
+        if fixity[id].rot_vel == 0 { rot_vel[id] += 0.5 * rot_acc[id] * settings.dT; }
+
+        // // artifical accelerations
+        // velocities[id] += 0.5 * vec2(forces[id].x, forces[id].y) * settings.dT;
+        // rot_vel[id] += forces[id].rot*settings.dT;
     }
-
-    //damping
-    // if settings.local_damping == 1 {
-    //     let alpha = settings.local_damping_alpha;
-    //     force  += vec2(abs(force.x), abs(force.y))  * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
-    //     moment += moment         * alpha * -sign(rot_vel[id]);
-    // }
-
-    // natural accelerations
-    accelerations[id] = (force) / mass;
-    rot_acc[id] = (moment) / rot_inertia;
-
-
-    if fixity[id].x_vel == 0 { velocities[id].x += 0.5 * accelerations[id].x * settings.dT; }
-    if fixity[id].y_vel == 0 { velocities[id].y += 0.5 * accelerations[id].y * settings.dT; }
-    if fixity[id].rot_vel == 0 { rot_vel[id] += 0.5 * rot_acc[id] * settings.dT; }
-
-    // // artifical accelerations
-    // velocities[id] += 0.5 * vec2(forces[id].x, forces[id].y) * settings.dT;
-    // rot_vel[id] += forces[id].rot*settings.dT;
 }

@@ -1,8 +1,8 @@
-use crate::audio_controller::*;
 use crate::particle_def::Particle_Definition;
 use crate::scripts::{self, Key, ScriptManager};
 use crate::wgpu_config::WGPUConfig;
 use crate::wgpu_prog::WGPUProg;
+use crate::{audio_controller::*, sound::*};
 use egui::color_picker::Alpha;
 use egui::*;
 use plot::Plot;
@@ -137,7 +137,24 @@ pub struct ViewSettings {
     pub data_menu: bool,
     pub script_menu: bool,
     pub code_editor: bool,
-    pub audio_menu: bool,
+    pub audio: AudioView,
+}
+
+pub struct AudioView {
+    pub menu: bool,
+    pub left_tab: usize,
+    pub current_sound: i32,
+    pub current_source: i32,
+    pub waveform: bool,
+    pub oscilloscope: bool,
+    pub osc_life: f32,
+}
+
+pub enum AV {
+    WaveForm,
+    Sound,
+    SoundInstance,
+    Sequence,
 }
 
 pub struct SetupSettings {
@@ -311,7 +328,15 @@ impl Settings {
                 data_menu: false,
                 script_menu: false,
                 code_editor: false,
-                audio_menu: false,
+                audio: AudioView {
+                    menu: false,
+                    left_tab: 0,
+                    current_sound: -1,
+                    current_source: -1,
+                    waveform: false,
+                    oscilloscope: false,
+                    osc_life: 1.0 / 100.0,
+                },
             },
             setup: SetupSettings {
                 particles,
@@ -518,6 +543,7 @@ impl Settings {
             self.script_panel(ctx, script_manager, prog, &mut config.device, &mut config.queue);
             self.code_editor(ctx, prog, config);
             self.audio_menu(ctx, ac);
+            self.waveform_menu(ctx, ac);
         }
         if self.simulation.auto_width && !self.export_screenshot {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
@@ -1124,7 +1150,7 @@ impl Settings {
                 .on_hover_text("Provides consistent results, impacts performance.")
                 .changed()
             {
-                self.changed_collision_settings = true;
+                self.rebuild_shaders = true;
             }
             ui.add_enabled_ui(self.f64_support, |ui| {
                 if self.f64_support {
@@ -1717,8 +1743,12 @@ impl Settings {
                 self.rebuild_shaders = true;
             }
             ui.separator();
-            if ui.selectable_label(self.view.audio_menu, "Audio").clicked() {
-                self.view.audio_menu = !self.view.audio_menu;
+            ui.label("Audio");
+            if ui.selectable_label(self.view.audio.menu, "Sounds").clicked() {
+                self.view.audio.menu = !self.view.audio.menu;
+            }
+            if ui.selectable_label(self.view.audio.waveform, "Waveform").clicked() {
+                self.view.audio.waveform = !self.view.audio.waveform;
             }
         });
     }
@@ -1960,7 +1990,7 @@ impl Settings {
                             }
                         }
                         ui.separator();
-                        if ui.button("Add Action").clicked() {
+                        if ui.add_sized(egui::Vec2::new(ui.available_width(), 0.0), egui::Button::new("+")).clicked() {
                             script_manager.push_action(self.current_script, Action::new(Command::None, vec![]));
                         }
                     });
@@ -2283,32 +2313,138 @@ impl Settings {
         self.changed_collision_settings = true;
     }
 
-    fn audio_menu(&self, ctx: &Context, ac: &mut AudioController) {
-        if self.view.audio_menu {
-            egui::Window::new("Audio").resizable(true).show(ctx, |ui| {
-                let mut sounds = ac.sounds.lock().unwrap();
+    fn audio_menu(&mut self, ctx: &Context, ac: &mut AudioController) {
+        if self.view.audio.menu {
+            egui::Window::new("Audio").collapsible(false).resizable(true).show(ctx, |ui| {
+                let sound_count = ac.sounds.lock().unwrap().len();
                 ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        let mut sid = 0;
-                        for sid in 0..sounds.len() {
-                            egui::CollapsingHeader::new(format!("Sound {}", sid)).show(ui, |ui| {
-                                for i in 0..sounds[sid].sources.len() {
-                                    sounds[sid].sources[i].ui(ui, format!("{}:{}", sid, i).as_str());
+                    ui.group(|ui| {
+                        ui.vertical(|ui| {
+                            ui.set_width(100.0);
+                            ui.horizontal(|ui| {
+                                if ui.selectable_label(self.view.audio.left_tab == 0, "Sounds").clicked() {
+                                    self.view.audio.left_tab = 0;
                                 }
-
-                                for i in 0..sounds[sid].effects.len() {
-                                    sounds[sid].effects[i].ui(ui);
+                                if ui.selectable_label(self.view.audio.left_tab == 1, "Sequences").clicked() {
+                                    self.view.audio.left_tab = 1;
                                 }
                             });
-                        }
+                            ui.separator();
+                            if self.view.audio.left_tab == 0 {
+                                for sid in 0..sound_count {
+                                    ui.horizontal(|ui| {
+                                        let mut sounds = ac.sounds.lock().unwrap();
+                                        if ui
+                                            .add_sized(
+                                                ui.available_size(),
+                                                egui::SelectableLabel::new(self.view.audio.current_sound == sid as i32, format!("{}", sounds[sid].name)),
+                                            )
+                                            .clicked()
+                                        {
+                                            self.view.audio.current_sound = sid as i32;
+                                            self.view.audio.current_source = -1;
+                                        }
+                                        mem::drop(sounds);
+                                    });
+                                }
+                                if ui.add_sized(egui::Vec2::new(ui.available_width(), 0.0), egui::Button::new("+")).clicked() {
+                                    ac.new_sound();
+                                }
+                            }
+                        });
                     });
-                    ui.vertical(|ui| {
-                        let ar = ac.ar.lock().unwrap();
-                        let record = ar.get_record();
+                    if self.view.audio.left_tab == 0 && self.view.audio.current_sound != -1 {
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                ui.set_width(130.0);
+                                ui.horizontal(|ui| {
+                                    let mut sounds = ac.sounds.lock().unwrap();
+                                    let cs = self.view.audio.current_sound as usize;
+                                    ui.text_edit_singleline(sounds[cs].name_mut());
+                                    mem::drop(sounds);
+                                    if ui.button("Play").clicked() {
+                                        ac.play(cs);
+                                    }
+                                });
+                                ui.horizontal(|ui| {
+                                    let mut sounds = ac.sounds.lock().unwrap();
+                                    let cs = self.view.audio.current_sound as usize;
 
+                                    ui.label("Duration: ");
+
+                                    ui.add_enabled(
+                                        !sounds[cs].auto_duration,
+                                        egui::DragValue::new(&mut sounds[cs].duration).clamp_range(1..=u64::MAX).speed(1).suffix("ms"),
+                                    );
+                                    ui.checkbox(&mut sounds[cs].auto_duration, "Auto");
+                                });
+                                ui.separator();
+
+                                let mut sounds = ac.sounds.lock().unwrap();
+                                let cs = self.view.audio.current_sound as usize;
+                                let source_count = sounds[cs].sources.len();
+                                for i in 0..source_count {
+                                    let source_type = sounds[cs].sources[i].as_type_string();
+                                    if ui
+                                        .add_sized(
+                                            egui::Vec2::new(ui.available_width(), 0.0),
+                                            egui::SelectableLabel::new(self.view.audio.current_source == i as i32, format!("{}: {}", i, source_type)),
+                                        )
+                                        .clicked()
+                                    {
+                                        self.view.audio.current_source = i as i32;
+                                    }
+                                }
+                                if ui.add_sized(egui::Vec2::new(ui.available_width(), 0.0), egui::Button::new("+")).clicked() {
+                                    sounds[cs].new_source();
+                                }
+                                mem::drop(sounds);
+                            });
+                        });
+                    }
+                    if self.view.audio.left_tab == 0 && self.view.audio.current_sound != -1 && self.view.audio.current_source != -1 {
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                let mut sounds = ac.sounds.lock().unwrap();
+                                sounds[self.view.audio.current_sound as usize].ui(ui, self.view.audio.current_source as i32, 0);
+                            });
+                        });
+                    }
+                });
+            });
+        }
+    }
+
+    fn waveform_menu(&mut self, ctx: &Context, ac: &mut AudioController) {
+        if self.view.audio.waveform {
+            egui::Window::new("Waveform").collapsible(false).resizable(true).show(ctx, |ui| {
+                ui.vertical(|ui| {
+                    let ar = ac.ar.lock().unwrap();
+                    let record = ar.get_record();
+                    if self.view.audio.oscilloscope {
+                        let mut oss_line_vec = vec![];
+                        let life = 1.0 / 120.0;
+                        let record_duration = 1.0;
+                        let start_index = record.0.len() - (record.0.len() as f32 * life) as usize;
+                        for i in start_index..record.0.len() {
+                            oss_line_vec.push([record.0[i] as f64, record.1[i] as f64]);
+                        }
+                        let oss_values = egui::plot::PlotPoints::from((oss_line_vec.to_owned()));
+                        let oss_line = egui::plot::Line::new(oss_values);
+                        let plot_oss = egui::plot::Plot::new("left channel plot")
+                            .auto_bounds_x()
+                            .auto_bounds_y()
+                            .clamp_grid(true)
+                            .height(800.0)
+                            .width(800.0)
+                            .allow_drag(false)
+                            .show_axes([false, false])
+                            .show(ui, |plot_ui| {
+                                plot_ui.line(oss_line);
+                            });
+                    } else {
                         let l_values = egui::plot::PlotPoints::from_ys_f32(&record.0);
                         let l_line = egui::plot::Line::new(l_values);
-
                         let r_values = egui::plot::PlotPoints::from_ys_f32(&record.1);
                         let r_line = egui::plot::Line::new(r_values);
                         let plot_l = egui::plot::Plot::new("left channel plot")
@@ -2317,8 +2453,7 @@ impl Settings {
                             .clamp_grid(true)
                             .height(300.0)
                             .allow_drag(false)
-                            .show_x(false)
-                            .show_y(false)
+                            .show_axes([false, false])
                             .show(ui, |plot_ui| {
                                 plot_ui.line(l_line);
                             });
@@ -2329,11 +2464,28 @@ impl Settings {
                             .clamp_grid(true)
                             .height(300.0)
                             .allow_drag(false)
-                            .show_x(false)
-                            .show_y(false)
+                            .show_axes([false, false])
                             .show(ui, |plot_ui| {
                                 plot_ui.line(r_line);
                             });
+                    }
+                    ui.horizontal(|ui| {
+                        let mut selected_text = "Wave";
+                        if self.view.audio.oscilloscope {
+                            selected_text = "Oscilloscope";
+                        }
+                        egui::ComboBox::new("Waveform View", "").selected_text(format!("{}", selected_text)).show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.view.audio.oscilloscope, false, "Wave");
+                            ui.selectable_value(&mut self.view.audio.oscilloscope, true, "Oscilloscope");
+                        });
+
+                        if self.view.audio.oscilloscope {
+                            egui::DragValue::new(&mut self.view.audio.osc_life)
+                                .clamp_range(0.001..=1.0)
+                                .prefix("Fade Time: ")
+                                .suffix(" s")
+                                .speed(0.001);
+                        }
                     });
                 });
             });
