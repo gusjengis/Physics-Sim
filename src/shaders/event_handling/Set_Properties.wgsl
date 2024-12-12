@@ -1,3 +1,5 @@
+# physics_structs;
+
 struct Input {
     set_x_pos: i32,
     set_y_pos: i32,
@@ -27,24 +29,6 @@ struct Input {
     y_fixity: i32,
     rot_fixity: i32,
     material: i32,
-}
-
-struct Particle_Settings {
-    x_vel: i32,
-    y_vel: i32,
-    rot_vel: i32,
-    x_vel_2: i32,
-    y_vel_2: i32,
-    rot_vel_2: i32,
-}
-
-struct Forces {
-    x: f32,
-    y: f32,
-    rot: f32,
-    delX: f32,
-    delY: f32,
-    delRot: f32,
 }
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;

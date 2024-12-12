@@ -9,6 +9,8 @@ pub fn assemble_shader(shader: &str, settings: &Settings) -> String {
         let char = iter.next().unwrap();
         if char == '$' {
             res.push_str(&handle_conditional_blocks(&mut iter, settings));
+        } else if char == '#' {
+            res.push_str(&handle_definition_imports(&mut iter, settings));
         } else {
             res.push(char);
         }
@@ -36,6 +38,8 @@ fn handle_conditional_blocks(iter: &mut Peekable<Chars<'_>>, settings: &Settings
         let char = iter.next().unwrap();
         if char == '$' {
             res.push_str(&handle_conditional_blocks(iter, settings));
+        } else if char == '#' {
+            res.push_str(&handle_definition_imports(iter, settings));
         } else {
             if char == '{' {
                 open_brackets += 1;
@@ -53,6 +57,29 @@ fn handle_conditional_blocks(iter: &mut Peekable<Chars<'_>>, settings: &Settings
     }
 
     return String::from("");
+}
+
+fn handle_definition_imports(iter: &mut Peekable<Chars<'_>>, settings: &Settings) -> String {
+    let mut token = String::from("");
+    let mut tokens = vec![];
+    while iter.peek() != None && *iter.peek().unwrap() != ';' {
+        let char = iter.next().unwrap();
+        if char != ' ' {
+            token.push(char);
+        } else {
+            tokens.push(token);
+            token = String::from("");
+        }
+    }
+
+    let file_path = format!("src/shaders/definitions/{}.wgsl", token);
+
+    let file_contents = match std::fs::read_to_string(&file_path) {
+        Ok(contents) => assemble_shader(&contents, settings),
+        Err(_) => String::new(),
+    };
+
+    return file_contents;
 }
 
 fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
@@ -92,6 +119,9 @@ fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
             }
             "DETERMINISTIC" => {
                 res |= settings.simulation.deterministic;
+            }
+            "NON-DETERMINISTIC" => {
+                res |= !settings.simulation.deterministic;
             }
             "CSO" => {
                 res |= settings.contact_search_optimization;

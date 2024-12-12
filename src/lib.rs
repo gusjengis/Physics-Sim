@@ -2,6 +2,7 @@
 
 pub mod audio_controller;
 pub mod client;
+pub mod macros;
 pub mod particle_def;
 pub mod scripts;
 pub mod settings;
@@ -9,6 +10,7 @@ pub mod setup;
 pub mod shader_gen;
 pub mod sound;
 pub mod state;
+pub mod timeline_widget;
 pub mod wgpu_config;
 pub mod wgpu_prog;
 pub mod wgpu_structs;

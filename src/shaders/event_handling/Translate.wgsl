@@ -1,3 +1,5 @@
+#physics_structs;
+
 struct Input {
     x: f32,
     y: f32,
@@ -6,24 +8,6 @@ struct Input {
     timestep: f32,
     ticks_per_frame: f32,
     toggle: i32
-}
-
-struct Particle_Settings {
-    x_vel: i32,
-    y_vel: i32,
-    rot_vel: i32,
-    x_vel_2: i32,
-    y_vel_2: i32,
-    rot_vel_2: i32,
-}
-
-struct Forces {
-    x: f32,
-    y: f32,
-    rot: f32,
-    delX: f32,
-    delY: f32,
-    delRot: f32,
 }
 
 @group(0) @binding(0) var<uniform> input: Input;

@@ -118,7 +118,8 @@ impl State {
         let flatbuffer = vec![0 as u8; 1];
         // Setup initial state
         setup::grid(settings, &mut pos, &mut vel, &mut radii, &mut fixity, &mut forces, &mut material_pointers);
-        let grid_info_return = grid_capacity(&settings);
+
+        let grid_info_return = settings.grid_info();
 
         let mut state = State {
             up_to_date: true,
@@ -143,12 +144,13 @@ impl State {
             contact_pointers,
             data,
             flatbuffer,
-            grid: vec![0; 1],
+            grid: vec![0; grid_info_return.0 * grid_info_return.2 as usize],
             grid_info: GridInfo::new(grid_info_return.0, grid_info_return.1, grid_info_return.2, grid_info_return.3, grid_info_return.4),
         };
 
         // state.load_from_csv(PathBuf::from("./saved_states/particle_state.csv"), settings);
         state.regen_bonds(config, settings);
+        state.print_state();
         state.save(config, settings, Some(script_manager));
         settings.update_critical_timestep = true;
 
@@ -156,9 +158,10 @@ impl State {
     }
 
     pub fn print_state(&self) {
-        for i in 0..self.p_count {
+        for i in 0..1 {
+            //self.p_count {
             print!("{}:\n", i);
-            for j in 0..CONTACT_SIZE * 2 {
+            for j in 0..CONTACT_SIZE {
                 let mut base = i * MAX_CONTACTS * CONTACT_SIZE; // + j * CONTACT_SIZE;
 
                 // let b = bytemuck::cast::<f32, i32>(self.contacts[base]);
@@ -307,7 +310,7 @@ impl State {
         State::update_i32(&mut config.device, &mut config.queue, &mut self.selections, &mut buffers.selection_buffers.buffers[0]);
         State::update_i32(&mut config.device, &mut config.queue, &mut self.groups, &mut buffers.selection_buffers.buffers[1]);
         State::update_f32(&mut config.device, &mut config.queue, &mut self.data, &mut buffers.data_buffer.buffer);
-        //self.print_state();
+        self.print_state();
         // State::update_i32(config.device, config.queue, &mut self.grid, &mut buffers.contact_buffers.buffers[4]);
         // for n in self.grid.iter() {
         //     println!("{}", n);
@@ -354,6 +357,7 @@ impl State {
                                 // println!("{}", bytemuck::cast::<f32, i32>(contacts[4*k]));
                                 if bytemuck::cast::<f32, i32>(contacts[CONTACT_SIZE * k]) == -1 {
                                     contacts[CONTACT_SIZE * k + 0] = bytemuck::cast(j as i32); //b
+                                    contacts[CONTACT_SIZE * k + 1] = bytemuck::cast(bond_index as i32); // bond_type
                                     contacts[CONTACT_SIZE * k + 2] = 0.0; // x force
                                     contacts[CONTACT_SIZE * k + 3] = 0.0; // y force
                                     contacts[CONTACT_SIZE * k + 4] = 0.0; // moment
@@ -370,6 +374,7 @@ impl State {
                             for k in settings.setup.max_contacts * j..settings.setup.max_contacts * (j + 1) {
                                 if bytemuck::cast::<f32, i32>(contacts[CONTACT_SIZE * k]) == -1 {
                                     contacts[CONTACT_SIZE * k + 0] = bytemuck::cast(i as i32); //b
+                                    contacts[CONTACT_SIZE * k + 1] = bytemuck::cast(bond_index as i32); // bond_type
                                     contacts[CONTACT_SIZE * k + 2] = 0.0; // x force
                                     contacts[CONTACT_SIZE * k + 3] = 0.0; // y force
                                     contacts[CONTACT_SIZE * k + 4] = 0.0; // moment
@@ -407,7 +412,7 @@ impl State {
         // }
         self.bonds = bonds;
         self.contacts = contacts;
-        self.print_state();
+        // self.print_state();
     }
 
     pub fn save(&mut self, config: &mut WGPUConfig, settings: &Settings, script_manager: Option<&ScriptManager>) {
@@ -744,7 +749,7 @@ impl State {
         settings.setup.max_radius = max;
         settings.setup.variable_rad = min != max;
 
-        let grid_info_return = grid_capacity(&settings);
+        let grid_info_return = settings.grid_info();
         self.grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
         self.grid_info = GridInfo::new(grid_info_return.0, grid_info_return.1, grid_info_return.2, grid_info_return.3, grid_info_return.4);
     }

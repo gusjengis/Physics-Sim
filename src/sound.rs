@@ -174,7 +174,7 @@ impl Source {
                     ui.add(egui::DragValue::new(amp).clamp_range(0.0..=1.0).speed(0.01));
                 });
             }
-            Source::File(path, samples, mut s_index, _, mut amp, ..) => {
+            Source::File(path, samples, ref mut s_index, _, ref mut amp, ..) => {
                 let mut new_file = false;
                 if ui.button("Select File").clicked() {
                     if let Some(file_path) = rfd::FileDialog::new().pick_file() {
@@ -185,8 +185,8 @@ impl Source {
 
                 if let Some(file_path) = path {
                     ui.label(format!("Selected file: {}", file_path.display()));
-                    ui.add(egui::Slider::new(&mut s_index, 0..=(samples.len() - 1)).text("Playback"));
-                    ui.add(egui::DragValue::new(&mut amp).clamp_range(0.0..=1.0).speed(0.01).prefix("Volume: "));
+                    ui.add(egui::Slider::new(s_index, 0..=(samples.len() - 1)).text("Playback"));
+                    ui.add(egui::DragValue::new(amp).clamp_range(0.0..=1.0).speed(0.01).prefix("Volume: "));
                     if new_file {
                         self.init_source();
                     }
@@ -236,8 +236,8 @@ impl Source {
                 if target_sample + channels < vec.len() {
                     let mut sum = 0.0;
                     if channels == 2 {
-                        res.0 = vec[target_sample * channels + 0];
-                        res.1 = vec[target_sample * channels + 1];
+                        res.0 = *amp * vec[target_sample * channels + 0];
+                        res.1 = *amp * vec[target_sample * channels + 1];
                     } else {
                         for i in 0..channels as usize {
                             sum += vec[target_sample * channels + i];

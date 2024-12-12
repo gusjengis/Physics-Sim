@@ -1,5 +1,6 @@
 use crate::audio_controller;
 use crate::audio_controller::AudioController;
+use crate::runtime;
 use crate::scripts;
 use crate::scripts::ScriptManager;
 use crate::settings::Data;
@@ -693,7 +694,6 @@ impl Client {
                                 return o.copied_text.clone();
                             });
                             if selected_text.len() > 0 {
-                                println!("selected text: {}", selected_text);
                                 self.clipboard.set_contents(selected_text).unwrap();
                             }
                             println!("selected text");
@@ -721,18 +721,19 @@ impl Client {
     }
 
     fn reset(&mut self) {
-        // self.start_time = Local::now();
-        self.wgpu_prog.shader_prog = WGPUComputeProg::new(
-            &mut self.wgpu_config,
-            &mut self.settings,
-            (self.canvas.size.width as u32, self.canvas.size.height as u32),
-            &self.script_manager,
-        );
-        self.settings.simulating = false;
-        self.generation = 0;
-        self.prev_gen = 0;
-        self.start_time = Local::now();
-        self.settings.data = Data::new();
+        runtime!("Reset", {
+            self.wgpu_prog.shader_prog.reset(
+                &mut self.wgpu_config,
+                &mut self.settings,
+                (self.canvas.size.width as u32, self.canvas.size.height as u32),
+                &self.script_manager,
+            );
+            self.settings.simulating = false;
+            self.generation = 0;
+            self.prev_gen = 0;
+            self.start_time = Local::now();
+            self.settings.data = Data::new();
+        });
     }
 
     fn backup(&mut self) {
@@ -741,12 +742,14 @@ impl Client {
     }
 
     fn restore(&mut self) {
-        self.wgpu_prog.shader_prog.state.load(&mut self.wgpu_config, &mut self.settings, Some(&mut self.script_manager), false);
-        self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, &mut self.settings);
-        self.generation = 0;
-        self.prev_gen = 0;
-        self.start_time = Local::now();
-        self.settings.data = Data::new();
+        runtime!("Restore", {
+            self.wgpu_prog.shader_prog.state.load(&mut self.wgpu_config, &mut self.settings, Some(&mut self.script_manager), false);
+            self.wgpu_prog.shader_prog.restore(&mut self.wgpu_config, &mut self.settings);
+            self.generation = 0;
+            self.prev_gen = 0;
+            self.start_time = Local::now();
+            self.settings.data = Data::new();
+        });
     }
 
     fn zoom(&mut self, change: f32) {
@@ -1062,11 +1065,11 @@ impl Client {
             bytemuck::cast(self.cursor_pos.1 - self.click_pos.1),
             bytemuck::cast((self.middle && !self.shift) as i32),
             bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32),
+            bytemuck::cast(self.settings.setup.particles as i32),
             self.wgpu_prog.cam.eye.x,
             self.wgpu_prog.cam.eye.y,
             self.wgpu_prog.cam.eye.z,
             0.0,
-            bytemuck::cast(self.settings.setup.particles as i32),
         ];
         //add camera
         input.extend_from_slice(&self.wgpu_prog.cam.view_proj.as_slice()[0]);

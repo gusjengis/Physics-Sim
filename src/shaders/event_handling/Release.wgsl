@@ -1,3 +1,6 @@
+#physics_structs;
+#physics_settings;
+
 struct Input {
     x: i32,
     y: i32,
@@ -7,57 +10,6 @@ struct Input {
     temp1: f32,
     temp2: f32,
     temp3: f32,
-}
-
-struct Particle_Settings {
-    x_vel: i32,
-    y_vel: i32,
-    rot_vel: i32,
-    x_vel_2: i32,
-    y_vel_2: i32,
-    rot_vel_2: i32,
-}
-
-struct Forces {
-    x: f32,
-    y: f32,
-    rot: f32,
-    delX: f32,
-    delY: f32,
-    delRot: f32,
-}
-
-struct Settings {
-    walls: i32,
-    hor_bound: f32,
-    vert_bound: f32,
-    round_bounds: i32,
-    bound_radius: f32,
-    wall_friction: f32,
-    gravity: i32,
-    planet_mode: i32,
-    bonds: i32,
-    collisions: i32,
-    friction_coefficient: f32,
-    gravity_acc: f32,
-    bond_normal_stiffness: f32,
-    bonds_tear: i32,
-    bond_normal_strength: f32,
-    contact_damping: f32,
-    bond_damping: f32,
-    drag: f32,
-    bond_shear_strength: f32,
-    dT: f32,
-    bond_shear_stiffness: f32,
-    gravity_x: f32,
-    gravity_y: f32,
-    mouse_gravity: i32,
-    moment_contribution_factor: f32,
-    collision_interval: i32,
-    local_damping: i32,
-    local_damping_alpha: f32,
-    particles: i32,
-    update_contacts: i32,
 }
 
 @group(0) @binding(0) var<uniform> input: Input;

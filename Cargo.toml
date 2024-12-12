@@ -16,6 +16,9 @@ target_arch = "wasm32"
 target_arch = "wasm32"
 # RUSTFLAGS = "--cfg=web_sys_unstable_apis"
 
+[features]
+profiling = []
+
 [target.'cfg(target_arch = "wasm32")']
 rustflags = [  "-C", "link-arg=-s",  "-C", "link-arg=--no-entry",  "-C", "link-arg=--export-table",  "-C", "link-arg=--import-memory",  "-C", "link-arg=--allow-undefined"]#"--cfg=web_sys_unstable_apis",
 

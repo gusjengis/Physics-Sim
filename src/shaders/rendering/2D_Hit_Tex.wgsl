@@ -1,98 +1,13 @@
-struct VertexIn {
-    @location(0) position: vec2<f32>,
-};
-
-struct Input {
-    width: f32, time: f32,
-    height: f32,
-    xOff: f32, yOff: f32,
-    ui_xOff: f32, ui_yOff: f32,
-    ui_scale: f32, scale: f32,
-    dark: f32,
-    x: i32, y: i32,
-    rW: i32, rH: i32,
-    pressed: i32,
-    timestamp: i32,
-    p_count: i32,
-    $ 3D { cam: Camera, }
-}
-
-struct Contact {
-    b: i32,
-    forces: vec2<f32>,
-    moment: f32,
-    s_force: vec2<f32>,
-    theta_b:  f32,
-    bond_type: i32,
-    bond_length: f32,
-    bond_angle: f32
-};
-
-$ 3D {
-    struct Camera {
-        pos: vec4<f32>,
-        view_proj: mat4x4<f32>,
-        eye: mat4x4<f32>,
-        focus: mat4x4<f32>,
-    };
-}
-
-struct Material {
-    red: f32,
-    green: f32,
-    blue: f32,
-    density: f32,
-    normal_stiffness: f32,
-    shear_stiffness: f32,
-}
+# physics_structs;
+# rendering_structs;
+# rendering_settings;
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) position: vec2<f32>,
-    // @location(1) color: vec3<f32>,
     @location(1) rot: f32,
     @location(2) rot_vel: f32,
     @location(3) id: u32
-};
-
-struct Settings {
-    circular_particles: i32,
-    render_rot: i32,
-    color_code_rot: i32,
-    colors: i32,
-    render_bonds: i32,
-    walls: i32,
-    w: f32,
-    h: f32,
-    stiffness: f32,
-    render_grid: i32,
-    round_bounds: i32,
-    wall_radius: f32,
-    render_outline: i32,
-    use_part_color: i32,
-    background_r: f32,
-    background_g: f32,
-    background_b: f32,
-    outline_r: f32,
-    outline_g: f32,
-    outline_b: f32,
-    dim_slow_particles: i32,
-    max_brightness_vel: f32,
-    crt_res: i32,
-    grain: i32,
-    grain_strength: f32,
-    grain_size: i32,
-    sobel: i32,
-    invert: i32,
-    chrom_ab: i32,
-    abb_strength: f32,
-    bond_highlight_strength: f32,
-    render_unbonded_contacts: i32
-}
-struct Bond {
-    index: i32,
-    angle: f32,
-    length: f32
 };
 
 @group(0) @binding(0) var<uniform> input: Input;

@@ -1,5 +1,6 @@
 use crate::particle_def::Particle_Definition;
 use crate::scripts::{self, Key, ScriptManager};
+use crate::timeline_widget::Timeline;
 use crate::wgpu_config::WGPUConfig;
 use crate::wgpu_prog::WGPUProg;
 use crate::{audio_controller::*, sound::*};
@@ -148,6 +149,7 @@ pub struct AudioView {
     pub waveform: bool,
     pub oscilloscope: bool,
     pub osc_life: f32,
+    pub timeline_menu: bool,
 }
 
 pub enum AV {
@@ -286,13 +288,13 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(canvas: &Canvas) -> Self {
-        let particles = 256;
+        let particles = 25600;
         let workgroup_size = 256;
         //particle settings
         let max_radius = 0.025;
-        let holeyness = 1.7;
+        let holeyness = 1.3;
         let max_bonds = 6;
-        let vert_bound = 2.0;
+        let vert_bound = 10.0;
         let hor_bound = vert_bound * 1.333;
         let materials = vec![1.0, 1.0, 1.0, 0.01, 100.0, 50.0, 1.0, 0.0, 0.0, 0.01, 100.0, 50.0];
         let mut settings = Settings {
@@ -302,15 +304,15 @@ impl Settings {
                 rendering: true,
                 circular_particles: true,
                 render_rot: false,
-                render_bonds: true,
+                render_bonds: false,
                 render_outline: true,
                 render_bp_grid: false,
                 color_code_rot: false,
                 use_particle_color_outline: true,
                 outline_color: [0.0, 0.0, 0.0],
                 background_color: [0.0, 0.0, 0.0],
-                color_source: ColorSource::Material,
-                dim_slow_particles: false,
+                color_source: ColorSource::Direction,
+                dim_slow_particles: true,
                 max_brightness_vel: 1.0,
                 crt_res: 1,
                 grain: false,
@@ -336,6 +338,7 @@ impl Settings {
                     waveform: false,
                     oscilloscope: false,
                     osc_life: 1.0 / 100.0,
+                    timeline_menu: false,
                 },
             },
             setup: SetupSettings {
@@ -344,7 +347,7 @@ impl Settings {
                 workgroup_size,
                 max_radius,
                 min_radius: max_radius / holeyness,
-                variable_rad: false,
+                variable_rad: true,
                 holeyness,
                 max_bonds,
                 max_contacts: max_bonds + 8,
@@ -353,15 +356,15 @@ impl Settings {
                 max_v_velocity: 0.0,
                 min_v_velocity: 0.0,
                 structure: Structure::Grid,
-                grid_width: 32.0,
+                grid_width: 160.0,
                 hex_grid: false,
             },
             simulation: SimulationSettings {
-                timestep: 1.0 / 12600.0,
+                timestep: 1.0 / 3240.0,
                 auto_timestep: false,
                 round_timestep: true,
-                gen_per_frame: 105,
-                max_gen_per_frame: 213,
+                gen_per_frame: 27,
+                max_gen_per_frame: 27,
                 auto_width: true,
                 walls: true,
                 hor_bound,
@@ -463,7 +466,7 @@ impl Settings {
             zoom_in: false,
             zoom_out: false,
             home: false,
-            simulating: false,
+            simulating: true,
             select_all: false,
             fix: false,
             drop: false,
@@ -544,6 +547,7 @@ impl Settings {
             self.code_editor(ctx, prog, config);
             self.audio_menu(ctx, ac);
             self.waveform_menu(ctx, ac);
+            self.timeline_menu(ctx, ac);
         }
         if self.simulation.auto_width && !self.export_screenshot {
             self.simulation.hor_bound = self.simulation.vert_bound * ctx.available_rect().width() as f32 / ctx.available_rect().height() as f32;
@@ -1750,6 +1754,9 @@ impl Settings {
             if ui.selectable_label(self.view.audio.waveform, "Waveform").clicked() {
                 self.view.audio.waveform = !self.view.audio.waveform;
             }
+            if ui.selectable_label(self.view.audio.timeline_menu, "Timeline").clicked() {
+                self.view.audio.timeline_menu = !self.view.audio.timeline_menu;
+            }
         });
     }
 
@@ -2069,11 +2076,13 @@ impl Settings {
         let h = (height / max_rad).ceil() as i32;
         let cell_cap = ((max_rad / min_rad + 1.0).powf(2.0).ceil() as i32).min(self.setup.particles as i32) + 2;
         let total_size = w * h * cell_cap;
-        println!("Cell Capacity:   {}", cell_cap);
-        println!("Cell Dimensions: {} x {}", w, h);
-        println!("Total Cells:     {}", w * h);
-        println!("Total Capacity:  {}", total_size);
-        println!("Bytes:           {}", total_size * 4);
+        if false {
+            println!("Cell Capacity:   {}", cell_cap);
+            println!("Cell Dimensions: {} x {}", w, h);
+            println!("Total Cells:     {}", w * h);
+            println!("Total Capacity:  {}", total_size);
+            println!("Bytes:           {}", total_size * 4);
+        }
 
         return ((w * h) as usize, max_rad, cell_cap, w, h);
     }
@@ -2415,6 +2424,19 @@ impl Settings {
         }
     }
 
+    fn timeline_menu(&mut self, ctx: &Context, ac: &mut AudioController) {
+        if self.view.audio.timeline_menu {
+            egui::Window::new("Timeline").collapsible(false).resizable(true).show(ctx, |ui| {
+                let mut timeline = Timeline::new();
+                timeline.regions.push((0.2, 0.4)); // Example region
+                timeline.regions.push((0.5, 0.7)); // Another region
+                timeline.playhead_position = 0.3; // Example playhead position
+
+                ui.add(&mut timeline);
+            });
+        }
+    }
+
     fn waveform_menu(&mut self, ctx: &Context, ac: &mut AudioController) {
         if self.view.audio.waveform {
             egui::Window::new("Waveform").collapsible(false).resizable(true).show(ctx, |ui| {
@@ -2423,7 +2445,7 @@ impl Settings {
                     let record = ar.get_record();
                     if self.view.audio.oscilloscope {
                         let mut oss_line_vec = vec![];
-                        let life = 1.0 / 120.0;
+                        let life = self.view.audio.osc_life;
                         let record_duration = 1.0;
                         let start_index = record.0.len() - (record.0.len() as f32 * life) as usize;
                         for i in start_index..record.0.len() {
@@ -2480,11 +2502,13 @@ impl Settings {
                         });
 
                         if self.view.audio.oscilloscope {
-                            egui::DragValue::new(&mut self.view.audio.osc_life)
-                                .clamp_range(0.001..=1.0)
-                                .prefix("Fade Time: ")
-                                .suffix(" s")
-                                .speed(0.001);
+                            ui.add(
+                                egui::DragValue::new(&mut self.view.audio.osc_life)
+                                    .clamp_range(0.001..=1.0)
+                                    .prefix("Fade Time: ")
+                                    .suffix(" s")
+                                    .speed(0.001),
+                            );
                         }
                     });
                 });

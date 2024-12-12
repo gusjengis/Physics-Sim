@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::particle_def::Particle_Definition;
+use crate::runtime;
 use crate::scripts::ScriptManager;
 use crate::settings;
 use crate::settings::Structure;
@@ -77,27 +78,27 @@ impl WGPUProg {
 
         let shader1_str = include_str!("shaders/rendering/2D_Particles.wgsl");
         let shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Particle Shader"),
             source: wgpu::ShaderSource::Wgsl(assemble_shader(shader1_str, settings).into()),
         });
         let shader2_str = include_str!("shaders/rendering/2D_Background.wgsl");
         let shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Background Shader"),
             source: wgpu::ShaderSource::Wgsl(assemble_shader(shader2_str, settings).into()),
         });
         let shader3_str = include_str!("shaders/rendering/2D_Hit_Tex.wgsl");
         let shader3 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Hit_Tex Shader"),
             source: wgpu::ShaderSource::Wgsl(assemble_shader(shader3_str, settings).into()),
         });
         let shader4_str = include_str!("shaders/rendering/2D_Post_Processing.wgsl");
         let shader4 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Post Processing Shader"),
             source: wgpu::ShaderSource::Wgsl(assemble_shader(shader4_str, settings).into()),
         });
         let shader6_str = include_str!("shaders/rendering/2D_Creation.wgsl");
         let shader6 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Creation Shader"),
             source: wgpu::ShaderSource::Wgsl(assemble_shader(shader6_str, settings).into()),
         });
 
@@ -208,7 +209,7 @@ impl WGPUProg {
         });
 
         let render_pipeline = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Particle Render Pipeline"),
             layout: Some(&pipeline_layout1),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -251,7 +252,7 @@ impl WGPUProg {
         });
 
         let render_pipeline2 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Background Render Pipeline"),
             layout: Some(&pipeline_layout2),
             vertex: wgpu::VertexState {
                 module: &shader2,
@@ -294,7 +295,7 @@ impl WGPUProg {
         });
 
         let render_pipeline3 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Hit_Tex Render Pipeline"),
             layout: Some(&pipeline_layout3),
             vertex: wgpu::VertexState {
                 module: &shader3,
@@ -337,7 +338,7 @@ impl WGPUProg {
         });
 
         let render_pipeline4 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Post Processing Render Pipeline"),
             layout: Some(&pipeline_layout4),
             vertex: wgpu::VertexState {
                 module: &shader4,
@@ -380,7 +381,7 @@ impl WGPUProg {
         });
 
         let render_pipeline5 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Hit_Tex Render Pipeline (2)"),
             layout: Some(&pipeline_layout3),
             vertex: wgpu::VertexState {
                 module: &shader3,
@@ -423,7 +424,7 @@ impl WGPUProg {
         });
 
         let render_pipeline6 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Creation Render Pipeline"),
             layout: Some(&pipeline_layout6),
             vertex: wgpu::VertexState {
                 module: &shader6,
@@ -514,12 +515,14 @@ impl WGPUProg {
     }
 
     pub fn rebuild_shaders(&mut self, config: &mut WGPUConfig, settings: &Settings) {
-        for i in 0..self.render_pipelines.len() {
-            self.rebuild_pipeline(config, settings, i);
-        }
-        for i in 0..2 {
-            self.shader_prog.rebuild_pipeline(config, settings, i);
-        }
+        runtime!("Rebuild Shaders", {
+            for i in 0..self.render_pipelines.len() {
+                self.rebuild_pipeline(config, settings, i);
+            }
+            for i in 0..2 {
+                self.shader_prog.rebuild_pipeline(config, settings, i);
+            }
+        });
     }
 
     pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, settings: &Settings, i: usize) {
@@ -768,31 +771,9 @@ pub struct WGPUComputeProg {
     pub set_prop_compute_pipeline: wgpu::ComputePipeline,
     // pub set_group_compute_pipeline: wgpu::ComputePipeline,
     pub hit_tex: Texture,
-    pub grid_info: GridInfo,
     pub shader_strs: Vec<String>,
     pub pipeline_layouts: Vec<PipelineLayout>,
     pub compute_pipelines: Vec<wgpu::ComputePipeline>,
-}
-
-pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
-    let width = settings.simulation.hor_bound * 2.0;
-    let height = settings.simulation.vert_bound * 2.0;
-    let max_rad = settings.setup.max_radius * 2.0;
-    let mut min_rad = settings.setup.min_radius;
-    if !settings.setup.variable_rad {
-        min_rad = settings.setup.max_radius;
-    }
-    let w = (width / max_rad).ceil() as i32;
-    let h = (height / max_rad).ceil() as i32;
-    let cell_cap = ((max_rad / min_rad + 1.0).powf(2.0).ceil() as i32).min(settings.setup.particles as i32) + 2;
-    let total_size = w * h * cell_cap;
-    // println!("Cell Capacity:   {}", cell_cap);
-    // println!("Cell Dimensions: {} x {}", w, h);
-    // println!("Total Cells:     {}", w * h);
-    // println!("Total Capacity:  {}", total_size);
-    // println!("Bytes:           {}", total_size * 4);
-
-    return ((w * h) as usize, max_rad, cell_cap, w, h);
 }
 
 impl WGPUComputeProg {
@@ -803,10 +784,6 @@ impl WGPUComputeProg {
 
         let p_count = state.p_count;
         // let mut contacts = vec![bytemuck::cast::<i32, f32>(-1); 4*settings.max_contacts*p_count];
-        let grid_info_return = settings.grid_info();
-        let mut bp_grid = vec![0; grid_info_return.0 * grid_info_return.2 as usize];
-        let mut cilck_info = vec![0; 4];
-        let grid_info = GridInfo::new(grid_info_return.0, grid_info_return.1, grid_info_return.2, grid_info_return.3, grid_info_return.4);
 
         // Convert arrays to GPU buffers
         let pos_buffers = BufferGroup::new(
@@ -838,8 +815,8 @@ impl WGPUComputeProg {
                 bytemuck::cast_slice(&state.contacts),
                 bytemuck::cast_slice(&state.contact_pointers),
                 bytemuck::cast_slice(&state.material_pointers),
-                bytemuck::cast_slice(&bp_grid),
-                bytemuck::cast_slice(&grid_info.as_vec()),
+                bytemuck::cast_slice(&state.grid),
+                bytemuck::cast_slice(&state.grid_info.as_vec()),
                 bytemuck::cast_slice(&vec![0 as i32; 4]), //shared mem, for controlling intermittent collision detection
             ],
             "Contact Buffers".to_string(),
@@ -850,6 +827,7 @@ impl WGPUComputeProg {
         let material_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&settings.materials), "Materials".to_string(), 0);
         let collision_settings = Uniform::new(&config.device, bytemuck::cast_slice(&settings.collision_settings()), "Collision Settings".to_string(), 0);
 
+        let mut cilck_info = vec![0; 4];
         let click_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&cilck_info), "Color Buffer".to_string(), 0);
 
         let create_input = Uniform::new(
@@ -967,7 +945,7 @@ impl WGPUComputeProg {
         // println!("11");
         let set_group_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/event_handling/Set_Group.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/event_handling/Set_Group.wgsl"), settings).into()),
         });
         ////create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -1152,14 +1130,6 @@ impl WGPUComputeProg {
             module: &set_prop_compute_shader,
             entry_point: "main",
         });
-        // println!("11");
-        // let set_group_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        //     label: None,
-        //     layout: Some(&set_group_compute_pipeline_layout),
-        //     module: &set_group_compute_shader,
-        //     entry_point: "main",
-        // });
-
         Self {
             state,
             buffers,
@@ -1174,11 +1144,15 @@ impl WGPUComputeProg {
             set_prop_compute_pipeline,
             // set_group_compute_pipeline,
             hit_tex,
-            grid_info,
             shader_strs: vec![lom_shader.to_string(), sim_shader.to_string()],
             pipeline_layouts: vec![compute_pipeline_layout, compute_pipeline_layout2],
             compute_pipelines: vec![compute_pipeline, compute_pipeline2],
         }
+    }
+
+    pub fn reset(&mut self, config: &mut WGPUConfig, settings: &mut Settings, dimensions: (u32, u32), script_manager: &ScriptManager) {
+        self.state = State::new(config, settings, script_manager);
+        self.restore(config, settings);
     }
 
     pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, settings: &Settings, i: usize) {
@@ -1298,7 +1272,7 @@ impl WGPUComputeProg {
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.rot.as_bytes(), 2);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.rot_vel.as_bytes(), 3);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.rot_acc.as_bytes(), 4);
-        // self.buffers.mov_buffers.updateBuffer(&config.device, self.state.acc.as_bytes(), 5);
+        self.buffers.mov_buffers.updateBuffer(&config.device, self.state.acc.as_bytes(), 5);
         self.buffers.mov_buffers.updateBuffer(&config.device, bytemuck::cast_slice(self.state.fixity.as_slice()), 6);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.forces.as_bytes(), 7);
         self.buffers.mov_buffers.updateBuffer(&config.device, self.state.vel.as_bytes(), 8);
