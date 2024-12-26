@@ -2,6 +2,7 @@ use crate::settings;
 use crate::wgpu_structs::*;
 use crate::window_init;
 use wgpu::util::DeviceExt;
+use wgpu::RequestAdapterOptions;
 
 pub struct WGPUConfig {
     #[allow(dead_code)]
@@ -107,21 +108,24 @@ impl WGPUConfig {
             max_buffer_size: 1 << 28,
         };
 
-        let result = adapter
+        let mut dev_temp = None;
+        let mut que_temp = None;
+        let mut f64_support = adapter.features().contains(wgpu::Features::SHADER_F64);
+        let mut features = wgpu::Features::VERTEX_WRITABLE_STORAGE;
+        if f64_support {
+            features |= wgpu::Features::SHADER_F64;
+        }
+        match adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
-                    features: wgpu::Features::VERTEX_WRITABLE_STORAGE | wgpu::Features::SHADER_F64,
+                    features: features.clone(),
                     limits: limits.clone(),
                     label: None,
                 },
                 None, // Trace path
             )
-            .await;
-
-        let mut dev_temp = None;
-        let mut que_temp = None;
-        let mut f64_support = true;
-        match result {
+            .await
+        {
             Ok((dev, que)) => {
                 dev_temp = Some(dev);
                 que_temp = Some(que)
@@ -158,8 +162,9 @@ impl WGPUConfig {
             .filter(|f| f.is_srgb()) // this line is sus, changed f.describe().srgb to f.is_srgb(), describe was not a thing
             .next()
             .unwrap_or(surface_caps.formats[0]);
+        // println!("{:?}", );
         let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT, // | wgpu::TextureUsages::COPY_SRC,
             format: surface_format,
             width: size.width,
             height: size.height,
