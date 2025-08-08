@@ -213,19 +213,27 @@ impl WGPUProg {
             layout: Some(&pipeline_layout1),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -249,6 +257,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let render_pipeline2 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -256,19 +265,27 @@ impl WGPUProg {
             layout: Some(&pipeline_layout2),
             vertex: wgpu::VertexState {
                 module: &shader2,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader2,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -292,6 +309,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let render_pipeline3 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -299,19 +317,27 @@ impl WGPUProg {
             layout: Some(&pipeline_layout3),
             vertex: wgpu::VertexState {
                 module: &shader3,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader3,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: wgpu::TextureFormat::Bgra8Unorm,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -335,6 +361,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let render_pipeline4 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -342,19 +369,27 @@ impl WGPUProg {
             layout: Some(&pipeline_layout4),
             vertex: wgpu::VertexState {
                 module: &shader4,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader4,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -378,6 +413,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let render_pipeline5 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -385,19 +421,27 @@ impl WGPUProg {
             layout: Some(&pipeline_layout3),
             vertex: wgpu::VertexState {
                 module: &shader3,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader3,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.config.format,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -421,6 +465,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         let render_pipeline6 = config.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -428,13 +473,17 @@ impl WGPUProg {
             layout: Some(&pipeline_layout6),
             vertex: wgpu::VertexState {
                 module: &shader6,
-                entry_point: "vs_main",     // 1.
-                buffers: &[Vertex::desc()], // 2.
+                entry_point: Some("vs_main"), // 1.
+                buffers: &[Vertex::desc()],   // 2.
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             },
             fragment: Some(wgpu::FragmentState {
                 // 3.
                 module: &shader6,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     // 4.
                     format: config.config.format,
@@ -452,6 +501,10 @@ impl WGPUProg {
                     }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[],
+                    zero_initialize_workgroup_memory: true,
+                },
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -475,6 +528,7 @@ impl WGPUProg {
                 alpha_to_coverage_enabled: false, // 4.
             },
             multiview: None, // 5.
+            cache: None,
         });
 
         Self {
@@ -555,19 +609,27 @@ impl WGPUProg {
                                     layout: Some(&self.pipeline_layouts[i]),
                                     vertex: wgpu::VertexState {
                                         module: &shader,
-                                        entry_point: "vs_main",     // 1.
-                                        buffers: &[Vertex::desc()], // 2.
+                                        entry_point: Some("vs_main"), // 1.
+                                        buffers: &[Vertex::desc()],   // 2.
+                                        compilation_options: wgpu::PipelineCompilationOptions {
+                                            constants: &[],
+                                            zero_initialize_workgroup_memory: true,
+                                        },
                                     },
                                     fragment: Some(wgpu::FragmentState {
                                         // 3.
                                         module: &shader,
-                                        entry_point: "fs_main",
+                                        entry_point: Some("fs_main"),
                                         targets: &[Some(wgpu::ColorTargetState {
                                             // 4.
                                             format: self.tex_formats[i],
                                             blend: Some(wgpu::BlendState::REPLACE),
                                             write_mask: wgpu::ColorWrites::ALL,
                                         })],
+                                        compilation_options: wgpu::PipelineCompilationOptions {
+                                            constants: &[],
+                                            zero_initialize_workgroup_memory: true,
+                                        },
                                     }),
                                     primitive: wgpu::PrimitiveState {
                                         topology: wgpu::PrimitiveTopology::TriangleList, // 1.
@@ -591,6 +653,7 @@ impl WGPUProg {
                                         alpha_to_coverage_enabled: false, // 4.
                                     },
                                     multiview: None, // 5.
+                                    cache: None,
                                 });
                             }
                             Err(e) => {}
@@ -628,15 +691,15 @@ impl WGPUProg {
             let output_buffer = config.device.create_buffer(&output_buffer_desc);
 
             encoder.copy_texture_to_buffer(
-                wgpu::ImageCopyTexture {
+                wgpu::TexelCopyTextureInfo {
                     texture: &frame.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
                 },
-                wgpu::ImageCopyBuffer {
+                wgpu::TexelCopyBufferInfo {
                     buffer: &output_buffer,
-                    layout: wgpu::ImageDataLayout {
+                    layout: wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(4 * config.size.width),
                         rows_per_image: Some(config.size.height),
@@ -656,7 +719,7 @@ impl WGPUProg {
             buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
                 tx.send(result).unwrap();
             });
-            config.device.poll(wgpu::Maintain::Wait);
+            config.device.poll(wgpu::PollType::Wait);
 
             if rx.recv().unwrap().is_ok() {
                 let data = buffer_slice.get_mapped_range();
@@ -1072,63 +1135,109 @@ impl WGPUComputeProg {
             label: None,
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            // TODO: Figure out what this stuff means
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("2");
         let compute_pipeline2 = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&compute_pipeline_layout2),
             module: &compute_shader2,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("4");
         let drag_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&drag_compute_pipeline_layout),
             module: &drag_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("5");
         let click_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&click_compute_pipeline_layout),
             module: &click_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("6");
         let selectangle_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&selectangle_compute_pipeline_layout),
             module: &selectangle_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("7");
         let release_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&release_compute_pipeline_layout),
             module: &release_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("8");
         let fix_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&fix_compute_pipeline_layout),
             module: &fix_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("9");
         let drop_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&drop_compute_pipeline_layout),
             module: &drop_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         // println!("10");
         let set_prop_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&set_prop_compute_pipeline_layout),
             module: &set_prop_compute_shader,
-            entry_point: "main",
+            entry_point: Some("main"),
+            cache: None,
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
         });
         Self {
             state,
@@ -1182,7 +1291,12 @@ impl WGPUComputeProg {
                                 label: None,
                                 layout: Some(&self.pipeline_layouts[i]),
                                 module: &shader,
-                                entry_point: "main",
+                                entry_point: Some("main"),
+                                cache: None,
+                                compilation_options: wgpu::PipelineCompilationOptions {
+                                    constants: &[],
+                                    zero_initialize_workgroup_memory: true,
+                                },
                             });
                         }
                         Err(e) => {}

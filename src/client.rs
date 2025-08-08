@@ -16,25 +16,27 @@ use crate::window_init;
 use cgmath::Angle;
 use cgmath::*;
 use egui::Rect;
-use egui_demo_lib::DemoWindows;
+// use egui_demo_lib::DemoWindows;
 use std::cmp::max;
 use std::fs;
 use std::io;
 use std::iter;
 use std::path::PathBuf;
 use winit::dpi::PhysicalPosition;
+use winit::keyboard::Key;
+use winit::keyboard::KeyCode;
+use winit::keyboard::NamedKey;
+use winit::keyboard::PhysicalKey;
 use winit::window::Fullscreen;
+use winit::window::Window;
 use winit::{
     dpi::PhysicalSize,
     event::*,
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    window::WindowBuilder,
 };
-use winit_fullscreen;
-use winit_fullscreen::WindowFullScreen;
 
-use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
-use egui_winit_platform::{Platform, PlatformDescriptor};
+use egui_wgpu::{RenderPass, ScreenDescriptor};
+use egui_winit::{Platform, PlatformDescriptor};
 
 use chrono::prelude::*;
 use copypasta::*;
@@ -90,9 +92,8 @@ pub struct Client {
 
 impl Client {
     pub async fn new() -> Self {
-        let event_loop = EventLoop::new();
-        let window = WindowBuilder::new().build(&event_loop).unwrap();
-        window.set_title("Physics Simulator");
+        let event_loop = EventLoop::new().unwrap();
+        let window = event_loop.create_window(Window::default_attributes().with_title("Physics Simulator")).unwrap();
 
         let canvas = window_init::Canvas::new(window);
         let mut wgpu_config = WGPUConfig::new(&canvas).await;
@@ -175,49 +176,30 @@ impl Client {
             clipboard: ClipboardContext::new().unwrap(),
         };
         client.resize(client.canvas.size);
-        client.platform.handle_event(&Event::WindowEvent {
-            window_id: client.canvas.window.id(),
-            event: WindowEvent::Resized(client.canvas.size),
-            // The generic type is provided here
-        } as &Event<()>);
+        // client.platform.handle_event(&Event::WindowEvent {
+        //     window_id: client.canvas.window.id(),
+        //     event: WindowEvent::Resized(client.canvas.size),
+        //     // The generic type is provided here
+        // } as &Event<()>);
 
         // client.update_saves();
 
         // client.wgpu_prog =  WGPUProg::new(&mut client.wgpu_config, (client.canvas.size.width as u32, client.canvas.size.height as u32));
-        event_loop.run(move |event, _, control_flow| {
-            client.platform.handle_event(&event);
-
-            let egui_event = client.platform.captures_event(&event);
-            match event {
-                Event::WindowEvent { ref event, window_id } if window_id == client.canvas.window.id() => {
-                    if !client.input(event, egui_event) && !egui_event {
-                        match event {
-                            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                            WindowEvent::Resized(physical_size) => {
-                                client.resize(*physical_size);
-                            }
-                            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                                // new_inner_size is &&mut so we have to dereference it twice
-                                client.resize(**new_inner_size);
-                            }
-                            _ => {}
-                        }
+        event_loop.run(move |event, evt_loop| match event {
+            Event::WindowEvent { window_id, event } if window_id == client.canvas.window.id() => {
+                client.platform.handle_event(&event);
+                let egui_event = client.platform.captures_event(&event);
+                match event {
+                    WindowEvent::CloseRequested => evt_loop.exit(),
+                    WindowEvent::Resized(size) => client.resize(size),
+                    WindowEvent::RedrawRequested => {
+                        client.render();
                     }
-                }
-                Event::RedrawRequested(window_id) if window_id == client.canvas.window.id() => match client.render() {
-                    Ok(_) => {}
-
-                    Err(wgpu::SurfaceError::Lost) => {
-                        client.resize(client.canvas.size.clone());
-                    }
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    Err(e) => eprintln!("{:?}", e),
-                },
-                Event::MainEventsCleared => {
-                    client.canvas.window.request_redraw();
-                }
-                _ => {}
+                    _ => {}
+                };
             }
+            Event::AboutToWait => window.request_redraw(),
+            _ => {}
         });
         return client;
     }
@@ -318,7 +300,7 @@ impl Client {
                     self.r_mouse = false;
                     return true;
                 }
-                WindowEvent::MouseWheel { device_id, delta, phase, modifiers } => {
+                WindowEvent::MouseWheel { device_id, delta, phase } => {
                     if self.settings.simulation.d3 {
                         return true;
                     }
@@ -352,22 +334,29 @@ impl Client {
                     self.world_delta = (self.world_delta.0 + world_delta.0 / ar, self.world_delta.1 + world_delta.1);
                     return true;
                 }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    match input {
-                        KeyboardInput {
-                            scancode: _,
+                WindowEvent::KeyboardInput { event, .. } => {
+                    match event {
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(key),
                             state: ElementState::Pressed,
-                            virtual_keycode: Some(key),
-                            modifiers: _,
+                            ..
                         } => {
-                            // println!("{:?}", key);
                             self.script_manager.key_pressed(*key, &mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
                         }
-                        _ => {}
+                        _ => {} // Key {
+                                //     scancode: _,
+                                //     state: ElementState::Pressed,
+                                //     physical_key: Some(key),
+                                //     modifiers: _,
+                                // } => {
+                                //     // println!("{:?}", key);
+                                //     self.script_manager.key_pressed(*key, &mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
+                                // }
+                                // _ => {}
                     }
-                    match input {
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::F11),
+                    match event {
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::F11),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -379,16 +368,16 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Space),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Space),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.settings.simulating = !self.settings.simulating;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::B),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyB),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -398,32 +387,32 @@ impl Client {
                         }
 
                         //SHIFT
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::LShift),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ShiftLeft),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.shift = true;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::LShift),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ShiftLeft),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.shift = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::RShift),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ShiftRight),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.shift = true;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::RShift),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ShiftRight),
                             state: ElementState::Released,
                             ..
                         } => {
@@ -432,32 +421,32 @@ impl Client {
                         }
 
                         //CTRL
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::LControl),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ControlLeft),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.ctrl = true;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::LControl),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ControlLeft),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.ctrl = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::RControl),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ControlRight),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.ctrl = true;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::RControl),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ControlRight),
                             state: ElementState::Released,
                             ..
                         } => {
@@ -465,8 +454,8 @@ impl Client {
                             return true;
                         }
 
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::R),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyR),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -477,40 +466,40 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::C),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyC),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             // self.settings.toggle_create();
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Equals),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Equal),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.zoom(1.0);
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Minus),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Minus),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.zoom(-1.0);
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::H),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyH),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.home();
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::O),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyO),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -519,40 +508,40 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::M),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyM),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.settings.view.settings_menu = !self.settings.view.settings_menu;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::L),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyL),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.hl = !self.hl;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::Escape),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.mouse_captured = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::W),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyW),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.key_w = true;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::A),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyA),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -564,8 +553,8 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::S),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyS),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -575,8 +564,8 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::D),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyD),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -584,56 +573,56 @@ impl Client {
                             self.wgpu_prog.shader_prog.drop(&mut self.wgpu_config, &self.settings);
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::F),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyF),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             self.wgpu_prog.shader_prog.fix(&mut self.wgpu_config, &self.settings);
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::T),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyT),
                             state: ElementState::Pressed,
                             ..
                         } => {
                             // crate::scripts::script_test(&mut self.wgpu_prog.shader_prog);
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::W),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyW),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.key_w = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::A),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyA),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.key_a = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::S),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyS),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.key_s = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::D),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyD),
                             state: ElementState::Released,
                             ..
                         } => {
                             self.key_d = false;
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Down),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ArrowDown),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -643,8 +632,8 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Left),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ArrowLeft),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -655,8 +644,8 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Right),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::ArrowRight),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -665,8 +654,8 @@ impl Client {
                             }
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::F3),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::F3),
                             state: ElementState::Pressed,
                             ..
                         } => {
@@ -674,19 +663,18 @@ impl Client {
                             Client::clear_console();
                             return true;
                         }
-                        _ => false,
+                        _ => return false,
                     }
                 }
-                _ => false,
+                _ => return false,
             }
-        } else {
+        } else if self.ctrl {
             return match event {
-                WindowEvent::KeyboardInput { input, .. } => {
-                    return match input {
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::C),
+                WindowEvent::KeyboardInput { event, .. } => {
+                    return match event {
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyC),
                             state: ElementState::Pressed,
-                            modifiers: ModifiersState::CTRL,
                             ..
                         } => {
                             self.platform.raw_input_mut().events.push(egui::Event::Copy);
@@ -699,10 +687,9 @@ impl Client {
                             println!("selected text");
                             return true;
                         }
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::V),
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(KeyCode::KeyV),
                             state: ElementState::Pressed,
-                            modifiers: ModifiersState::CTRL,
                             ..
                         } => {
                             if let Ok(paste_text) = self.clipboard.get_contents() {
@@ -718,6 +705,7 @@ impl Client {
                 _ => false,
             };
         }
+        false
     }
 
     fn reset(&mut self) {
@@ -1266,14 +1254,14 @@ impl Client {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.wgpu_prog.depth_buffer.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(1.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         }),
@@ -1302,14 +1290,14 @@ impl Client {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.wgpu_prog.depth_buffer.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(1.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         }),
@@ -1338,14 +1326,14 @@ impl Client {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.wgpu_prog.depth_buffer.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(1.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         }),
@@ -1376,14 +1364,14 @@ impl Client {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Load,
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.wgpu_prog.depth_buffer.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(1.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         }),
@@ -1412,14 +1400,14 @@ impl Client {
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(self.wgpu_prog.clear_color),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             },
                         })],
                         depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                             view: &self.wgpu_prog.depth_buffer.view,
                             depth_ops: Some(wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(1.0),
-                                store: true,
+                                store: wgpu::StoreOp::Store,
                             }),
                             stencil_ops: None,
                         }),

@@ -41,13 +41,13 @@ impl WGPUConfig {
 
         #[cfg(not(target_arch = "wasm32"))]
         let adapter = instance
-            .enumerate_adapters(wgpu::Backends::all())
-            .filter(|adapter| {
-                // Check if this adapter supports our surface
-                adapter.is_surface_supported(&surface)
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
             })
-            .next()
-            .unwrap();
+            .await
+            .expect("No suitable GPU adapters found.");
 
         #[cfg(target_arch = "wasm32")]
         // let adapter = instance

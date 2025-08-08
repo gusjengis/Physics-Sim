@@ -840,7 +840,7 @@ impl State {
         }); // buffer_size is the size of the buffer
 
         // Poll the device in a loop or in an event-driven manner
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait);
 
         // Once the buffer is mapped, get the mapped range
         {
@@ -893,7 +893,7 @@ impl State {
         }); // buffer_size is the size of the buffer
 
         // Poll the device in a loop or in an event-driven manner
-        device.poll(wgpu::Maintain::Wait);
+        device.poll(wgpu::PollType::Wait);
 
         // Once the buffer is mapped, get the mapped range
         {

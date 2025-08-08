@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::{str::FromStr, vec};
 use wgpu::{Device, Queue};
 use winit::event::VirtualKeyCode;
+use winit::keyboard::{KeyCode, NamedKey};
 
 use crate::{
     client::Client,
@@ -94,7 +95,7 @@ impl ScriptManager {
         self.scripts[script_index].push_action(action);
     }
 
-    pub fn key_pressed(&mut self, key: VirtualKeyCode, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
+    pub fn key_pressed(&mut self, key: KeyCode, prog: &mut WGPUProg, config: &mut WGPUConfig, settings: &mut Settings, canvas: &Canvas) {
         let k = Key::from_vck(key);
         for (i, script) in self.scripts.iter().enumerate() {
             match &script.script_trigger {
@@ -1220,13 +1221,13 @@ pub enum Key {
 }
 
 impl Key {
-    pub fn from_vck(key: VirtualKeyCode) -> Self {
+    pub fn from_vck(key: KeyCode) -> Self {
         match key {
-            VirtualKeyCode::A => Key::A,
-            VirtualKeyCode::D => Key::D,
-            VirtualKeyCode::S => Key::S,
-            VirtualKeyCode::W => Key::W,
-            VirtualKeyCode::Space => Key::Space,
+            KeyCode::KeyA => Key::A,
+            KeyCode::KeyD => Key::D,
+            KeyCode::KeyS => Key::S,
+            KeyCode::KeyW => Key::W,
+            KeyCode::Space => Key::Space,
             _ => Key::Null,
         }
     }

@@ -33,6 +33,8 @@
             xorg.libXcursor
             xorg.libXi
             xorg.libXrandr
+            vulkan-loader # generic loader + ICD discovery
+            mesa # open-source drivers for AMD/Intel
           ];
 
           # make the libraries visible at run-time
