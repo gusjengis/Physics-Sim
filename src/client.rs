@@ -1,5 +1,5 @@
 use crate::audio_controller;
-use crate::audio_controller::AudioController;
+// use crate::audio_controller::AudioController;
 use crate::runtime;
 use crate::scripts;
 use crate::scripts::ScriptManager;
@@ -45,7 +45,7 @@ pub struct Client {
     wgpu_prog: WGPUProg,
     settings: Settings,
     script_manager: ScriptManager,
-    ac: AudioController,
+    // ac: AudioController,
     last_draw: chrono::DateTime<Local>,
     log_framerate: bool,
     start_time: DateTime<Local>,
@@ -122,15 +122,15 @@ impl Client {
             max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
         }
 
-        let mut ac = AudioController::new();
-        ac.ringtone();
+        // let mut ac = AudioController::new();
+        // ac.ringtone();
 
         let mut client = Client {
             canvas,
             wgpu_config,
             settings,
             script_manager,
-            ac,
+            // ac,
             last_draw: Local::now(),
             log_framerate: false,
             wgpu_prog,
@@ -1227,7 +1227,7 @@ impl Client {
                 &mut self.script_manager,
                 &mut self.wgpu_config,
                 (self.canvas.size.width, self.canvas.size.height),
-                &mut self.ac,
+                // &mut self.ac,
             );
             self.available_rect = self.platform.context().available_rect();
             if needs_reset {
