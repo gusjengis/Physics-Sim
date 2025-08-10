@@ -88,7 +88,7 @@ pub struct Client {
     pub egui_state: State,
     pub egui_renderer: Renderer,
     data_length_backup: usize,
-    available_rect: Rect,
+    available_rect: Option<egui::Rect>,
     boot_time: i64,
     clipboard: ClipboardContext,
     event_loop: Option<EventLoop<()>>,
@@ -118,8 +118,8 @@ impl Client {
             None, // Theme
             None, // max_texture_side
         );
-        let available_rect = egui_ctx.available_rect();
-        egui_ctx.set_pixels_per_point(2.0);
+        // let available_rect = egui_ctx.available_rect();
+        // egui_ctx.set_pixels_per_point(2.0);
 
         let egui_renderer = egui_wgpu::Renderer::new(
             &wgpu_config.device,
@@ -132,7 +132,11 @@ impl Client {
         let mut max_framerate = 120.0 / 1000.0;
         #[cfg(not(target_arch = "wasm32"))]
         {
-            max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+            if let Some(monitor) = canvas.window.current_monitor() {
+                if let Some(framerate) = monitor.refresh_rate_millihertz() {
+                    max_framerate = framerate as f32 / 1000.0;
+                }
+            }
         }
 
         // let mut ac = AudioController::new();
@@ -183,7 +187,7 @@ impl Client {
             egui_state,
             egui_renderer,
             data_length_backup: 1,
-            available_rect: available_rect,
+            available_rect: None,
             boot_time: Local::now().timestamp_millis(), // max_framerate:  max_framerate,
             // prev_framerate: max_framerate
             clipboard: ClipboardContext::new().unwrap(),
@@ -1017,38 +1021,50 @@ impl Client {
     }
 
     fn post_ui_x_off(&self) -> f32 {
-        let scale_factor = self.canvas.window.scale_factor() as f32;
-        let center = self.canvas.size.width as f32 / (2.0);
-        let left = self.available_rect.left() * scale_factor;
-        let right = self.available_rect.right() * scale_factor;
-        let new_center = (right - left) / 2.0 + left;
-        let world_offset = self.cursor_del_to_world_delta(((new_center - center) as i32, 0));
-        return world_offset.0 as f32;
+        if let Some(rect) = self.available_rect {
+            let scale_factor = self.canvas.window.scale_factor() as f32;
+            let center = self.canvas.size.width as f32 / (2.0);
+            let left = rect.left() * scale_factor;
+            let right = rect.right() * scale_factor;
+            let new_center = (right - left) / 2.0 + left;
+            let world_offset = self.cursor_del_to_world_delta(((new_center - center) as i32, 0));
+            return world_offset.0 as f32;
+        }
+        return 0.0;
     }
 
     fn post_ui_y_off(&self) -> f32 {
-        let scale_factor = self.canvas.window.scale_factor() as f32;
-        let center = self.canvas.size.height as f32 / (2.0);
-        let top = self.available_rect.top() * scale_factor;
-        let bottom = self.available_rect.bottom() * scale_factor;
-        let new_center = ((bottom - top) / 2.0 + top);
-        let world_offset = self.cursor_del_to_world_delta((0, (new_center - center) as i32));
-        return world_offset.1 as f32;
+        if let Some(rect) = self.available_rect {
+            let scale_factor = self.canvas.window.scale_factor() as f32;
+            let center = self.canvas.size.height as f32 / (2.0);
+            let top = rect.top() * scale_factor;
+            let bottom = rect.bottom() * scale_factor;
+            let new_center = ((bottom - top) / 2.0 + top);
+            let world_offset = self.cursor_del_to_world_delta((0, (new_center - center) as i32));
+            return world_offset.1 as f32;
+        }
+        return 0.0;
     }
 
     fn post_ui_center(&self) -> (i32, i32) {
-        let scale_factor = self.canvas.window.scale_factor() as f32;
-        let left = self.available_rect.left() * scale_factor;
-        let right = self.available_rect.right() * scale_factor;
-        let new_center_x = (right - left) / 2.0 + left;
-        let top = self.available_rect.top() * scale_factor;
-        let bottom = self.available_rect.bottom() * scale_factor;
-        let new_center_y = ((bottom - top) / 2.0 + top);
-        return (new_center_x as i32, new_center_y as i32);
+        if let Some(rect) = self.available_rect {
+            let scale_factor = self.canvas.window.scale_factor() as f32;
+            let left = rect.left() * scale_factor;
+            let right = rect.right() * scale_factor;
+            let new_center_x = (right - left) / 2.0 + left;
+            let top = rect.top() * scale_factor;
+            let bottom = rect.bottom() * scale_factor;
+            let new_center_y = ((bottom - top) / 2.0 + top);
+            return (new_center_x as i32, new_center_y as i32);
+        }
+        return (0, 0);
     }
 
     fn ui_scale(&self) -> f32 {
-        return self.canvas.window.scale_factor() as f32 * self.available_rect.height() / self.canvas.size.height as f32;
+        if let Some(rect) = self.available_rect {
+            return self.canvas.window.scale_factor() as f32 * rect.height() / self.canvas.size.height as f32;
+        }
+        return 1.0;
     }
 
     fn update_render_input(&mut self) {
@@ -1158,7 +1174,11 @@ impl Client {
         let mut max_framerate = 120.0 / 1000.0;
         #[cfg(not(target_arch = "wasm32"))]
         {
-            max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+            if let Some(monitor) = self.canvas.window.current_monitor() {
+                if let Some(framerate) = monitor.refresh_rate_millihertz() {
+                    max_framerate = framerate as f32 / 1000.0;
+                }
+            }
         }
         if !self.minimized {
             settings!().simulation.max_gen_per_frame = ((1.0 / settings!().simulation.timestep) / max_framerate).round() as i32;
@@ -1219,6 +1239,7 @@ impl Client {
             let raw_input = self.egui_state.take_egui_input(&self.canvas.window);
             let mut needs_reset = false;
             let full_output = self.egui_ctx.run(raw_input, |ctx| {
+                self.available_rect = Some(self.egui_ctx.available_rect());
                 needs_reset = settings!().ui(
                     ctx,
                     &mut self.wgpu_prog,
@@ -1227,7 +1248,6 @@ impl Client {
                     (self.canvas.size.width, self.canvas.size.height),
                 );
             });
-            self.available_rect = self.egui_ctx.available_rect();
             if needs_reset {
                 self.reset();
             }
