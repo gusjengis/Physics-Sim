@@ -22,5 +22,6 @@ pub fn main() {
     let args: Vec<String> = env::args().collect();
     dbg!(args);
     let mut client = async_std::task::block_on(client::Client::new());
+    client.start_event_loop();
     client.resize(client.canvas.size);
 }

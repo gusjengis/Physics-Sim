@@ -16,6 +16,7 @@ use crate::window_init;
 use cgmath::Angle;
 use cgmath::*;
 use egui::Rect;
+use egui_winit::pixels_per_point;
 // use egui_demo_lib::DemoWindows;
 use std::cmp::max;
 use std::fs;
@@ -35,8 +36,9 @@ use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
 };
 
-use egui_wgpu::{RenderPass, ScreenDescriptor};
-use egui_winit::{Platform, PlatformDescriptor};
+use egui::{Context, ViewportId};
+use egui_wgpu::{Renderer, ScreenDescriptor};
+use egui_winit::State;
 
 use chrono::prelude::*;
 use copypasta::*;
@@ -82,12 +84,14 @@ pub struct Client {
     key_n: bool,
     r_mouse: bool,
     init: bool,
-    pub platform: Platform,
-    egui_rpass: RenderPass,
+    pub egui_ctx: Context,
+    pub egui_state: State,
+    pub egui_renderer: Renderer,
     data_length_backup: usize,
     available_rect: Rect,
     boot_time: i64,
     clipboard: ClipboardContext,
+    event_loop: Option<EventLoop<()>>,
 }
 
 impl Client {
@@ -105,17 +109,25 @@ impl Client {
         // UI Setup
 
         let size = canvas.size;
-        let platform = Platform::new(PlatformDescriptor {
-            physical_width: size.width,
-            physical_height: size.height,
-            scale_factor: canvas.window.scale_factor(),
-            font_definitions: egui::FontDefinitions::default(),
-            style: Default::default(),
-        });
-        let available_rect = platform.context().available_rect();
-        platform.context().set_pixels_per_point(2.0);
+        let egui_ctx = Context::default();
+        let mut egui_state = State::new(
+            egui_ctx.clone(),
+            ViewportId::ROOT,
+            &canvas.window, // anything implementing HasDisplayHandle
+            Some(canvas.window.scale_factor() as f32),
+            None, // Theme
+            None, // max_texture_side
+        );
+        let available_rect = egui_ctx.available_rect();
+        egui_ctx.set_pixels_per_point(2.0);
 
-        let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
+        let egui_renderer = egui_wgpu::Renderer::new(
+            &wgpu_config.device,
+            wgpu_config.surface_format,
+            None,  // depth format
+            1,     // msaa_samples
+            false, // dithering
+        );
 
         let mut max_framerate = 120.0 / 1000.0;
         #[cfg(not(target_arch = "wasm32"))]
@@ -167,13 +179,15 @@ impl Client {
             key_n: false,
             r_mouse: false,
             init: false,
-            platform,
-            egui_rpass,
+            egui_ctx,
+            egui_state,
+            egui_renderer,
             data_length_backup: 1,
             available_rect: available_rect,
             boot_time: Local::now().timestamp_millis(), // max_framerate:  max_framerate,
             // prev_framerate: max_framerate
             clipboard: ClipboardContext::new().unwrap(),
+            event_loop: Some(event_loop),
         };
         client.resize(client.canvas.size);
         // client.platform.handle_event(&Event::WindowEvent {
@@ -185,23 +199,27 @@ impl Client {
         // client.update_saves();
 
         // client.wgpu_prog =  WGPUProg::new(&mut client.wgpu_config, (client.canvas.size.width as u32, client.canvas.size.height as u32));
+        return client;
+    }
+
+    pub fn start_event_loop(&mut self) {
+        let event_loop = self.event_loop.take().expect("event_loop present");
         event_loop.run(move |event, evt_loop| match event {
-            Event::WindowEvent { window_id, event } if window_id == client.canvas.window.id() => {
-                client.platform.handle_event(&event);
-                let egui_event = client.platform.captures_event(&event);
+            Event::WindowEvent { window_id, event } if window_id == self.canvas.window.id() => {
+                // let evt = self.egui_state.on_window_event(&self.canvas.window, &event);
+                // let egui_event = evt.consumed;
                 match event {
                     WindowEvent::CloseRequested => evt_loop.exit(),
-                    WindowEvent::Resized(size) => client.resize(size),
+                    WindowEvent::Resized(size) => self.resize(size),
                     WindowEvent::RedrawRequested => {
-                        client.render();
+                        self.render();
                     }
                     _ => {}
                 };
             }
-            Event::AboutToWait => window.request_redraw(),
+            Event::AboutToWait => self.canvas.window.request_redraw(),
             _ => {}
         });
-        return client;
     }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -677,10 +695,8 @@ impl Client {
                             state: ElementState::Pressed,
                             ..
                         } => {
-                            self.platform.raw_input_mut().events.push(egui::Event::Copy);
-                            let selected_text = self.platform.context().output(|o| {
-                                return o.copied_text.clone();
-                            });
+                            self.egui_state.egui_input_mut().events.push(egui::Event::Copy);
+                            let selected_text = self.egui_ctx.output(|o| o.copied_text.clone());
                             if selected_text.len() > 0 {
                                 self.clipboard.set_contents(selected_text).unwrap();
                             }
@@ -694,7 +710,7 @@ impl Client {
                         } => {
                             if let Ok(paste_text) = self.clipboard.get_contents() {
                                 println!("Paste: {}", paste_text);
-                                self.platform.raw_input_mut().events.push(egui::Event::Text(paste_text));
+                                self.egui_state.egui_input_mut().events.push(egui::Event::Text(paste_text));
                             }
                             println!("Paste");
                             return true;
@@ -1196,28 +1212,22 @@ impl Client {
 
             // UI
 
-            self.platform.update_time((Local::now().timestamp_millis() - self.start_time.timestamp_millis()) as f64 / 1000.0);
-
             let output_frame = self.wgpu_config.surface.get_current_texture().unwrap();
             let output_view = output_frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            // Begin to draw the UI frame.
-            // if self.platform
             let scale_factor = self.canvas.window.scale_factor() as f32;
-            self.platform.raw_input_mut().screen_rect = Some(egui::Rect::from_min_size(
-                egui::Pos2::new(0.0, 0.0),
-                egui::Vec2::new(self.canvas.size.width as f32 / scale_factor, self.canvas.size.height as f32 / scale_factor),
-            ));
-            self.platform.begin_frame();
-            let needs_reset = settings!().ui(
-                &self.platform.context(),
-                &mut self.wgpu_prog,
-                &mut self.script_manager,
-                &mut self.wgpu_config,
-                (self.canvas.size.width, self.canvas.size.height),
-                // &mut self.ac,
-            );
-            self.available_rect = self.platform.context().available_rect();
+
+            let raw_input = self.egui_state.take_egui_input(&self.canvas.window);
+            let mut needs_reset = false;
+            let full_output = self.egui_ctx.run(raw_input, |ctx| {
+                needs_reset = settings!().ui(
+                    ctx,
+                    &mut self.wgpu_prog,
+                    &mut self.script_manager,
+                    &mut self.wgpu_config,
+                    (self.canvas.size.width, self.canvas.size.height),
+                );
+            });
+            self.available_rect = self.egui_ctx.available_rect();
             if needs_reset {
                 self.reset();
             }
@@ -1237,8 +1247,8 @@ impl Client {
             self.wgpu_prog.cam.update_view_proj(&self.wgpu_config);
             self.update_render_input();
 
-            let full_output = self.platform.end_frame(Some(&self.canvas.window));
-            let paint_jobs = self.platform.context().tessellate(full_output.shapes);
+            let paint_jobs = self.egui_ctx.tessellate(full_output.shapes, pixels_per_point(&self.egui_ctx, &self.canvas.window));
+            self.egui_state.handle_platform_output(&self.canvas.window, full_output.platform_output);
 
             self.wgpu_prog
                 .ren_set_uniform
@@ -1265,6 +1275,8 @@ impl Client {
                             }),
                             stencil_ops: None,
                         }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     });
 
                     render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
@@ -1301,6 +1313,8 @@ impl Client {
                             }),
                             stencil_ops: None,
                         }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     });
 
                     render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
@@ -1337,6 +1351,8 @@ impl Client {
                             }),
                             stencil_ops: None,
                         }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     });
 
                     render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0 + settings!().view.show_hit_tex as usize * 4]);
@@ -1375,6 +1391,8 @@ impl Client {
                             }),
                             stencil_ops: None,
                         }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     });
 
                     render_pass6.set_pipeline(&self.wgpu_prog.render_pipelines[5]);
@@ -1411,6 +1429,8 @@ impl Client {
                             }),
                             stencil_ops: None,
                         }),
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
                     });
 
                     render_pass4.set_pipeline(&self.wgpu_prog.render_pipelines[3]);
@@ -1425,15 +1445,10 @@ impl Client {
 
             // Upload all resources for the GPU.
             let screen_descriptor = ScreenDescriptor {
-                physical_width: self.canvas.size.width,
-                physical_height: self.canvas.size.height,
-                scale_factor: self.canvas.window.scale_factor() as f32,
+                size_in_pixels: [self.canvas.size.width, self.canvas.size.height],
+                pixels_per_point: self.canvas.window.scale_factor() as f32,
             };
             let tdelta: egui::TexturesDelta = full_output.textures_delta;
-            self.egui_rpass.add_textures(&self.wgpu_config.device, &self.wgpu_config.queue, &tdelta).expect("add texture ok");
-            self.egui_rpass.update_buffers(&self.wgpu_config.device, &self.wgpu_config.queue, &paint_jobs, &screen_descriptor);
-
-            self.egui_rpass.execute(&mut encoder, &output_view, &paint_jobs, &screen_descriptor, None).unwrap();
 
             self.wgpu_config.queue.submit(iter::once(encoder.finish()));
 
@@ -1449,8 +1464,6 @@ impl Client {
             }
 
             output_frame.present();
-
-            self.egui_rpass.remove_textures(tdelta).expect("remove texture ok");
         }
 
         // // println!("{}", self.platform.context().pixels_per_point());

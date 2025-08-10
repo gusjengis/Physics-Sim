@@ -1,0 +1,6 @@
+*.csv
+*.his
+*.png
+*.exe
+*.bin
+data/__pycache__ 

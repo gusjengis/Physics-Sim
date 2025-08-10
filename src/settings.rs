@@ -6,7 +6,7 @@ use crate::wgpu_prog::WGPUProg;
 // use crate::{audio_controller::*, sound::*};
 use egui::color_picker::Alpha;
 use egui::*;
-use plot::Plot;
+use egui_plot::{Line, Plot, PlotPoints};
 use scripts::*;
 use serde::{Deserialize, Serialize};
 use serde_json::*;
@@ -919,7 +919,7 @@ impl Settings {
     }
 
     fn view_menu(&mut self, ui: &mut Ui) {
-        let zoom_in_shortcut = egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::PlusEquals);
+        let zoom_in_shortcut = egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Plus);
         let zoom_out_shortcut = egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::Minus);
         // let pan_shortcut =
         //     egui::KeyboardShortcut::new(Modifiers::NONE, egui::Key::R);
@@ -1661,46 +1661,45 @@ impl Settings {
                     });
                     reset_button = Some(ui.add(egui::Button::new("Reset View")));
                 });
-                let mut plot = egui::plot::Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
+                let mut plot = Plot::new("physics plot").auto_bounds_x().auto_bounds_y().clamp_grid(true);
                 if reset_button.unwrap().clicked() {
                     plot = plot.reset()
                 }
                 plot.show(ui, |plot_ui| {
                     match self.plotted_prop {
                         Property::X_Position => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_pos_data.to_owned())));
+                            plot_ui.line(Line::new("X_Position", PlotPoints::from(self.data.x_pos_data.to_owned())));
                         }
                         Property::Y_Position => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_pos_data.to_owned())));
+                            plot_ui.line(Line::new("Y_Position", PlotPoints::from(self.data.y_pos_data.to_owned())));
                         }
                         Property::Rotation => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_data.to_owned())));
+                            plot_ui.line(Line::new("Rotation", PlotPoints::from(self.data.rot_data.to_owned())));
                         }
                         Property::X_Velocity => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.x_vel_data.to_owned())));
+                            plot_ui.line(Line::new("X_Velocity", PlotPoints::from(self.data.x_vel_data.to_owned())));
                         }
                         Property::Y_Velocity => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.y_vel_data.to_owned())));
+                            plot_ui.line(Line::new("Y_Velocity", PlotPoints::from(self.data.y_vel_data.to_owned())));
                         }
                         Property::Rotational_Velocity => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.rot_vel_data.to_owned())));
+                            plot_ui.line(Line::new("Rotational_Velocity", PlotPoints::from(self.data.rot_vel_data.to_owned())));
                         }
                         Property::Normal_Force => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data1.to_owned())));
+                            plot_ui.line(Line::new("Normal_Force", PlotPoints::from(self.data.data1.to_owned())));
                         }
                         Property::Shear_Force => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data2.to_owned())));
+                            plot_ui.line(Line::new("Shear_Force", PlotPoints::from(self.data.data2.to_owned())));
                         }
                         Property::Moment => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data3.to_owned())));
+                            plot_ui.line(Line::new("Moment", PlotPoints::from(self.data.data3.to_owned())));
                         }
-                        // Property::Data_4 => {plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.data4.to_owned())));},
                         Property::FPS => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.fps.to_owned())));
+                            plot_ui.line(Line::new("FPS", PlotPoints::from(self.data.fps.to_owned())));
                         }
                         Property::Torn_Bonds => {
-                            plot_ui.line(egui::plot::Line::new(egui::plot::PlotPoints::from(self.data.torn_bonds.to_owned())));
-                        }
+                            plot_ui.line(Line::new("Torn_Bonds", PlotPoints::from(self.data.torn_bonds.to_owned())));
+                        } // Property::Data_4 => {plot_ui.line(Line::new(PlotPoints::from(self.data.data4.to_owned())));},
                     }
                 });
             });
@@ -1772,21 +1771,27 @@ impl Settings {
                         ui.memory_mut(|mem| mem.toggle_popup(format!("{}_delete", self.current_script).into()));
                     }
                     // if script_manager.delete_window[self.current_script] {
-                    egui::popup_below_widget(ui, format!("{}_delete", self.current_script).into(), &delete_button, |ui2| {
-                        // ui2.set_min_width(100.0);
-                        // ui2.label(format!("Delete {}?", script_manager.scripts[self.current_script].name));
-                        ui2.horizontal(|ui3| {
-                            if ui3.button("Delete").clicked() {
-                                script_manager.delete_script(self.current_script);
-                                if self.current_script == script_manager.scripts.len() {
-                                    self.current_script -= 1;
+                    egui::popup_below_widget(
+                        ui,
+                        format!("{}_delete", self.current_script).into(),
+                        &delete_button,
+                        egui::PopupCloseBehavior::CloseOnClickOutside,
+                        |ui2: &mut Ui| {
+                            // ui2.set_min_width(100.0);
+                            // ui2.label(format!("Delete {}?", script_manager.scripts[self.current_script].name));
+                            ui2.horizontal(|ui3| {
+                                if ui3.button("Delete").clicked() {
+                                    script_manager.delete_script(self.current_script);
+                                    if self.current_script == script_manager.scripts.len() {
+                                        self.current_script -= 1;
+                                    }
                                 }
-                            }
-                            if ui3.button("Cancel").clicked() {
-                                ui.memory_mut(|mem| mem.toggle_popup(format!("{}_delete", self.current_script).into()));
-                            }
-                        });
-                    });
+                                if ui3.button("Cancel").clicked() {
+                                    ui.memory_mut(|mem| mem.toggle_popup(format!("{}_delete", self.current_script).into()));
+                                }
+                            });
+                        },
+                    );
                     // }
                     if ui.selectable_label(script_manager.threads[self.current_script].executing, "Run").clicked() {
                         script_manager.toggle_execution(self.current_script);

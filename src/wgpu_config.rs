@@ -2,14 +2,17 @@ use crate::settings;
 use crate::wgpu_structs::*;
 use crate::window_init;
 use wgpu::util::DeviceExt;
+use wgpu::BackendOptions;
+use wgpu::Backends;
 use wgpu::RequestAdapterOptions;
+use wgpu::Trace;
 
 pub struct WGPUConfig {
     #[allow(dead_code)]
     pub instance: wgpu::Instance,
     #[allow(dead_code)]
     pub adapter: wgpu::Adapter,
-    pub surface: wgpu::Surface,
+    pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
@@ -28,16 +31,20 @@ impl WGPUConfig {
 
         // The instance is a handle to our GPU
         // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
-            dx12_shader_compiler: Default::default(),
+            ..Default::default()
         });
 
         // # Safety
         //
         // The surface needs to live as long as the canvas that created it.
         // State owns the canvas so this should be safe.
-        let surface = unsafe { instance.create_surface(&canvas.window) }.unwrap();
+        let surface = unsafe {
+            instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::from_window(&canvas.window).expect("raw window/display handles"))
+                .expect("create surface")
+        };
 
         #[cfg(not(target_arch = "wasm32"))]
         let adapter = instance
@@ -76,36 +83,42 @@ impl WGPUConfig {
         //     label: None,
         // };
         let limits = wgpu::Limits {
-            //downlevel_defaults()
-            max_texture_dimension_1d: 2048,
+            max_texture_dimension_1d: 8192,
             max_texture_dimension_2d: 8192,
-            max_texture_dimension_3d: 256,
+            max_texture_dimension_3d: 2048,
             max_texture_array_layers: 256,
-            max_bind_groups: 8,
-            max_bindings_per_bind_group: 640,
+            max_bind_groups: 8, // changed
+            max_bindings_per_bind_group: 1000,
             max_dynamic_uniform_buffers_per_pipeline_layout: 8,
             max_dynamic_storage_buffers_per_pipeline_layout: 4,
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
-            max_storage_buffers_per_shader_stage: 16,
+            max_storage_buffers_per_shader_stage: 16, // changed
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
-            max_uniform_buffer_binding_size: 16 << 10,
-            max_storage_buffer_binding_size: 128 << 20,
+            max_binding_array_elements_per_shader_stage: 0,
+            max_binding_array_sampler_elements_per_shader_stage: 0,
+            max_uniform_buffer_binding_size: 64 << 10,  // (64 KiB)
+            max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
             max_vertex_buffers: 8,
+            max_buffer_size: 256 << 20, // (256 MiB)
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
-            max_push_constant_size: 0,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
             max_inter_stage_shader_components: 60,
-            max_compute_workgroup_storage_size: 16352,
+            max_color_attachments: 8,
+            max_color_attachment_bytes_per_sample: 32,
+            max_compute_workgroup_storage_size: 16384,
             max_compute_invocations_per_workgroup: 256,
             max_compute_workgroup_size_x: 256,
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            max_buffer_size: 1 << 28,
+            min_subgroup_size: 0,
+            max_subgroup_size: 0,
+            max_push_constant_size: 0,
+            max_non_sampler_bindings: 1_000_000,
         };
 
         let mut dev_temp = None;
@@ -115,34 +128,22 @@ impl WGPUConfig {
         if f64_support {
             features |= wgpu::Features::SHADER_F64;
         }
-        match adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    features: features.clone(),
-                    limits: limits.clone(),
-                    label: None,
-                },
-                None, // Trace path
-            )
-            .await
-        {
+
+        let desc = wgpu::DeviceDescriptor {
+            label: None,
+            required_features: features,
+            required_limits: limits.clone(),
+            memory_hints: wgpu::MemoryHints::default(),
+            trace: Trace::default(),
+        };
+        match adapter.request_device(&desc).await {
             Ok((dev, que)) => {
                 dev_temp = Some(dev);
                 que_temp = Some(que)
             }
             Err(_) => {
                 println!("Warning: GPU doesn't support f64 compute, this feature will be unavailable.");
-                let temp = adapter
-                    .request_device(
-                        &wgpu::DeviceDescriptor {
-                            features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
-                            limits: limits.clone(),
-                            label: None,
-                        },
-                        None, // Trace path
-                    )
-                    .await
-                    .unwrap();
+                let temp = adapter.request_device(&desc).await.unwrap();
                 dev_temp = Some(temp.0);
                 que_temp = Some(temp.1);
                 f64_support = false;
@@ -171,6 +172,7 @@ impl WGPUConfig {
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
+            desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
 

@@ -4,7 +4,7 @@ use winit::{
     dpi::PhysicalSize,
     event::*,
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    window::WindowBuilder,
+    window::Window,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -56,6 +56,3 @@ impl Canvas {
         }
     }
 }
-
-use winit::window::Window;
-

@@ -11,7 +11,6 @@ use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::{str::FromStr, vec};
 use wgpu::{Device, Queue};
-use winit::event::VirtualKeyCode;
 use winit::keyboard::{KeyCode, NamedKey};
 
 use crate::{
