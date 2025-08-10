@@ -129,7 +129,7 @@ impl Client {
             false, // dithering
         );
 
-        let mut max_framerate = 120.0 / 1000.0;
+        let mut max_framerate = 144.0 / 1000.0;
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(monitor) = canvas.window.current_monitor() {
@@ -210,8 +210,14 @@ impl Client {
         let event_loop = self.event_loop.take().expect("event_loop present");
         event_loop.run(move |event, evt_loop| match event {
             Event::WindowEvent { window_id, event } if window_id == self.canvas.window.id() => {
-                // let evt = self.egui_state.on_window_event(&self.canvas.window, &event);
-                // let egui_event = evt.consumed;
+                // 1) Feed egui
+                let egui_resp = self.egui_state.on_window_event(&self.canvas.window, &event);
+
+                // 2) Optionally send to your app if egui didn’t consume it
+                //    (you already wrote input(&WindowEvent, egui_event: bool))
+                let _handled = self.input(&event, egui_resp.consumed);
+
+                // 3) Your special cases still apply:
                 match event {
                     WindowEvent::CloseRequested => evt_loop.exit(),
                     WindowEvent::Resized(size) => self.resize(size),
@@ -219,9 +225,19 @@ impl Client {
                         self.render();
                     }
                     _ => {}
-                };
+                }
+
+                // 4) If egui wants a repaint (hover/cursor change/etc), do it
+                if egui_resp.repaint {
+                    self.canvas.window.request_redraw();
+                }
             }
-            Event::AboutToWait => self.canvas.window.request_redraw(),
+
+            Event::AboutToWait => {
+                // keep the render loop ticking
+                self.canvas.window.request_redraw();
+            }
+
             _ => {}
         });
     }
@@ -1171,7 +1187,7 @@ impl Client {
         // println!("{}", self.wgpu_prog.shader_prog.state.up_to_date);
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
-        let mut max_framerate = 120.0 / 1000.0;
+        let mut max_framerate = 144.0 / 1000.0;
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(monitor) = self.canvas.window.current_monitor() {
@@ -1469,6 +1485,39 @@ impl Client {
                 pixels_per_point: self.canvas.window.scale_factor() as f32,
             };
             let tdelta: egui::TexturesDelta = full_output.textures_delta;
+
+            for (id, image_delta) in tdelta.set {
+                self.egui_renderer.update_texture(&self.wgpu_config.device, &self.wgpu_config.queue, id, &image_delta);
+            }
+
+            self.egui_renderer
+                .update_buffers(&self.wgpu_config.device, &self.wgpu_config.queue, &mut encoder, &paint_jobs, &screen_descriptor);
+
+            {
+                let mut egui_pass = encoder
+                    .begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("egui render pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &output_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                // Keep what you already drew
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    })
+                    .forget_lifetime();
+
+                self.egui_renderer.render(&mut egui_pass, &paint_jobs, &screen_descriptor);
+            }
+
+            for id in tdelta.free {
+                self.egui_renderer.free_texture(&id);
+            }
 
             self.wgpu_config.queue.submit(iter::once(encoder.finish()));
 
