@@ -100,7 +100,7 @@ impl WGPUConfig {
             max_binding_array_sampler_elements_per_shader_stage: 0,
             max_uniform_buffer_binding_size: 64 << 10,  // (64 KiB)
             max_storage_buffer_binding_size: 128 << 20, // (128 MiB)
-            max_vertex_buffers: 8,
+            max_vertex_buffers: 16,
             max_buffer_size: 256 << 20, // (256 MiB)
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
