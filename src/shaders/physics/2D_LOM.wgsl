@@ -30,7 +30,7 @@ const MAX_CONTACTS = 14u;
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
-    if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
+    if id >= u32(settings.particles) || radii[id] == 0.0 { return; }
     let mat_id = material_pointers[id];
     let grid_info = grid_info_buffer[0];
     

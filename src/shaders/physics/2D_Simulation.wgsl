@@ -38,7 +38,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     data[id * DATA_SIZE + 2u] = 0.0;
     // data[id*DATA_SIZE+3u] = velocities[id].x;
 
-    if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
+    if id >= u32(settings.particles) || radii[id] == 0.0 { return; }
 
     var net_force = vec2(0.0, 0.0);
     var net_moment = 0.0;
