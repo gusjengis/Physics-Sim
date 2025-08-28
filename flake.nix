@@ -2,7 +2,7 @@
   description = "Dev environment for Particle Physics Sim (wgpu + winit on Wayland/X11)";
 
   inputs = {
-    nixpkgs.url = "nixpkgs/nixos-25.05";
+    nixpkgs.url = "nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -33,6 +33,7 @@
               xorg.libXrandr
 
               mesa
+              vulkan-tools
 
             ];
 
@@ -40,7 +41,7 @@
             shellHook = ''
                           export LD_LIBRARY_PATH=${pkgs.wayland}/lib:${pkgs.libxkbcommon}/lib:\
               ${pkgs.xorg.libX11}/lib:${pkgs.xorg.libxcb}/lib:${pkgs.xorg.libXcursor}/lib:${pkgs.xorg.libXi}/lib:${pkgs.xorg.libXrandr}/lib:\
-              ${pkgs.mesa.drivers}/lib:${pkgs.mesa.drivers}/lib/dri:${pkgs.vulkan-loader}/lib:\
+              ${pkgs.mesa}/lib:${pkgs.mesa}/lib/dri:${pkgs.vulkan-loader}/lib:\
             '';
 
           };
