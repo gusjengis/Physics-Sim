@@ -1256,7 +1256,8 @@ impl Client {
             let mut needs_reset = false;
             let full_output = self.egui_ctx.run(raw_input, |ctx| {
                 self.available_rect = Some(self.egui_ctx.available_rect());
-                needs_reset = settings!().ui(
+                needs_reset = crate::ui::main(
+                    &mut settings!(),
                     ctx,
                     &mut self.wgpu_prog,
                     &mut self.script_manager,

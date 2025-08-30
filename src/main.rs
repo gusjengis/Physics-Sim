@@ -12,6 +12,7 @@ pub mod shader_gen;
 pub mod sound;
 pub mod state;
 pub mod timeline_widget;
+pub mod ui;
 pub mod wgpu_config;
 pub mod wgpu_prog;
 pub mod wgpu_structs;

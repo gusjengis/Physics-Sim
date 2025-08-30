@@ -69,4 +69,4 @@ features = ["png", "jpeg"]
 # ]}
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-native-dialog = "0.7.0"
+native-dialog = "0.9.0"

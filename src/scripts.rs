@@ -2,8 +2,8 @@ use crate::settings::{self, BondType, Data, Properties, Settings};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use chrono::Local;
 use egui::Ui;
+use rfd::FileDialog;
 #[cfg(not(target_arch = "wasm32"))]
-use native_dialog::FileDialog;
 use serde::{self, Deserialize, Serialize};
 use serde_json::*;
 use std::fmt;
@@ -136,7 +136,7 @@ impl ScriptManager {
     pub fn export_scripts(&self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
+            if let path = FileDialog::new().set_directory("").add_filter("JSON", &["json"]).pick_file().unwrap() {
                 let json_data = self.to_json(); // Export all scripts
                 std::fs::write(path, json_data).expect("Unable to write to file");
             }
@@ -148,7 +148,7 @@ impl ScriptManager {
         if script_index < self.scripts.len() {
             #[cfg(not(target_arch = "wasm32"))]
             {
-                if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
+                if let path = FileDialog::new().set_directory("").add_filter("JSON", &["json"]).pick_file().unwrap() {
                     let script_json = self.scripts[script_index].to_json(); // Serialize only one script
                     std::fs::write(path, script_json).expect("Unable to write to file");
                 }
@@ -161,7 +161,7 @@ impl ScriptManager {
     pub fn import_scripts(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_open_single_file().unwrap() {
+            if let path = FileDialog::new().set_directory("").add_filter("JSON", &["json"]).pick_file().unwrap() {
                 let json_data = std::fs::read_to_string(path).expect("Unable to read file");
 
                 // Try to deserialize as a list of scripts or a single script
@@ -1089,17 +1089,13 @@ impl Parameter {
                             #[cfg(not(target_arch = "wasm32"))]
                             {
                                 let new_path = FileDialog::new()
-                                    .set_location("")
+                                    .set_directory("")
                                     .add_filter(file_type.clone().unwrap().as_str(), &[file_type.unwrap().as_str()])
-                                    .show_open_single_file()
+                                    .pick_file()
                                     .unwrap();
-                                match new_path {
-                                    Some(p) => {
-                                        path.clear();
-                                        path.push(p);
-                                    }
-                                    None => {}
-                                }
+
+                                path.clear();
+                                path.push(new_path);
                             }
                         }
                     });

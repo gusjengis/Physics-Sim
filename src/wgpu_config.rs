@@ -1,11 +1,11 @@
 use crate::settings;
 use crate::wgpu_structs::*;
 use crate::window_init;
-use wgpu::util::DeviceExt;
 use wgpu::BackendOptions;
 use wgpu::Backends;
 use wgpu::RequestAdapterOptions;
 use wgpu::Trace;
+use wgpu::util::DeviceExt;
 
 pub struct WGPUConfig {
     #[allow(dead_code)]
@@ -55,7 +55,7 @@ impl WGPUConfig {
             })
             .await
             .expect("No suitable GPU adapters found.");
-
+        println!("Adapter: {:?}", adapter.get_info().device_type);
         #[cfg(target_arch = "wasm32")]
         // let adapter = instance
         //     .enumerate_adapters(wgpu::Backends::BROWSER_WEBGPU)
@@ -152,6 +152,9 @@ impl WGPUConfig {
 
         let (device, queue) = (dev_temp.unwrap(), que_temp.unwrap());
 
+        dump_adapter(&adapter, &surface);
+        dump_device(&device);
+
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
         // one will result all the colors coming out darker. If you want to support non
@@ -188,4 +191,38 @@ impl WGPUConfig {
             f64_support,
         }
     }
+}
+
+fn dump_adapter(adapter: &wgpu::Adapter, surface: &wgpu::Surface) {
+    let info = adapter.get_info();
+    eprintln!("=== ADAPTER INFO ===");
+    eprintln!("name:            {}", info.name);
+    eprintln!("vendor:          0x{:04x}", info.vendor);
+    eprintln!("device:          0x{:04x}", info.device);
+    eprintln!("device_type:     {:?}", info.device_type); // Discrete/Integrated/Virtual/Cpu
+    eprintln!("backend:         {:?}", info.backend); // Vulkan/Metal/Dx12/Gl/BrowserWebGpu
+
+    let feats = adapter.features();
+    eprintln!("features:        {:?}", feats);
+
+    let limits = adapter.limits();
+    eprintln!("limits:          {:#?}", limits);
+
+    // Downlevel caps are helpful on GL/older stacks
+    let dl = adapter.get_downlevel_capabilities();
+    eprintln!("downlevel:       {:#?}", dl);
+
+    // Surface support + caps (formats/present modes/alpha)
+    let supported = adapter.is_surface_supported(surface);
+    eprintln!("surface_supported_by_adapter: {}", supported);
+    let caps = surface.get_capabilities(adapter);
+    eprintln!("surface.formats:      {:?}", caps.formats);
+    eprintln!("surface.present_modes: {:?}", caps.present_modes);
+    eprintln!("surface.alpha_modes:   {:?}", caps.alpha_modes);
+}
+
+fn dump_device(device: &wgpu::Device) {
+    eprintln!("=== DEVICE INFO ===");
+    eprintln!("enabled features: {:?}", device.features());
+    eprintln!("effective limits:  {:#?}", device.limits());
 }

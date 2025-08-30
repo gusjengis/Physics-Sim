@@ -1,9 +1,23 @@
 // use core::slice::SlicePattern;
+use bytemuck::bytes_of;
+use image::EncodableLayout;
+use naga::ShaderStage;
+use naga::back::spv;
+use rand::Rng;
+use rfd::FileDialog;
 use std::fmt::DebugTuple;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
+use wgpu::ColorTargetState;
+use wgpu::Device;
+use wgpu::PipelineLayout;
+use wgpu::Queue;
+use wgpu::RenderPipeline;
+use wgpu::SurfaceTexture;
+use wgpu::TextureFormat;
+use wgpu::util::DeviceExt;
 
 use crate::particle_def::Particle_Definition;
 use crate::runtime;
@@ -17,23 +31,8 @@ use crate::shader_gen::*;
 use crate::state::*;
 use crate::wgpu_config::*;
 use crate::wgpu_structs::*;
-use bytemuck::bytes_of;
-use image::EncodableLayout;
-use naga::back::spv;
-use naga::ShaderStage;
-#[cfg(not(target_arch = "wasm32"))]
-use native_dialog::FileDialog;
-use rand::Rng;
-use wgpu::ColorTargetState;
-use wgpu::Device;
-use wgpu::PipelineLayout;
-use wgpu::Queue;
-use wgpu::RenderPipeline;
-use wgpu::SurfaceTexture;
-use wgpu::TextureFormat;
 
 extern crate flatbuffers;
-use wgpu::util::DeviceExt;
 
 pub const VERTICES: &[Vertex] = &[
     Vertex { position: [1.0, 1.0, 0.0] },   // 0 - Top Right
@@ -671,12 +670,7 @@ impl WGPUProg {
         {
             let path = match path_param {
                 Some(p) => p,
-                None => FileDialog::new()
-                    .set_location("~")
-                    .add_filter("PNG File", &["png"])
-                    .show_save_single_file()
-                    .unwrap()
-                    .expect("No file selected"),
+                None => FileDialog::new().set_directory("~").add_filter("PNG File", &["png"]).pick_file().expect("No file selected"),
             };
 
             let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
