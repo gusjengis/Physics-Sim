@@ -3,6 +3,7 @@ use crate::wgpu_structs::*;
 use crate::window_init;
 use wgpu::BackendOptions;
 use wgpu::Backends;
+use wgpu::PresentMode;
 use wgpu::RequestAdapterOptions;
 use wgpu::Trace;
 use wgpu::util::DeviceExt;
@@ -156,6 +157,20 @@ impl WGPUConfig {
         dump_device(&device);
 
         let surface_caps = surface.get_capabilities(&adapter);
+
+        // Try to make sure that vsync is on, physics are tied to rendering, so a
+        // higher framerate means faster physics.
+        // Lame, I know
+        let present_mode = if surface_caps.present_modes.contains(&PresentMode::AutoVsync) {
+            PresentMode::AutoVsync
+        } else if surface_caps.present_modes.contains(&PresentMode::Fifo) {
+            PresentMode::Fifo
+        } else {
+            println!("NO VSYNC! Physics may be too fast.");
+            // Fallback (shouldn't happen on most platforms)
+            surface_caps.present_modes[0]
+        };
+
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
         // one will result all the colors coming out darker. If you want to support non
         // sRGB surfaces, you'll need to account for that when drawing to the frame.
@@ -172,7 +187,7 @@ impl WGPUConfig {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_caps.present_modes[0],
+            present_mode,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
