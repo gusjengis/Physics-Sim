@@ -29,7 +29,6 @@ pub fn file_menu(settings: &mut Settings, ui: &mut Ui) {
                 }
             } else {
                 ui.label("Invalid Directory Path");
-                return;
             }
 
             let font_id = egui::TextStyle::Button.resolve(ui.style());

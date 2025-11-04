@@ -56,7 +56,7 @@ impl WGPUConfig {
             })
             .await
             .expect("No suitable GPU adapters found.");
-        println!("Adapter: {:?}", adapter.get_info().device_type);
+        // println!("Adapter: {:?}", adapter.get_info().device_type);
         #[cfg(target_arch = "wasm32")]
         // let adapter = instance
         //     .enumerate_adapters(wgpu::Backends::BROWSER_WEBGPU)
@@ -152,9 +152,10 @@ impl WGPUConfig {
         }
 
         let (device, queue) = (dev_temp.unwrap(), que_temp.unwrap());
+        // if adapter info is needed, uncomment this
 
-        dump_adapter(&adapter, &surface);
-        dump_device(&device);
+        // dump_adapter(&adapter, &surface);
+        // dump_device(&device);
 
         let surface_caps = surface.get_capabilities(&adapter);
 

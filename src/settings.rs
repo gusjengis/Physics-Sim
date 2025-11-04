@@ -483,7 +483,7 @@ impl Settings {
             update_contacts: false,
             contact_search_optimization: false,
         };
-        settings.load_memory();
+        settings.load_memory(false);
         return settings;
     }
 
@@ -644,7 +644,7 @@ impl Settings {
         }
     }
 
-    pub fn load_memory(&mut self) {
+    pub fn load_memory(&mut self, recursively_called: bool) {
         match fs::read_to_string("memory.json") {
             Ok(json_string) => match serde_json::from_str::<Memory>(&json_string) {
                 Ok(loaded_memory) => {
@@ -656,7 +656,18 @@ impl Settings {
                 }
             },
             Err(_) => {
-                println!("Err: Failed to read memory file.");
+                println!("Err: Failed to read memory file. Creating new memory file.");
+                let json_string = serde_json::to_string(&Memory::default()).unwrap();
+
+                match fs::write("memory.json", json_string) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        println!("Err: Failed to create memory file.");
+                    }
+                }
+                if !recursively_called {
+                    self.load_memory(true);
+                }
             }
         }
     }
@@ -1037,6 +1048,14 @@ pub enum Property {
 #[derive(Serialize, Deserialize)]
 struct Memory {
     pub current_dir: std::path::PathBuf,
+}
+
+impl Default for Memory {
+    fn default() -> Self {
+        return Memory {
+            current_dir: env::current_dir().unwrap().join("saved_states"),
+        };
+    }
 }
 
 #[derive(Debug, PartialEq)]
