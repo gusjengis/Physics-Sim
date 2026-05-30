@@ -15,7 +15,7 @@ struct Input {
 
 $ 3D {
 struct Camera {
-        pos: vec4<f32>
+        pos: vec4<f32>,
         view_proj: mat4x4<f32>,
         eye: mat4x4<f32>,
         focus: mat4x4<f32>,

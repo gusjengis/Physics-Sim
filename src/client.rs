@@ -23,11 +23,11 @@ use std::fs;
 use std::io;
 use std::iter;
 use std::path::PathBuf;
-use winit::dpi::PhysicalPosition;
 use winit::keyboard::Key;
 use winit::keyboard::KeyCode;
 use winit::keyboard::NamedKey;
 use winit::keyboard::PhysicalKey;
+use winit::window::CursorGrabMode;
 use winit::window::Fullscreen;
 use winit::window::Window;
 use winit::{
@@ -60,7 +60,7 @@ pub struct Client {
     cursor_pos: (i32, i32),
     click_pos: (i32, i32),
     cursor_delta: (i32, i32),
-    mouse_delta: (i32, i32),
+    mouse_delta: (f32, f32),
     mouse_captured: bool,
     world_delta: (f32, f32),
     minimized: bool,
@@ -160,7 +160,7 @@ impl Client {
             cursor_pos: (0, 0),
             click_pos: (0, 0),
             cursor_delta: (0, 0),
-            mouse_delta: (0, 0),
+            mouse_delta: (0.0, 0.0),
             mouse_captured: false,
             world_delta: (0.0, 0.0),
             minimized: false,
@@ -209,6 +209,15 @@ impl Client {
     pub fn start_event_loop(&mut self) {
         let event_loop = self.event_loop.take().expect("event_loop present");
         event_loop.run(move |event, evt_loop| match event {
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta },
+                ..
+            } => {
+                if self.mouse_captured && self.settings.simulation.d3 {
+                    self.mouse_delta = (self.mouse_delta.0 + delta.0 as f32, self.mouse_delta.1 + delta.1 as f32);
+                }
+            }
+
             Event::WindowEvent { window_id, event } if window_id == self.canvas.window.id() => {
                 // 1) Feed egui
                 let egui_resp = self.egui_state.on_window_event(&self.canvas.window, &event);
@@ -286,7 +295,7 @@ impl Client {
                         );
                         self.wgpu_prog.shader_prog.click(&mut self.wgpu_config, &self.settings);
                         if self.settings.simulation.d3 {
-                            self.mouse_captured = true;
+                            self.set_mouse_captured(true);
                         }
                     }
                     if self.settings.create.create_mode {
@@ -357,12 +366,6 @@ impl Client {
                     self.cursor_delta = delta;
                     self.cursor_pos = (position.x as i32, position.y as i32);
                     self.settings.update_world_pos(self.cursor_to_world_pos(self.cursor_pos), (self.post_ui_x_off(), self.post_ui_y_off()));
-                    if self.mouse_captured {
-                        let center = self.post_ui_center();
-                        self.mouse_delta = (position.x as i32 - center.0, position.y as i32 - center.1);
-
-                        self.canvas.window.set_cursor_position(PhysicalPosition::new(center.0, center.1));
-                    }
                     if (self.middle && self.shift && !self.settings.simulation.d3) {
                         self.x_off += (world_delta.0 as f32);
                         self.y_off += (world_delta.1 as f32);
@@ -567,7 +570,7 @@ impl Client {
                             state: ElementState::Pressed,
                             ..
                         } => {
-                            self.mouse_captured = false;
+                            self.set_mouse_captured(false);
                             return true;
                         }
                         KeyEvent {
@@ -788,6 +791,20 @@ impl Client {
         if self.settings.simulation.d3 {
             self.wgpu_prog.cam = Camera::new(&self.wgpu_config);
         }
+    }
+
+    fn set_mouse_captured(&mut self, captured: bool) {
+        if captured {
+            if self.canvas.window.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+                let _ = self.canvas.window.set_cursor_grab(CursorGrabMode::Confined);
+            }
+            self.canvas.window.set_cursor_visible(false);
+            self.mouse_delta = (0.0, 0.0);
+        } else {
+            let _ = self.canvas.window.set_cursor_grab(CursorGrabMode::None);
+            self.canvas.window.set_cursor_visible(true);
+        }
+        self.mouse_captured = captured;
     }
 
     fn select_all(&mut self) {
@@ -1102,6 +1119,9 @@ impl Client {
             bytemuck::cast((self.middle && !self.shift) as i32),
             bytemuck::cast((Local::now().timestamp_millis() - self.boot_time) as i32),
             bytemuck::cast(self.settings.setup.particles as i32),
+            0.0,
+            0.0,
+            0.0,
             self.wgpu_prog.cam.eye.x,
             self.wgpu_prog.cam.eye.y,
             self.wgpu_prog.cam.eye.z,
@@ -1148,7 +1168,7 @@ impl Client {
 
     fn camera_movement(&mut self) {
         let camera = &mut self.wgpu_prog.cam;
-        camera.process_mouse_movement(-self.mouse_delta.0 as f32, -self.mouse_delta.1 as f32, 0.001);
+        camera.process_mouse_movement(-self.mouse_delta.0, -self.mouse_delta.1, 0.001);
         let forward = camera.target - camera.eye;
         let forward_norm = forward.normalize();
         let forward_mag = forward.magnitude();
@@ -1175,7 +1195,7 @@ impl Client {
             camera.eye += forward_norm * move_speed;
             camera.target += forward_norm * move_speed;
         }
-        self.mouse_delta = (0, 0);
+        self.mouse_delta = (0.0, 0.0);
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -1278,8 +1298,8 @@ impl Client {
             }
             if self.settings.simulation.d3 && self.mouse_captured {
                 self.camera_movement();
-            } else {
-                self.mouse_captured = false;
+            } else if self.mouse_captured {
+                self.set_mouse_captured(false);
             }
             self.wgpu_prog.cam.update_view_proj(&self.wgpu_config);
             self.update_render_input();

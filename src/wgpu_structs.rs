@@ -741,7 +741,7 @@ impl Camera {
     }
 
     pub fn process_mouse_movement(&mut self, delta_x: f32, delta_y: f32, sensitivity: f32) {
-        use cgmath::{Matrix4, Rad, Vector3};
+        use cgmath::{Matrix4, Rad};
 
         // Adjust mouse delta by sensitivity
         let delta_x = delta_x * sensitivity;
@@ -759,9 +759,15 @@ impl Camera {
         direction = horizontal_rotation.transform_vector(direction);
 
         // Rotate around the right axis (perpendicular to up and direction) for vertical movement
-        let right = direction.cross(self.up).normalize();
-        let vertical_rotation = Matrix4::from_axis_angle(right, vertical_angle);
-        direction = vertical_rotation.transform_vector(direction);
+        let direction_norm = direction.normalize();
+        let current_pitch = direction_norm.dot(self.up).asin();
+        let max_pitch = 89.0_f32.to_radians();
+        let vertical_angle = Rad((current_pitch + delta_y).clamp(-max_pitch, max_pitch) - current_pitch);
+        let right = direction.cross(self.up);
+        if right.magnitude2() > 0.000001 {
+            let vertical_rotation = Matrix4::from_axis_angle(right.normalize(), vertical_angle);
+            direction = vertical_rotation.transform_vector(direction);
+        }
 
         // Update target position
         self.target = self.eye + direction;
