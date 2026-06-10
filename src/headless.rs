@@ -95,7 +95,134 @@ pub struct Scenario {
     /// row is density; see settings.materials). Optional override.
     #[serde(default)]
     pub materials: Option<Vec<f32>>,
+    /// Aggregate dump mode (Stage 2, large N): instead of per-particle columns,
+    /// each row holds whole-system energies and contact-bookkeeping health
+    /// metrics computed CPU-side from the readback. No physics touched.
+    #[serde(default)]
+    pub aggregate: bool,
     pub particles: Vec<ScenarioParticle>,
+}
+
+/// Per-row aggregate metrics for Stage-2 settling runs.
+///
+/// Overlap/neighbor metrics mirror the shader's broad phase exactly:
+/// grid origin base_x = -cell_size*w/2, base_y = +cell_size*h/2 (y inverted),
+/// AABB multi-cell insertion, usable slots per cell = cell_cap - 2
+/// (one count word + one tick word). `cell_overflow` counts particle-cell
+/// insertions the shader would silently drop; `slot_overflow` counts
+/// particles touching more than the 14 contact slots the simulation shader
+/// can hold.
+fn dump_aggregate(
+    out: &mut BufWriter<File>,
+    step: u32,
+    t: f64,
+    st: &crate::state::State,
+    n: usize,
+    mass: &[f32],
+    kn: &[f32],
+    g: f32,
+    floor_y: f32,
+) {
+    use std::collections::HashSet;
+    let gi = &st.grid_info;
+    let (w, h, cs, cap) = (gi.w as usize, gi.h as usize, gi.cell_size, gi.cell_cap as usize);
+    let base_x = -cs * w as f32 * 0.5;
+    let base_y = cs * h as f32 * 0.5;
+
+    let mut ke_trans = 0.0f64;
+    let mut ke_rot = 0.0f64;
+    let mut pe_grav = 0.0f64;
+    let mut max_speed = 0.0f32;
+    let mut nan_count = 0usize;
+    for i in 0..n {
+        let (x, y) = (st.pos[2 * i], st.pos[2 * i + 1]);
+        let (vx, vy) = (st.vel[2 * i], st.vel[2 * i + 1]);
+        let rv = st.rot_vel[i];
+        if !(x.is_finite() && y.is_finite() && vx.is_finite() && vy.is_finite() && rv.is_finite()) {
+            nan_count += 1;
+            continue;
+        }
+        let v2 = vx * vx + vy * vy;
+        ke_trans += 0.5 * (mass[i] * v2) as f64;
+        ke_rot += 0.5 * (0.5 * mass[i] * st.radii[i] * st.radii[i] * rv * rv) as f64;
+        pe_grav += (mass[i] * g * (y - floor_y)) as f64;
+        max_speed = max_speed.max(v2.sqrt());
+    }
+
+    // CPU re-binning with the shader's exact grid geometry.
+    let mut cells: Vec<Vec<u32>> = vec![Vec::new(); w * h];
+    let mut cell_overflow = 0usize;
+    for i in 0..n {
+        let (x, y) = (st.pos[2 * i], st.pos[2 * i + 1]);
+        let r = st.radii[i];
+        if !(x.is_finite() && y.is_finite()) {
+            continue;
+        }
+        let min_cx = (((x - r - base_x) / cs) as i64).max(0) as usize;
+        let max_cx = ((((x + r - base_x) / cs) as i64).min(w as i64 - 1)).max(0) as usize;
+        let min_cy = (((base_y - (y + r)) / cs) as i64).max(0) as usize;
+        let max_cy = ((((base_y - (y - r)) / cs) as i64).min(h as i64 - 1)).max(0) as usize;
+        for cy in min_cy..=max_cy {
+            for cx in min_cx..=max_cx {
+                let cell = &mut cells[cy * w + cx];
+                if cell.len() >= cap - 2 {
+                    cell_overflow += 1;
+                } else {
+                    cell.push(i as u32);
+                }
+            }
+        }
+    }
+
+    let mut seen: HashSet<(u32, u32)> = HashSet::new();
+    let mut pe_elast = 0.0f64;
+    let mut max_overlap = 0.0f32;
+    let mut neighbors = vec![0u32; n];
+    for cell in &cells {
+        for (ai, &a) in cell.iter().enumerate() {
+            for &b in &cell[ai + 1..] {
+                let key = if a < b { (a, b) } else { (b, a) };
+                if !seen.insert(key) {
+                    continue;
+                }
+                let (i, j) = (key.0 as usize, key.1 as usize);
+                let dx = st.pos[2 * j] - st.pos[2 * i];
+                let dy = st.pos[2 * j + 1] - st.pos[2 * i + 1];
+                let dist = (dx * dx + dy * dy).sqrt();
+                let u = st.radii[i] + st.radii[j] - dist;
+                if u > 0.0 {
+                    let kp = 1.0 / (1.0 / kn[i] + 1.0 / kn[j]);
+                    pe_elast += 0.5 * (kp * u * u) as f64;
+                    max_overlap = max_overlap.max(u);
+                    neighbors[i] += 1;
+                    neighbors[j] += 1;
+                }
+            }
+        }
+    }
+    let touching_pairs: u32 = neighbors.iter().sum::<u32>() / 2;
+    let max_neighbors = neighbors.iter().copied().max().unwrap_or(0);
+    let slot_overflow = neighbors.iter().filter(|&&c| c > 14).count();
+
+    writeln!(
+        out,
+        "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+        step,
+        t,
+        ke_trans,
+        ke_rot,
+        pe_grav,
+        pe_elast,
+        ke_trans + ke_rot + pe_grav + pe_elast,
+        max_overlap,
+        touching_pairs,
+        max_neighbors,
+        slot_overflow,
+        cell_overflow,
+        max_speed,
+        nan_count
+    )
+    .unwrap();
 }
 
 pub fn run(scenario_path: &str, out_path: &str) {
@@ -212,12 +339,30 @@ pub fn run(scenario_path: &str, out_path: &str) {
     }
     prog.shader_prog.restore(&mut config, &mut settings);
 
+    // Per-particle mass and material normal stiffness for aggregate metrics
+    // (material row = [r, g, b, density, k_n, k_s], see PFC_MODEL.md D3).
+    let mat = &settings.materials;
+    let (mass, kn): (Vec<f32>, Vec<f32>) = (0..n)
+        .map(|i| {
+            let m = sc.particles[i].material as usize;
+            let density = mat[m * 6 + 3];
+            let r = sc.particles[i].r;
+            (density * std::f32::consts::PI * r * r, mat[m * 6 + 4])
+        })
+        .unzip();
+    let g_eff = if sc.gravity { 9.81 * sc.gravity_acceleration } else { 0.0 };
+    let floor_y = -sc.vert_bound / 2.0;
+
     let mut out = BufWriter::new(File::create(out_path).unwrap_or_else(|e| panic!("cannot create {}: {}", out_path, e)));
-    write!(out, "step,t").unwrap();
-    for i in 0..n {
-        write!(out, ",p{i}_x,p{i}_y,p{i}_vx,p{i}_vy,p{i}_rot,p{i}_rot_vel,p{i}_fn,p{i}_fs,p{i}_mom").unwrap();
+    if sc.aggregate {
+        writeln!(out, "step,t,ke_trans,ke_rot,pe_grav,pe_elast,e_total,max_overlap,touching_pairs,max_neighbors,slot_overflow,cell_overflow,max_speed,nan_count").unwrap();
+    } else {
+        write!(out, "step,t").unwrap();
+        for i in 0..n {
+            write!(out, ",p{i}_x,p{i}_y,p{i}_vx,p{i}_vy,p{i}_rot,p{i}_rot_vel,p{i}_fn,p{i}_fs,p{i}_mom").unwrap();
+        }
+        writeln!(out).unwrap();
     }
-    writeln!(out).unwrap();
 
     let dump = |out: &mut BufWriter<File>, step: u32, st: &crate::state::State| {
         write!(out, "{},{}", step, step as f64 * sc.timestep as f64).unwrap();
@@ -243,13 +388,20 @@ pub fn run(scenario_path: &str, out_path: &str) {
     };
 
     // Row for the initial state, then one row per dump interval.
-    dump(&mut out, 0, &prog.shader_prog.state);
+    let do_dump = |out: &mut BufWriter<File>, step: u32, st: &crate::state::State| {
+        if sc.aggregate {
+            dump_aggregate(out, step, step as f64 * sc.timestep as f64, st, n, &mass, &kn, g_eff, floor_y);
+        } else {
+            dump(out, step, st);
+        }
+    };
+    do_dump(&mut out, 0, &prog.shader_prog.state);
     for step in 1..=sc.steps {
         prog.shader_prog.compute(&mut config, &settings);
         if step % sc.dump_every == 0 {
             let sp = &mut prog.shader_prog;
             sp.state.update_state(&mut config, &settings, &mut sp.buffers);
-            dump(&mut out, step, &sp.state);
+            do_dump(&mut out, step, &sp.state);
         }
     }
     out.flush().unwrap();
