@@ -186,16 +186,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         }
 
-        storageBarrier();
-
-        for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
-            for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
-                let base_index = (cell_y * grid_info.w + cell_x) * grid_info.cell_cap;
-                let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
-                if p_count < grid_info.cell_cap - 1 {
-                    grid[base_index + 1 + p_count] = i32(id);
-                }
-            }
-        }
+        // Insertion moved to 2D_Grid_Insert.wgsl (own dispatch). storageBarrier()
+        // here only synced within a workgroup (AUTOPSY H8): with >1 workgroup the
+        // clear above could race another workgroup's insertions and wipe them.
     }
 }

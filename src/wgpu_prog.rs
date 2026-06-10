@@ -848,6 +848,13 @@ impl WGPUComputeProg {
             label: None,
             source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/physics/2D_Broad_Phase.wgsl"), settings).into()),
         });
+        // Grid insertion split out of LOM (AUTOPSY H8: storageBarrier is not a
+        // cross-workgroup barrier; insertion needs its own dispatch after clear).
+        let grid_insert_shader = include_str!("./shaders/physics/2D_Grid_Insert.wgsl");
+        let grid_insert_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(grid_insert_shader, settings).into()),
+        });
         // println!("3");
         let sim_shader = include_str!("./shaders/physics/2D_Simulation.wgsl");
         let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -898,6 +905,20 @@ impl WGPUComputeProg {
         ////create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("LOM compute"),
+            bind_group_layouts: &[
+                &buffers.pos_buffers.bind_group_layout,
+                &buffers.mov_buffers.bind_group_layout,
+                &buffers.contact_buffers.bind_group_layout,
+                &buffers.collision_settings.bind_group_layout,
+                &buffers.data_buffer.bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        // identical to the LOM layout; separate object so shader_strs /
+        // pipeline_layouts / compute_pipelines stay index-aligned (H8 split)
+        let grid_insert_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Grid insert compute"),
             bind_group_layouts: &[
                 &buffers.pos_buffers.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
@@ -1045,6 +1066,12 @@ impl WGPUComputeProg {
             module: &compute_shader2,
             entry_point: "main",
         });
+        let grid_insert_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&grid_insert_compute_pipeline_layout),
+            module: &grid_insert_compute_shader,
+            entry_point: "main",
+        });
         // println!("4");
         let drag_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -1118,9 +1145,9 @@ impl WGPUComputeProg {
             // set_group_compute_pipeline,
             hit_tex,
             grid_info,
-            shader_strs: vec![lom_shader.to_string(), sim_shader.to_string()],
-            pipeline_layouts: vec![compute_pipeline_layout, compute_pipeline_layout2],
-            compute_pipelines: vec![compute_pipeline, compute_pipeline2],
+            shader_strs: vec![lom_shader.to_string(), sim_shader.to_string(), grid_insert_shader.to_string()],
+            pipeline_layouts: vec![compute_pipeline_layout, compute_pipeline_layout2, grid_insert_compute_pipeline_layout],
+            compute_pipelines: vec![compute_pipeline, compute_pipeline2, grid_insert_compute_pipeline],
         }
     }
 
@@ -1428,6 +1455,22 @@ impl WGPUComputeProg {
                 let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
 
                 compute_pass.set_pipeline(&self.compute_pipelines[0]);
+
+                compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);
+                compute_pass.set_bind_group(4, &self.buffers.data_buffer.bind_group, &[]);
+
+                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
+            }
+
+            // GRID INSERT (H8): own dispatch so the LOM grid clear is fully
+            // complete (implicit inter-dispatch barrier) before insertion.
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
+
+                compute_pass.set_pipeline(&self.compute_pipelines[2]);
 
                 compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
                 compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
