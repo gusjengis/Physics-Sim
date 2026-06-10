@@ -190,6 +190,10 @@ pub fn run(scenario_path: &str, out_path: &str) {
         // the shaders bind bonds as array<Bond> (12-byte stride), so pad to one
         // full null Bond to satisfy wgpu's minimum binding size.
         st.bonds = vec![-1; 3];
+        // State::new leaves grid as a 1-word placeholder (state.rs `grid: vec![0; 1]`);
+        // only the file-load path sizes it. restore() would otherwise shrink the
+        // GPU grid buffer to 4 bytes and silently kill the broad phase.
+        st.grid = vec![0; (st.grid_info.w * st.grid_info.h * st.grid_info.cell_cap) as usize];
         for (i, p) in sc.particles.iter().enumerate() {
             st.pos[2 * i] = p.x;
             st.pos[2 * i + 1] = p.y;
@@ -211,22 +215,27 @@ pub fn run(scenario_path: &str, out_path: &str) {
     let mut out = BufWriter::new(File::create(out_path).unwrap_or_else(|e| panic!("cannot create {}: {}", out_path, e)));
     write!(out, "step,t").unwrap();
     for i in 0..n {
-        write!(out, ",p{i}_x,p{i}_y,p{i}_vx,p{i}_vy,p{i}_rot,p{i}_rot_vel").unwrap();
+        write!(out, ",p{i}_x,p{i}_y,p{i}_vx,p{i}_vy,p{i}_rot,p{i}_rot_vel,p{i}_fn,p{i}_fs,p{i}_mom").unwrap();
     }
     writeln!(out).unwrap();
 
     let dump = |out: &mut BufWriter<File>, step: u32, st: &crate::state::State| {
         write!(out, "{},{}", step, step as f64 * sc.timestep as f64).unwrap();
         for i in 0..n {
+            // data[0..2] are the per-particle contact diagnostics summed in the
+            // simulation shader: normal force, tangent force, moment.
             write!(
                 out,
-                ",{},{},{},{},{},{}",
+                ",{},{},{},{},{},{},{},{},{}",
                 st.pos[2 * i],
                 st.pos[2 * i + 1],
                 st.vel[2 * i],
                 st.vel[2 * i + 1],
                 st.rot[i],
-                st.rot_vel[i]
+                st.rot_vel[i],
+                st.data[7 * i],
+                st.data[7 * i + 1],
+                st.data[7 * i + 2]
             )
             .unwrap();
         }
@@ -245,4 +254,81 @@ pub fn run(scenario_path: &str, out_path: &str) {
     }
     out.flush().unwrap();
     println!("[headless] wrote {}", out_path);
+
+    // Debug introspection of GPU-side contact state (harness-only).
+    if std::env::var("HEADLESS_DEBUG").is_ok() {
+        let sp = &mut prog.shader_prog;
+        sp.state.update_state(&mut config, &settings, &mut sp.buffers);
+        let st = &sp.state;
+        println!("[debug] grid_info: cell_size={} cap={} w={} h={}", st.grid_info.cell_size, st.grid_info.cell_cap, st.grid_info.w, st.grid_info.h);
+        println!("[debug] p_count={} contacts.len()={} data.len()={}", st.p_count, st.contacts.len(), st.data.len());
+        for p in 0..n.min(4) {
+            for s in 0..14 {
+                let base = (p * 14 + s) * 6;
+                if base + 5 >= st.contacts.len() {
+                    break;
+                }
+                let a = bytemuck::cast::<f32, i32>(st.contacts[base]);
+                let b = bytemuck::cast::<f32, i32>(st.contacts[base + 1]);
+                if b != -1 {
+                    println!(
+                        "[debug] contact p{} slot{}: a={} b={} ft={} bft={} thb={} bonded={}",
+                        p, s, a, b, st.contacts[base + 2], st.contacts[base + 3], st.contacts[base + 4],
+                        bytemuck::cast::<f32, i32>(st.contacts[base + 5])
+                    );
+                }
+            }
+            let d = 7 * p;
+            println!(
+                "[debug] data p{}: fn={} fs={} mom={} d3={} intvx={} intvy={} introt={}",
+                p, st.data[d], st.data[d + 1], st.data[d + 2], st.data[d + 3], st.data[d + 4], st.data[d + 5], st.data[d + 6]
+            );
+        }
+        // state.grid readback is commented out upstream in update_state; read
+        // the GPU grid buffer directly here.
+        let mut gpu_grid: Vec<i32> = Vec::new();
+        crate::state::State::update_i32(&mut config.device, &mut config.queue, &mut gpu_grid, &mut sp.buffers.contact_buffers.buffers[4]);
+        let st = &sp.state;
+        let gi = &st.grid_info;
+        let mut nonzero = 0;
+        for c in 0..(gi.w * gi.h) as usize {
+            let base = c * gi.cell_cap as usize;
+            if base < gpu_grid.len() && gpu_grid[base] != 0 {
+                nonzero += 1;
+                if nonzero <= 8 {
+                    let cx = c % gi.w as usize;
+                    let cy = c / gi.w as usize;
+                    println!(
+                        "[debug] grid cell ({},{}) count={} tick={} slots={:?}",
+                        cx, cy, gpu_grid[base], gpu_grid[base + 1],
+                        &gpu_grid[base + 2..(base + gi.cell_cap as usize).min(gpu_grid.len())]
+                    );
+                }
+            }
+        }
+        println!("[debug] cells with nonzero count: {}", nonzero);
+        let mut ticked = 0;
+        let mut anynz = 0;
+        for c in 0..(gi.w * gi.h) as usize {
+            let base = c * gi.cell_cap as usize;
+            if base + 1 < gpu_grid.len() && gpu_grid[base + 1] != 0 {
+                ticked += 1;
+                if ticked <= 6 {
+                    println!("[debug] ticked cell {} tick={} count={}", c, gpu_grid[base + 1], gpu_grid[base]);
+                }
+            }
+        }
+        for (i, v) in gpu_grid.iter().enumerate() {
+            if *v != 0 {
+                anynz += 1;
+                if anynz <= 10 {
+                    println!("[debug] grid[{}] = {}", i, v);
+                }
+            }
+        }
+        println!("[debug] ticked cells: {}, nonzero grid words: {} of {}", ticked, anynz, gpu_grid.len());
+        let mut cc: Vec<i32> = vec![0; 4];
+        crate::state::State::update_i32(&mut config.device, &mut config.queue, &mut cc, &mut sp.buffers.contact_buffers.buffers[6]);
+        println!("[debug] coll_cont = {:?}", cc);
+    }
 }
