@@ -2,7 +2,6 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
-#[derive(Clone)]
 struct AudioController {
     frequency: Arc<Mutex<f32>>, // Shared frequency for the audio tone
     amplitude: Arc<Mutex<f32>>, // Shared amplitude (volume control)
@@ -38,6 +37,7 @@ impl AudioController {
                     }
                 },
                 |err| eprintln!("Error in audio stream: {}", err),
+                None, // timeout (added in cpal 0.15)
             )
             .expect("Failed to create audio stream");
 
