@@ -456,12 +456,15 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
         force += vec2(0.0, -gravity_acc * mass);
     }
 
-    //damping
-    // if settings.local_damping == 1 {
-    //     let alpha = settings.local_damping_alpha;
-    //     force  += vec2(abs(force.x), abs(force.y))  * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
-    //     moment += moment         * alpha * -sign(rot_vel[id]);
-    // }
+    // PFC-style local non-viscous damping (re-enabled, AUTOPSY H1):
+    // F -= alpha*|F|*sign(v) per component, same for the moment. The original
+    // commented-out moment line lacked abs(moment), which would INJECT energy
+    // whenever moment and rot_vel have opposite signs; fixed here.
+    if settings.local_damping == 1 {
+        let alpha = settings.local_damping_alpha;
+        force  += vec2(abs(force.x), abs(force.y)) * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
+        moment += abs(moment) * alpha * -sign(rot_vel[id]);
+    }
 
     // natural accelerations
     accelerations[id] = (force) / mass;
