@@ -250,9 +250,12 @@ pub fn run(scenario_path: &str, out_path: &str) {
     // collision-settings uniform are all built from these values.
     settings.set_particles(n);
     settings.setup.structure = Structure::Grid;
-    settings.setup.variable_rad = false;
     settings.setup.max_radius = sc.particles.iter().map(|p| p.r).fold(0.0_f32, f32::max);
     settings.setup.min_radius = sc.particles.iter().map(|p| p.r).fold(f32::INFINITY, f32::min);
+    // H3 fix (AUTOPSY): variable_rad=false collapsed min_rad to max_radius in
+    // grid_capacity(), undersizing cell_cap (11 for the polydisperse T7 instead
+    // of 51) -> silent grid-insertion drops -> missed contacts at large N.
+    settings.setup.variable_rad = settings.setup.min_radius < settings.setup.max_radius;
     settings.setup.max_h_velocity = 0.0;
     settings.setup.min_h_velocity = 0.0;
     settings.setup.max_v_velocity = 0.0;
