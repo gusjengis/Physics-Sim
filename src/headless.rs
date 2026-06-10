@@ -100,6 +100,32 @@ pub struct Scenario {
     /// metrics computed CPU-side from the readback. No physics touched.
     #[serde(default)]
     pub aggregate: bool,
+    /// Bond configuration (Stage 3c). bond_type: 0 none, 1 normal-only,
+    /// 2 linear contact, 3 parallel (PFC-style). bond_init = bond every pair
+    /// within 1.05*(r_i+r_j) at t=0 via the upstream State::regen_bonds path.
+    /// NOTE: aggregate bond elastic energy is only computed for bond_type 3.
+    #[serde(default)]
+    pub bond_type: i32,
+    #[serde(default)]
+    pub bond_init: bool,
+    #[serde(default)]
+    pub bond_tearing: bool,
+    #[serde(default = "d_one_f")]
+    pub bond_normal_stiffness: f32,
+    #[serde(default = "d_one_f")]
+    pub bond_shear_stiffness: f32,
+    #[serde(default)]
+    pub bond_normal_strength: f32,
+    #[serde(default)]
+    pub bond_shear_strength: f32,
+    #[serde(default = "d_one_f")]
+    pub moment_contribution_factor: f32,
+    /// Binary snapshot stream for video rendering: every k steps append one
+    /// frame of 4 f32 LE per particle (x, y, speed, intact_bond_count) to
+    /// `<out>.snap`, plus a JSON sidecar `<out>.snap.json` with the layout.
+    /// 0 = off.
+    #[serde(default)]
+    pub snapshot_every: u32,
     pub particles: Vec<ScenarioParticle>,
 }
 
@@ -122,6 +148,9 @@ fn dump_aggregate(
     kn: &[f32],
     g: f32,
     floor_y: f32,
+    bond_type: i32,
+    bkn: f32,
+    bks: f32,
 ) {
     use std::collections::HashSet;
     let gi = &st.grid_info;
@@ -174,6 +203,75 @@ fn dump_aggregate(
         }
     }
 
+    // Bond bookkeeping + bond elastic energy (Stage 3c), parallel bonds only
+    // (bond_type 3). Mirrors 2D_Simulation.wgsl linear_parallel_bonds():
+    // R = 0.5*min(r_a, r_b), A = 2R (t = 1), I = (2/3)R^3.
+    // Per SLOT (each side holds its own springs): shear PE = bft^2/(2*bks*A),
+    // bending PE = 0.5*bkn*I*theta_b^2. Per PAIR (shared geometry): normal
+    // PE = 0.5*bkn*A*U_n^2 with U_n = dist - bond reference length, plus the
+    // superposed linear contact (material pair stiffness, also referenced to
+    // bond length, compression only). Intact/broken counts come from the
+    // bonds[] array itself (index >= 0 intact, < 0 torn).
+    let mut pe_bond = 0.0f64;
+    let mut bonds_intact = 0u32;
+    let mut bonds_broken = 0u32;
+    let mut bonded_pairs: HashSet<(u32, u32)> = HashSet::new();
+    if st.bonds.len() >= 3 {
+        for k in (0..st.bonds.len() - 2).step_by(3) {
+            if st.bonds[k] >= 0 {
+                bonds_intact += 1;
+            } else if st.bonds[k] <= -9 {
+                bonds_broken += 1;
+            }
+        }
+    }
+    if bond_type == 3 {
+        for p in 0..n {
+            for s in 0..14usize {
+                let base = (p * 14 + s) * 6;
+                if base + 5 >= st.contacts.len() {
+                    break;
+                }
+                let b = bytemuck::cast::<f32, i32>(st.contacts[base + 1]);
+                if b == -1 {
+                    continue;
+                }
+                let bonded = bytemuck::cast::<f32, i32>(st.contacts[base + 5]);
+                if bonded < 0 {
+                    continue;
+                }
+                let a = bytemuck::cast::<f32, i32>(st.contacts[base]) as usize;
+                let b = b as usize;
+                let r_bond = 0.5 * st.radii[a].min(st.radii[b]);
+                let area = 2.0 * r_bond;
+                let inertia = 2.0 / 3.0 * r_bond * r_bond * r_bond;
+                let bft = st.contacts[base + 2 + 1]; // bond_tangent_force
+                let thb = st.contacts[base + 4]; // theta_b
+                if bft.is_finite() && thb.is_finite() {
+                    pe_bond += 0.5 * (bft * bft / (bks * area)) as f64;
+                    pe_bond += 0.5 * (bkn * inertia * thb * thb) as f64;
+                }
+                let key = if a < b { (a as u32, b as u32) } else { (b as u32, a as u32) };
+                if bonded_pairs.insert(key) {
+                    let bidx = bonded as usize * 3;
+                    if bidx + 2 < st.bonds.len() {
+                        let bond_len = f32::from_bits(st.bonds[bidx + 2] as u32);
+                        let dx = st.pos[2 * b] - st.pos[2 * a];
+                        let dy = st.pos[2 * b + 1] - st.pos[2 * a + 1];
+                        let un = (dx * dx + dy * dy).sqrt() - bond_len;
+                        if un.is_finite() {
+                            pe_bond += 0.5 * (bkn * area * un * un) as f64;
+                            if un < 0.0 {
+                                let kp = 1.0 / (1.0 / kn[a] + 1.0 / kn[b]);
+                                pe_bond += 0.5 * (kp * un * un) as f64;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let mut seen: HashSet<(u32, u32)> = HashSet::new();
     let mut pe_elast = 0.0f64;
     let mut max_overlap = 0.0f32;
@@ -191,11 +289,16 @@ fn dump_aggregate(
                 let dist = (dx * dx + dy * dy).sqrt();
                 let u = st.radii[i] + st.radii[j] - dist;
                 if u > 0.0 {
-                    let kp = 1.0 / (1.0 / kn[i] + 1.0 / kn[j]);
-                    pe_elast += 0.5 * (kp * u * u) as f64;
                     max_overlap = max_overlap.max(u);
                     neighbors[i] += 1;
                     neighbors[j] += 1;
+                    // Bonded pairs' elastic energy is referenced to the bond
+                    // length and accounted in pe_bond above; skip here.
+                    if bonded_pairs.contains(&(key.0, key.1)) {
+                        continue;
+                    }
+                    let kp = 1.0 / (1.0 / kn[i] + 1.0 / kn[j]);
+                    pe_elast += 0.5 * (kp * u * u) as f64;
                 }
             }
         }
@@ -206,21 +309,24 @@ fn dump_aggregate(
 
     writeln!(
         out,
-        "{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+        "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
         step,
         t,
         ke_trans,
         ke_rot,
         pe_grav,
         pe_elast,
-        ke_trans + ke_rot + pe_grav + pe_elast,
+        ke_trans + ke_rot + pe_grav + pe_elast + pe_bond,
         max_overlap,
         touching_pairs,
         max_neighbors,
         slot_overflow,
         cell_overflow,
         max_speed,
-        nan_count
+        nan_count,
+        pe_bond,
+        bonds_intact,
+        bonds_broken
     )
     .unwrap();
 }
@@ -275,7 +381,13 @@ pub fn run(scenario_path: &str, out_path: &str) {
     settings.physics.contact_damping = sc.contact_damping;
     settings.physics.local_damping = sc.local_damping;
     settings.physics.local_damping_alpha = sc.local_damping_alpha;
-    settings.physics.bonds = 0;
+    settings.physics.bonds = sc.bond_type;
+    settings.physics.bond_tearing = sc.bond_tearing;
+    settings.physics.bond_normal_stiffness = sc.bond_normal_stiffness;
+    settings.physics.bond_shear_stiffness = sc.bond_shear_stiffness;
+    settings.physics.bond_normal_strength = sc.bond_normal_strength;
+    settings.physics.bond_shear_strength = sc.bond_shear_strength;
+    settings.physics.moment_contribution_factor = sc.moment_contribution_factor;
     if let Some(m) = &sc.materials {
         settings.materials = m.clone();
     }
@@ -339,6 +451,18 @@ pub fn run(scenario_path: &str, out_path: &str) {
                 st.fixity[6 * i + 2] = 1; // rot_vel
             }
         }
+        // Bond init (Stage 3c): reuse the upstream regen_bonds path, which
+        // bonds every pair within 1.05*(r_i+r_j) and rebuilds the contacts
+        // array with the bonded slots. Must run AFTER positions/radii are set.
+        if sc.bond_init {
+            st.regen_bonds(&mut config, &settings);
+            if st.bonds.len() < 3 {
+                // pad to one full 12-byte Bond for wgpu's minimum binding size
+                st.bonds = vec![-1; 3];
+            }
+            let nb = if st.bonds[0] == -1 { 0 } else { st.bonds.len() / 3 };
+            println!("[headless] bond_init: {} bonds created (bond_type {})", nb, sc.bond_type);
+        }
     }
     prog.shader_prog.restore(&mut config, &mut settings);
 
@@ -358,7 +482,7 @@ pub fn run(scenario_path: &str, out_path: &str) {
 
     let mut out = BufWriter::new(File::create(out_path).unwrap_or_else(|e| panic!("cannot create {}: {}", out_path, e)));
     if sc.aggregate {
-        writeln!(out, "step,t,ke_trans,ke_rot,pe_grav,pe_elast,e_total,max_overlap,touching_pairs,max_neighbors,slot_overflow,cell_overflow,max_speed,nan_count").unwrap();
+        writeln!(out, "step,t,ke_trans,ke_rot,pe_grav,pe_elast,e_total,max_overlap,touching_pairs,max_neighbors,slot_overflow,cell_overflow,max_speed,nan_count,pe_bond,bonds_intact,bonds_broken").unwrap();
     } else {
         write!(out, "step,t").unwrap();
         for i in 0..n {
@@ -393,21 +517,75 @@ pub fn run(scenario_path: &str, out_path: &str) {
     // Row for the initial state, then one row per dump interval.
     let do_dump = |out: &mut BufWriter<File>, step: u32, st: &crate::state::State| {
         if sc.aggregate {
-            dump_aggregate(out, step, step as f64 * sc.timestep as f64, st, n, &mass, &kn, g_eff, floor_y);
+            dump_aggregate(out, step, step as f64 * sc.timestep as f64, st, n, &mass, &kn, g_eff, floor_y, sc.bond_type, sc.bond_normal_stiffness, sc.bond_shear_stiffness);
         } else {
             dump(out, step, st);
         }
     };
+    // Binary snapshot stream for video rendering (Stage 3c). One frame =
+    // 4 f32 LE per particle: x, y, speed, intact-bond count (from the contact
+    // slots, bonded >= 0). Sidecar JSON records the layout for the renderer.
+    let mut snap: Option<BufWriter<File>> = if sc.snapshot_every > 0 {
+        let snap_path = format!("{}.snap", out_path);
+        let sidecar = format!(
+            "{{\"n\": {}, \"fields\": [\"x\", \"y\", \"speed\", \"intact_bonds\"], \"every\": {}, \"dt\": {}}}\n",
+            n, sc.snapshot_every, sc.timestep
+        );
+        std::fs::write(format!("{}.snap.json", out_path), sidecar).unwrap();
+        Some(BufWriter::new(File::create(&snap_path).unwrap_or_else(|e| panic!("cannot create {}: {}", snap_path, e))))
+    } else {
+        None
+    };
+    let write_snap = |snap: &mut BufWriter<File>, st: &crate::state::State| {
+        let mut frame: Vec<f32> = Vec::with_capacity(4 * n);
+        for i in 0..n {
+            let (vx, vy) = (st.vel[2 * i], st.vel[2 * i + 1]);
+            let mut intact = 0.0f32;
+            for s in 0..14usize {
+                let base = (i * 14 + s) * 6;
+                if base + 5 >= st.contacts.len() {
+                    break;
+                }
+                if bytemuck::cast::<f32, i32>(st.contacts[base + 1]) != -1
+                    && bytemuck::cast::<f32, i32>(st.contacts[base + 5]) >= 0
+                {
+                    intact += 1.0;
+                }
+            }
+            frame.push(st.pos[2 * i]);
+            frame.push(st.pos[2 * i + 1]);
+            frame.push((vx * vx + vy * vy).sqrt());
+            frame.push(intact);
+        }
+        snap.write_all(bytemuck::cast_slice(&frame)).unwrap();
+    };
+
     do_dump(&mut out, 0, &prog.shader_prog.state);
+    if let Some(s) = snap.as_mut() {
+        write_snap(s, &prog.shader_prog.state);
+    }
     for step in 1..=sc.steps {
         prog.shader_prog.compute(&mut config, &settings);
-        if step % sc.dump_every == 0 {
+        let dump_due = step % sc.dump_every == 0;
+        let snap_due = sc.snapshot_every > 0 && step % sc.snapshot_every == 0;
+        if dump_due || snap_due {
             let sp = &mut prog.shader_prog;
             sp.state.update_state(&mut config, &settings, &mut sp.buffers);
-            do_dump(&mut out, step, &sp.state);
+            if dump_due {
+                do_dump(&mut out, step, &sp.state);
+            }
+            if snap_due {
+                if let Some(s) = snap.as_mut() {
+                    write_snap(s, &sp.state);
+                }
+            }
         }
     }
     out.flush().unwrap();
+    if let Some(mut s) = snap.take() {
+        s.flush().unwrap();
+        println!("[headless] wrote {}.snap (+.snap.json)", out_path);
+    }
     println!("[headless] wrote {}", out_path);
 
     // Debug introspection of GPU-side contact state (harness-only).
