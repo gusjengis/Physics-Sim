@@ -61,6 +61,7 @@ struct Settings {
     local_damping: i32,
     local_damping_alpha: f32,
     particles: i32,
+    dashpot_beta: f32,
 }
 
 struct Material {
@@ -361,6 +362,26 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
 
     var friction_limit = abs(normal_force) * settings.friction_coefficient;
     contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent * shear_stiffness, -friction_limit, friction_limit);
+
+    // Stage-3b contact dashpot (D1, AUTOPSY 2026-06-11): viscous normal
+    // damping on UNBONDED contacts. The Coulomb cap above uses the spring
+    // force only (PFC convention); total normal force is floored at 0 so the
+    // dashpot never pulls in tension. beta = 0 => byte-identical legacy path.
+    if settings.dashpot_beta > 0.0 && bonded < 0 {
+        let m_a = materials[material_pointers[a]].density * PI * radii[a] * radii[a];
+        let m_b = materials[material_pointers[b]].density * PI * radii[b] * radii[b];
+        var m_eff = m_a * m_b / (m_a + m_b);
+        // PFC ball-wall convention: a fully translation-fixed particle acts
+        // as infinite mass.
+        if fixity[b].x_vel != 0 && fixity[b].y_vel != 0 { m_eff = m_a; }
+        if fixity[a].x_vel != 0 && fixity[a].y_vel != 0 { m_eff = m_b; }
+        // separation rate along the contact normal (same per-step
+        // displacement basis as the tangential spring)
+        let v_n_rel = dot(del_pos[a] - del_pos[b], normal) / settings.dT;
+        let c_n = 2.0 * settings.dashpot_beta * sqrt(m_eff * normal_stiffness);
+        normal_force = max(normal_force - c_n * v_n_rel, 0.0);
+    }
+
     var moment = -(radii[a]) * contacts[i].tangent_force;
     let force = (normal * normal_force + tangent * contacts[i].tangent_force);
     data[u32(a) * DATA_SIZE   ] += normal_force;

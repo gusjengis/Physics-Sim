@@ -91,6 +91,11 @@ pub struct Scenario {
     pub local_damping: bool,
     #[serde(default = "d_alpha")]
     pub local_damping_alpha: f32,
+    /// Stage-3b contact dashpot (AUTOPSY 2026-06-11): viscous normal damping
+    /// ratio at unbonded contacts, c_n = 2*beta*sqrt(m_eff*k_n_pair).
+    /// 0 (default) = OFF = byte-identical legacy behavior.
+    #[serde(default)]
+    pub dashpot_beta: f32,
     /// If > 0, start the run with local damping OFF and switch it on at this
     /// step (host re-uploads the collision-settings uniform; no shader change).
     /// For bonded free-flight scenes: local damping rectifies internal bond
@@ -388,6 +393,7 @@ pub fn run(scenario_path: &str, out_path: &str) {
     settings.physics.contact_damping = sc.contact_damping;
     settings.physics.local_damping = sc.local_damping && sc.damping_on_after_step == 0;
     settings.physics.local_damping_alpha = sc.local_damping_alpha;
+    settings.physics.dashpot_beta = sc.dashpot_beta;
     settings.physics.bonds = sc.bond_type;
     settings.physics.bond_tearing = sc.bond_tearing;
     settings.physics.bond_normal_stiffness = sc.bond_normal_stiffness;

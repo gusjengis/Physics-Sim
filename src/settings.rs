@@ -191,6 +191,7 @@ pub struct PhysicsSettings {
     pub moment_contribution_factor: f32,
     pub local_damping: bool,
     pub local_damping_alpha: f32,
+    pub dashpot_beta: f32,
 }
 
 pub struct CreateSettings {
@@ -354,6 +355,7 @@ impl Settings {
                 moment_contribution_factor: 1.0,
                 local_damping: false,
                 local_damping_alpha: 0.1,
+                dashpot_beta: 0.0,
             },
             create: CreateSettings {
                 create_mode: false,
@@ -1169,6 +1171,8 @@ impl Settings {
             ui.add_enabled_ui(self.physics.local_damping, |ui| {
                 self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.local_damping_alpha, 0.0..=1.0)).changed();
             });
+            ui.label("Contact Dashpot Beta");
+            self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.dashpot_beta, 0.0..=1.0)).changed();
             ui.separator();
             let mut changed_bonds = false;
 
@@ -2115,6 +2119,7 @@ impl Settings {
             bytemuck::cast(self.physics.local_damping as i32),
             self.physics.local_damping_alpha,
             bytemuck::cast(self.setup.particles as i32),
+            self.physics.dashpot_beta,
         ];
     }
 
