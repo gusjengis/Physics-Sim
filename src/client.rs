@@ -749,12 +749,30 @@ impl Client {
         // headless one-step-per-compute contract; interactive wants dt-paced).
         self.settings.simulation.gen_per_frame =
             ((1.0 / (60.0 * sc.timestep)).round() as i32).clamp(1, self.settings.simulation.max_gen_per_frame as i32);
-        // Frame the scenario: origin centered, world bounds just inside view.
-        self.x_off = 0.0;
-        self.y_off = 0.0;
-        self.settings.view.scale = 0.9
-            * (self.canvas.size.width as f32 / sc.hor_bound).min(self.canvas.size.height as f32 / sc.vert_bound)
-            / self.ui_scale();
+        // Frame the scenario on the initial particle AABB, not the world
+        // bounds — quasi-static scenarios park a small scene inside huge
+        // walls (e.g. T6: a 38-unit chain in a 280-unit world). Shader maps
+        // clip = scale*(pos + off), x divided by aspect, clip span = 2; the
+        // span floor keeps 1-2 body scenes from being microscopic, the world
+        // bounds cap keeps the view inside the walls.
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        let mut max_r = 0.0f32;
+        for p in &sc.particles {
+            min_x = min_x.min(p.x - p.r);
+            max_x = max_x.max(p.x + p.r);
+            min_y = min_y.min(p.y - p.r);
+            max_y = max_y.max(p.y + p.r);
+            max_r = max_r.max(p.r);
+        }
+        let aspect = self.canvas.size.width as f32 / self.canvas.size.height as f32;
+        let span_x = (max_x - min_x).max(30.0 * max_r).min(sc.hor_bound) * 1.2;
+        let span_y = (max_y - min_y).max(30.0 * max_r).min(sc.vert_bound) * 1.2;
+        self.x_off = -0.5 * (min_x + max_x);
+        self.y_off = -0.5 * (min_y + max_y);
+        self.settings.view.scale = (2.0 / span_y).min(2.0 * aspect / span_x);
     }
 
     fn backup(&mut self) {

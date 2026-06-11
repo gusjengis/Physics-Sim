@@ -45,8 +45,8 @@ pub const PRESETS: &[Preset] = &[
     },
     Preset {
         name: "T6 — bonded cantilever (N=20)",
-        blurb: "Parallel-bonded chain under gravity. Tip deflection matches the discrete beam solution to <0.7%.",
-        json: include_str!("../presets/t6_N20_g0.002.json"),
+        blurb: "Parallel-bonded chain, full gravity: swings down and rings before parking. (The VALIDATED gate config uses 0.002g and deflects 0.05 units — sub-pixel by design; tip matches the discrete beam solution to <0.7%.)",
+        json: include_str!("../presets/t6_demo_g1.json"),
     },
     Preset {
         name: "T7 — gravity settling, N\u{2248}1200",
