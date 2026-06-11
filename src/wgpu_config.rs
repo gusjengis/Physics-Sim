@@ -63,7 +63,12 @@ impl WGPUConfig {
                 force_fallback_adapter: false,
             })
             .await
-            .unwrap();
+            .expect(
+                "No WebGPU adapter. Requirements: a WebGPU browser \
+                 (Chrome/Edge 113+; Firefox/Safari need flags), a SECURE \
+                 context (https:// or localhost — plain http:// hides \
+                 WebGPU entirely), and hardware acceleration enabled.",
+            );
         // let adapter = instance.request_adapter(
         //     &wgpu::RequestAdapterOptions {
         //         power_preference: wgpu::PowerPreference::default(),
