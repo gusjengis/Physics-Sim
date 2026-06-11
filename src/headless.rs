@@ -91,6 +91,13 @@ pub struct Scenario {
     pub local_damping: bool,
     #[serde(default = "d_alpha")]
     pub local_damping_alpha: f32,
+    /// If > 0, start the run with local damping OFF and switch it on at this
+    /// step (host re-uploads the collision-settings uniform; no shader change).
+    /// For bonded free-flight scenes: local damping rectifies internal bond
+    /// vibration into net lift and fakes air resistance (LOGBOOK 2026-06-10),
+    /// so damp only after first contact. 0 = damping state fixed for the run.
+    #[serde(default)]
+    pub damping_on_after_step: u32,
     /// Raw materials vector (rows of `material_size` floats, first entry of a
     /// row is density; see settings.materials). Optional override.
     #[serde(default)]
@@ -379,7 +386,7 @@ pub fn run(scenario_path: &str, out_path: &str) {
     settings.physics.collision_interval = 1;
     settings.physics.friction_coefficient = sc.friction_coefficient;
     settings.physics.contact_damping = sc.contact_damping;
-    settings.physics.local_damping = sc.local_damping;
+    settings.physics.local_damping = sc.local_damping && sc.damping_on_after_step == 0;
     settings.physics.local_damping_alpha = sc.local_damping_alpha;
     settings.physics.bonds = sc.bond_type;
     settings.physics.bond_tearing = sc.bond_tearing;
@@ -565,6 +572,19 @@ pub fn run(scenario_path: &str, out_path: &str) {
         write_snap(s, &prog.shader_prog.state);
     }
     for step in 1..=sc.steps {
+        if sc.local_damping && sc.damping_on_after_step > 0 && step == sc.damping_on_after_step {
+            settings.physics.local_damping = true;
+            let cs = settings.collision_settings();
+            prog.shader_prog
+                .buffers
+                .collision_settings
+                .updateUniform(&config.device, bytemuck::cast_slice(&cs));
+            println!(
+                "[headless] local damping enabled at step {} (t = {:.3})",
+                step,
+                step as f64 * sc.timestep as f64
+            );
+        }
         prog.shader_prog.compute(&mut config, &settings);
         let dump_due = step % sc.dump_every == 0;
         let snap_due = sc.snapshot_every > 0 && step % sc.snapshot_every == 0;
