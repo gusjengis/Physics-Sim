@@ -250,6 +250,9 @@ pub struct Settings {
     pub world_pos: (f32, f32),
     pub curr_shader: usize,
     pub json_scripts: bool,
+    /// Index into presets::PRESETS, set by the Presets menu; the client
+    /// consumes it (loads the scenario + resets) and clears it each frame.
+    pub pending_preset: Option<usize>,
     // pub groups: i32,
     // pub set_group: i32, // pub paths: ReadDir,
 }
@@ -435,6 +438,7 @@ impl Settings {
             world_pos: (0.0, 0.0),
             curr_shader: 0,
             json_scripts: false,
+            pending_preset: None,
         };
         settings.load_memory();
         return settings;
@@ -471,6 +475,7 @@ impl Settings {
                 egui::menu::bar(ui, |ui| {
                     ui.horizontal_centered(|ui| {
                         self.file_menu(ui);
+                        self.presets_menu(ui);
                         // self.edit_menu(ctx, ui);
                         self.view_menu(ui);
                         self.state_menu(ui);
@@ -504,6 +509,22 @@ impl Settings {
         }
 
         return reset;
+    }
+
+    /// Validation-suite scenarios embedded as runnable preset experiments
+    /// (Stage 5). Selecting one sets pending_preset; the client loads the
+    /// exact scenario the harness validated and resets the sim (paused).
+    fn presets_menu(&mut self, ui: &mut Ui) {
+        ui.menu_button("Presets", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.label("Validation tests (configs of record)");
+            for (i, p) in crate::presets::PRESETS.iter().enumerate() {
+                if ui.button(p.name).on_hover_text(p.blurb).clicked() {
+                    self.pending_preset = Some(i);
+                    ui.close_menu();
+                }
+            }
+        });
     }
 
     fn file_menu(&mut self, ui: &mut Ui) {

@@ -1,0 +1,43 @@
+{
+ "name": "t0_verify",
+ "steps": 5000,
+ "dump_every": 10,
+ "timestep": 0.0001,
+ "gravity": true,
+ "gravity_acceleration": 1.0,
+ "planet_mode": false,
+ "hor_bound": 100.0,
+ "vert_bound": 100.0,
+ "collisions": false,
+ "friction_coefficient": 0.0,
+ "contact_damping": 0.0,
+ "local_damping": false,
+ "local_damping_alpha": 0.0,
+ "materials": [
+  1.0,
+  1.0,
+  1.0,
+  1000.0,
+  2000000.0,
+  1000000.0,
+  1.0,
+  1.0,
+  1.0,
+  1000.0,
+  2000000.0,
+  1000000.0
+ ],
+ "particles": [
+  [
+   0.0,
+   0.0,
+   0.3,
+   0.0,
+   0.5,
+   0.0,
+   0.0,
+   0,
+   false
+  ]
+ ]
+}

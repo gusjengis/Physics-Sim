@@ -726,6 +726,37 @@ impl Client {
         self.settings.data = Data::new();
     }
 
+    /// Load a validation-suite preset (Stage 5): apply the scenario to
+    /// settings, rebuild the compute program (same path as reset), then
+    /// overwrite the generated scene with the scenario's exact initial state
+    /// — the same loader the headless harness uses, so the UI runs exactly
+    /// what was validated. Starts paused; framing fits the scenario bounds.
+    fn load_preset(&mut self, idx: usize) {
+        let Some(preset) = crate::presets::PRESETS.get(idx) else {
+            return;
+        };
+        let sc = match crate::scenario::Scenario::parse(preset.json) {
+            Ok(sc) => sc,
+            Err(e) => {
+                println!("Err: preset '{}' failed to parse: {}", preset.name, e);
+                return;
+            }
+        };
+        sc.apply_to_settings(&mut self.settings);
+        self.reset();
+        sc.install_state(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings);
+        // ~Real-time playback at 60 fps (apply_to_settings sets 1 for the
+        // headless one-step-per-compute contract; interactive wants dt-paced).
+        self.settings.simulation.gen_per_frame =
+            ((1.0 / (60.0 * sc.timestep)).round() as i32).clamp(1, self.settings.simulation.max_gen_per_frame as i32);
+        // Frame the scenario: origin centered, world bounds just inside view.
+        self.x_off = 0.0;
+        self.y_off = 0.0;
+        self.settings.view.scale = 0.9
+            * (self.canvas.size.width as f32 / sc.hor_bound).min(self.canvas.size.height as f32 / sc.vert_bound)
+            / self.ui_scale();
+    }
+
     fn backup(&mut self) {
         self.wgpu_prog.shader_prog.update_state(&mut self.wgpu_config, &self.settings);
         self.wgpu_prog.shader_prog.state.save(&mut self.wgpu_config, &self.settings, Some(&self.script_manager));
@@ -1184,6 +1215,9 @@ impl Client {
             self.available_rect = self.platform.context().available_rect();
             if needs_reset {
                 self.reset();
+            }
+            if let Some(idx) = self.settings.pending_preset.take() {
+                self.load_preset(idx);
             }
 
             if settings!().materials_changed {
