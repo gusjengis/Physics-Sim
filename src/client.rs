@@ -1,4 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 use crate::audio_controller;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::audio_controller::*;
 use crate::scripts;
 use crate::scripts::ScriptManager;
@@ -36,6 +38,7 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use chrono::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use copypasta::*;
 
 pub struct Client {
@@ -83,6 +86,7 @@ pub struct Client {
     data_length_backup: usize,
     available_rect: Rect,
     boot_time: i64,
+    #[cfg(not(target_arch = "wasm32"))]
     clipboard: ClipboardContext,
 }
 
@@ -112,7 +116,15 @@ impl Client {
         let available_rect = platform.context().available_rect();
         platform.context().set_pixels_per_point(2.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
-        let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        // current_monitor() is None on the web backend — the old .unwrap()
+        // was a statically-known panic there, and LLVM dead-stripped the
+        // entire UI behind it. 60 Hz fallback; native behavior unchanged.
+        let max_framerate = canvas
+            .window
+            .current_monitor()
+            .and_then(|m| m.refresh_rate_millihertz())
+            .map(|mhz| mhz as f32 / 1000.0)
+            .unwrap_or(60.0);
 
         // audio_controller::main(); // disabled: Anthony's startup test tone (440->880 Hz beep)
 
@@ -162,6 +174,7 @@ impl Client {
             available_rect: available_rect,
             boot_time: Local::now().timestamp_millis(), // max_framerate:  max_framerate,
             // prev_framerate: max_framerate
+            #[cfg(not(target_arch = "wasm32"))]
             clipboard: ClipboardContext::new().unwrap(),
         };
         client.resize(client.canvas.size);
@@ -685,6 +698,7 @@ impl Client {
                             });
                             if selected_text.len() > 0 {
                                 println!("selected text: {}", selected_text);
+                                #[cfg(not(target_arch = "wasm32"))]
                                 self.clipboard.set_contents(selected_text).unwrap();
                             }
                             println!("selected text");
@@ -696,6 +710,7 @@ impl Client {
                             modifiers: ModifiersState::CTRL,
                             ..
                         } => {
+                            #[cfg(not(target_arch = "wasm32"))]
                             if let Ok(paste_text) = self.clipboard.get_contents() {
                                 println!("Paste: {}", paste_text);
                                 self.platform.raw_input_mut().events.push(egui::Event::Text(paste_text));
@@ -1160,7 +1175,15 @@ impl Client {
         }
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
-        let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        // See Client::new — None on web; .unwrap() here killed the whole UI
+        // via dead-code elimination on wasm.
+        let max_framerate = self
+            .canvas
+            .window
+            .current_monitor()
+            .and_then(|m| m.refresh_rate_millihertz())
+            .map(|mhz| mhz as f32 / 1000.0)
+            .unwrap_or(60.0);
         if !self.minimized {
             settings!().simulation.max_gen_per_frame = ((1.0 / settings!().simulation.timestep) / max_framerate).round() as i32;
             if settings!().simulation.max_gen_per_frame < settings!().simulation.gen_per_frame {

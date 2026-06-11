@@ -1,0 +1,5 @@
+# wgpu 0.16's web backend requires web-sys's unstable WebGPU bindings.
+# Anthony had this flag in Cargo.toml ([target.cfg...] rustflags), where
+# cargo ignores it ("unused manifest key" warning) — it belongs here.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg=web_sys_unstable_apis"]

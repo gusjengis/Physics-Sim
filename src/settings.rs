@@ -18,6 +18,7 @@ use std::*;
 use std::{fmt::Debug, io::Read};
 use wgpu::{Device, Queue};
 
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use crate::{state::State, wgpu_structs::Uniform, window_init::Canvas};
@@ -565,6 +566,7 @@ impl Settings {
                     }
                 }
 
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Select Folder").clicked() {
                     match FileDialog::new()
                         //.set_location(&self.current_dir)
@@ -2010,37 +2012,46 @@ impl Settings {
     }
 
     pub fn load(&mut self) {
-        let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                self.load = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    self.load = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save(&mut self) {
-        let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                // let mut ancestors = path.ancestors();
-                // println!("{}", ancestors.next().unwrap().to_str().unwrap());
-                // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
-                self.save = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    // let mut ancestors = path.ancestors();
+                    // println!("{}", ancestors.next().unwrap().to_str().unwrap());
+                    // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
+                    self.save = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save_data(&mut self, path_param: Option<PathBuf>) {
+        #[cfg(not(target_arch = "wasm32"))]
         let path = match path_param {
             Some(p) => Some(p),
             None => FileDialog::new().set_location("~").add_filter("CSV File", &["csv"]).show_save_single_file().unwrap(),
         };
+        #[cfg(target_arch = "wasm32")]
+        let path = path_param;
 
         if let Some(path) = path {
             let file_path = Path::new(&path);
