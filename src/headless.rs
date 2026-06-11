@@ -571,8 +571,16 @@ pub fn run(scenario_path: &str, out_path: &str) {
     if let Some(s) = snap.as_mut() {
         write_snap(s, &prog.shader_prog.state);
     }
-    for step in 1..=sc.steps {
-        if sc.local_damping && sc.damping_on_after_step > 0 && step == sc.damping_on_after_step {
+    // Step batching: compute() already records gen_per_frame full physics
+    // steps into ONE command submission; the per-submission host/driver
+    // overhead (not GPU compute) dominates wall time at large N. Batch up to
+    // MAX_BATCH steps per submission, breaking exactly at every dump,
+    // snapshot, and damping-switch boundary so observable behavior is
+    // identical to the old one-step-per-submission loop.
+    const MAX_BATCH: u32 = 256;
+    let mut step = 0u32; // steps completed
+    while step < sc.steps {
+        if sc.local_damping && sc.damping_on_after_step > 0 && step + 1 == sc.damping_on_after_step {
             settings.physics.local_damping = true;
             let cs = settings.collision_settings();
             prog.shader_prog
@@ -581,11 +589,21 @@ pub fn run(scenario_path: &str, out_path: &str) {
                 .updateUniform(&config.device, bytemuck::cast_slice(&cs));
             println!(
                 "[headless] local damping enabled at step {} (t = {:.3})",
-                step,
-                step as f64 * sc.timestep as f64
+                step + 1,
+                (step + 1) as f64 * sc.timestep as f64
             );
         }
+        let to_next = |every: u32| if every > 0 { every - (step % every) } else { u32::MAX };
+        let mut batch = (sc.steps - step).min(MAX_BATCH).min(to_next(sc.dump_every));
+        if sc.snapshot_every > 0 {
+            batch = batch.min(to_next(sc.snapshot_every));
+        }
+        if sc.local_damping && sc.damping_on_after_step > step + 1 {
+            batch = batch.min(sc.damping_on_after_step - (step + 1));
+        }
+        settings.simulation.gen_per_frame = batch as i32;
         prog.shader_prog.compute(&mut config, &settings);
+        step += batch;
         let dump_due = step % sc.dump_every == 0;
         let snap_due = sc.snapshot_every > 0 && step % sc.snapshot_every == 0;
         if dump_due || snap_due {
