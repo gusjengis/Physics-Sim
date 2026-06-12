@@ -26,10 +26,19 @@
       window.addEventListener("error", (e) => logLine("window.onerror: " + e.message));
       window.addEventListener("unhandledrejection", (e) => logLine("unhandledrejection: " + e.reason));
       // Dawn/WebGPU validation errors arrive on the device, not the JS console.
+      // Same limits shim as index.js (wgpu 0.16 never forwards requiredLimits).
       if (navigator.gpu) {
         const origReq = GPUAdapter.prototype.requestDevice;
         GPUAdapter.prototype.requestDevice = async function (...a) {
-          logLine("requestDevice called: " + JSON.stringify(a[0] && a[0].requiredLimits || {}));
+          const want = { maxBindGroups: 8, maxStorageBuffersPerShaderStage: 16, maxStorageBufferBindingSize: 134217728, maxBufferSize: 268435456 };
+          const desc = a[0] || {};
+          const limits = {};
+          for (const [k, v] of Object.entries(want)) {
+            if (this.limits[k] !== undefined) limits[k] = Math.min(v, this.limits[k]);
+          }
+          desc.requiredLimits = Object.assign(limits, desc.requiredLimits || {});
+          a[0] = desc;
+          logLine("requestDevice called: " + JSON.stringify(desc.requiredLimits || {}));
           try {
             const dev = await origReq.apply(this, a);
             dev.addEventListener("uncapturederror", (ev) =>
