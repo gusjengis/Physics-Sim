@@ -61,6 +61,7 @@ struct Settings {
     local_damping: i32,
     local_damping_alpha: f32,
     particles: i32,
+    dashpot_beta: f32,
 }
 
 struct Material {
@@ -96,11 +97,13 @@ struct GridInfo {
 @group(2) @binding(2) var<storage, read_write> contact_pointers: array<i32>;
 @group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<i32>;
-@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
-@group(4) @binding(0) var<storage, read_write> materials: array<Material>; 
-@group(5) @binding(0) var<storage, read_write> data: array<f32>; 
+@group(3) @binding(1) var<storage, read_write> materials: array<Material>; 
+$ DIAGNOSTICS {
+@group(3) @binding(2) var<storage, read_write> data: array<f32>;
+} 
 
 const PI = 3.141592653589793238;
 const DATA_SIZE = 7u;
@@ -110,9 +113,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
     let grid_info = grid_info_buffer[0];
 
+    $ DIAGNOSTICS {
     data[id * DATA_SIZE   ] = 0.0;
     data[id * DATA_SIZE + 1u] = 0.0;
     data[id * DATA_SIZE + 2u] = 0.0;
+    }
     // data[id*DATA_SIZE+3u] = velocities[id].x;
 
     if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
@@ -271,15 +276,16 @@ fn distance(a: i32, b: i32) -> f32 {
 }
 
 fn distance2(a: i32, b: i32, bonded: i32) -> f32 {
-    var length = radii[a] + radii[b];
+    // (renamed from `length`: Tint rejects shadowing a builtin then calling it)
+    var ref_length = radii[a] + radii[b];
     if bonded >= 0 {
-        length = bonds[bonded].length;
+        ref_length = bonds[bonded].length;
     }
     $ F64 {
-        return f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - f64(length));
+        return f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - f64(ref_length));
     }
     $ F32 {
-        return length(positions[a] - positions[b]) - length;
+        return length(positions[a] - positions[b]) - ref_length;
     }
 }
 
@@ -328,9 +334,11 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
         force = vec2(0.0, 0.0);
         moment = 0.0;
     }
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] += -normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].bond_tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
+    }
 
     return  vec3(force, moment) + linear_model(a, b, i, bonded); 
 }
@@ -361,11 +369,33 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
 
     var friction_limit = abs(normal_force) * settings.friction_coefficient;
     contacts[i].tangent_force = clamp(contacts[i].tangent_force + rel_tangent * shear_stiffness, -friction_limit, friction_limit);
+
+    // Stage-3b contact dashpot (D1, AUTOPSY 2026-06-11): viscous normal
+    // damping on UNBONDED contacts. The Coulomb cap above uses the spring
+    // force only (PFC convention); total normal force is floored at 0 so the
+    // dashpot never pulls in tension. beta = 0 => byte-identical legacy path.
+    if settings.dashpot_beta > 0.0 && bonded < 0 {
+        let m_a = materials[material_pointers[a]].density * PI * radii[a] * radii[a];
+        let m_b = materials[material_pointers[b]].density * PI * radii[b] * radii[b];
+        var m_eff = m_a * m_b / (m_a + m_b);
+        // PFC ball-wall convention: a fully translation-fixed particle acts
+        // as infinite mass.
+        if fixity[b].x_vel != 0 && fixity[b].y_vel != 0 { m_eff = m_a; }
+        if fixity[a].x_vel != 0 && fixity[a].y_vel != 0 { m_eff = m_b; }
+        // separation rate along the contact normal (same per-step
+        // displacement basis as the tangential spring)
+        let v_n_rel = dot(del_pos[a] - del_pos[b], normal) / settings.dT;
+        let c_n = 2.0 * settings.dashpot_beta * sqrt(m_eff * normal_stiffness);
+        normal_force = max(normal_force - c_n * v_n_rel, 0.0);
+    }
+
     var moment = -(radii[a]) * contacts[i].tangent_force;
     let force = (normal * normal_force + tangent * contacts[i].tangent_force);
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] += normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
+    }
     // data[u32(a) * DATA_SIZE + 3u] = normal.;
 
 
@@ -409,9 +439,11 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
         moment = 0.0;
     }
 
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] = -normal_force;
     data[u32(a) * DATA_SIZE + 1u] = contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] = moment;
+    }
 
     return vec3(force, moment);
 }
@@ -456,12 +488,15 @@ fn store_forces(id: u32, mat_id: i32, net_force: vec2<f32>, net_moment: f32) {
         force += vec2(0.0, -gravity_acc * mass);
     }
 
-    //damping
-    // if settings.local_damping == 1 {
-    //     let alpha = settings.local_damping_alpha;
-    //     force  += vec2(abs(force.x), abs(force.y))  * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
-    //     moment += moment         * alpha * -sign(rot_vel[id]);
-    // }
+    // PFC-style local non-viscous damping (re-enabled, AUTOPSY H1):
+    // F -= alpha*|F|*sign(v) per component, same for the moment. The original
+    // commented-out moment line lacked abs(moment), which would INJECT energy
+    // whenever moment and rot_vel have opposite signs; fixed here.
+    if settings.local_damping == 1 {
+        let alpha = settings.local_damping_alpha;
+        force  += vec2(abs(force.x), abs(force.y)) * alpha * -vec2(sign(velocities[id].x), sign(velocities[id].y));
+        moment += abs(moment) * alpha * -sign(rot_vel[id]);
+    }
 
     // natural accelerations
     accelerations[id] = (force) / mass;

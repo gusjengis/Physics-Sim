@@ -2,6 +2,7 @@ use crate::settings::{Data, Properties, Settings};
 use crate::{wgpu_config::WGPUConfig, window_init::Canvas};
 use chrono::Local;
 use egui::Ui;
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::FileDialog;
 use serde::{self, Deserialize, Serialize};
 use serde_json::*;
@@ -133,6 +134,7 @@ impl ScriptManager {
     }
 
     pub fn export_scripts(&self) {
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
             let json_data = self.to_json(); // Export all scripts
             std::fs::write(path, json_data).expect("Unable to write to file");
@@ -141,6 +143,7 @@ impl ScriptManager {
 
     // Export a single script by index to a JSON file
     pub fn export_single_script(&self, script_index: usize) {
+        #[cfg(not(target_arch = "wasm32"))]
         if script_index < self.scripts.len() {
             if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_save_single_file().unwrap() {
                 let script_json = self.scripts[script_index].to_json(); // Serialize only one script
@@ -151,6 +154,7 @@ impl ScriptManager {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn import_scripts(&mut self) {
         if let Some(path) = FileDialog::new().set_location("").add_filter("JSON", &["json"]).show_open_single_file().unwrap() {
             let json_data = std::fs::read_to_string(path).expect("Unable to read file");
@@ -168,6 +172,11 @@ impl ScriptManager {
                 eprintln!("Invalid JSON format for scripts.");
             }
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn import_scripts(&mut self) {
+        // No file dialogs on wasm32.
     }
 }
 
@@ -799,6 +808,7 @@ impl Parameter {
                             Some(str) => str.to_str().unwrap(),
                             None => "",
                         }));
+                        #[cfg(not(target_arch = "wasm32"))]
                         if ui.button("Browse").clicked() {
                             let new_path = FileDialog::new().set_location("").add_filter("CSV", &["csv"]).show_open_single_file().unwrap();
                             match new_path {

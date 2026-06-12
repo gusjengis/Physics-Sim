@@ -1,20 +1,9 @@
-struct Particle_Settings {
-    x_vel: i32,
-    y_vel: i32,
-    rot_vel: i32,
-    x_vel_2: i32,
-    y_vel_2: i32,
-    rot_vel_2: i32,
-}
-
-struct Forces {
-    x: f32,
-    y: f32,
-    rot: f32,
-    delX: f32,
-    delY: f32,
-    delRot: f32,
-}
+// Grid insertion pass, split out of 2D_LOM.wgsl (AUTOPSY H8).
+// storageBarrier() only synchronizes within a workgroup, so with more than
+// 256 particles the LOM kernel's clear loop in one workgroup could race the
+// insert loop of another, wiping already-inserted neighbor entries. Running
+// the insert as its own dispatch puts an implicit barrier between clear and
+// insert. Uses the same pipeline layout / bind groups as 2D_LOM.wgsl.
 
 struct GridInfo {
     cell_size: f32,
@@ -57,30 +46,18 @@ struct Settings {
 
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
 @group(0) @binding(1) var<storage, read_write> radii: array<f32>;
-@group(1) @binding(0) var<storage, read_write> velocities: array<vec2<f32>>;
-@group(1) @binding(1) var<storage, read_write> accelerations: array<vec2<f32>>;
-@group(1) @binding(2) var<storage, read_write> rot: array<f32>;
-@group(1) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(1) @binding(4) var<storage, read_write> rot_acc: array<f32>;
-@group(1) @binding(5) var<storage, read_write> acc: array<vec3<f32>>;
-@group(1) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
-@group(1) @binding(7) var<storage, read_write> forces: array<Forces>;
-@group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
-@group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<atomic<i32>>;
 @group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
 
-
-const PI = 3.141592653589793238;
-
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id = global_id.x;
+    if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
+    if coll_cont[0] != 1 { return; }
     let grid_info = grid_info_buffer[0];
 
-    // Broad Phase
     let base_x = -grid_info.cell_size * f32(grid_info.w) * 0.5;
     let base_y = grid_info.cell_size * f32(grid_info.h) * 0.5;
 
@@ -97,15 +74,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
         for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
             let base_index = (cell_y * grid_info.w + cell_x) * grid_info.cell_cap;
-            if atomicExchange(&grid[base_index + 1], coll_cont[2]) != coll_cont[2] { // store tick number in cell so we know when it was last updated and if we need to reset it
-                atomicStore(&grid[base_index + 0], 0);
-            }
-            // storageBarrier() calls removed: Tint rejects them in non-uniform
-            // control flow, and this kernel is dead code (binning moved to
-            // 2D_Grid_Insert.wgsl; the dispatch is commented out upstream).
             let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
             if p_count < grid_info.cell_cap - 1 {
-                atomicStore(&grid[base_index + 1 + p_count], i32(id));
+                atomicStore(&grid[base_index + 1 + p_count], i32(id)); // plain assignment to atomic<i32> rejected by Tint
             }
         }
     }

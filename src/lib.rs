@@ -1,7 +1,12 @@
 #![allow(warnings)]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod audio_controller;
 pub mod client;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod headless;
 pub mod particle_def;
+pub mod presets;
+pub mod scenario;
 pub mod scripts;
 pub mod settings;
 pub mod setup;

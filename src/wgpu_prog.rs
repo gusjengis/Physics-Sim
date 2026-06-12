@@ -51,6 +51,12 @@ pub struct WGPUProg {
     pub tex_formats: Vec<TextureFormat>,
     pub render_pipelines: Vec<wgpu::RenderPipeline>,
     pub cam: Camera,
+    // Group-0 layout shared by all scene render pipelines (web/Dawn caps
+    // maxBindGroups at 4): b0 frame input, b1 render settings, b2 materials,
+    // b3 selections, b4 click_info, b5 create input. The bind group is
+    // created per frame in client::render() because the uniforms' buffers
+    // are replaced on update.
+    pub render_misc_layout: wgpu::BindGroupLayout,
 }
 
 impl WGPUProg {
@@ -107,17 +113,49 @@ impl WGPUProg {
         let dim_uniform = Uniform::new(&config.device, bytemuck::cast_slice(dim_contents), String::from("dimensions"), 0);
         let ren_set_uniform = Uniform::new(&config.device, bytemuck::cast_slice(&settings.render_settings()), String::from("settings"), 0);
 
+        // Shared group-0 layout: frame input + render settings (uniforms),
+        // materials/selections/click_info (read-only storage), create input.
+        let misc_uniform_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+        // Storage entries carry only the stage that uses them (usage census
+        // 2026-06-11): web caps storage buffers per stage at 16.
+        let misc_storage_entry = |binding: u32, visibility: wgpu::ShaderStages| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+        let render_misc_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                misc_uniform_entry(0),
+                misc_uniform_entry(1),
+                misc_storage_entry(2, wgpu::ShaderStages::VERTEX), // materials
+                misc_storage_entry(3, wgpu::ShaderStages::VERTEX), // selections
+                misc_storage_entry(4, wgpu::ShaderStages::FRAGMENT), // click_info
+                misc_uniform_entry(5),
+            ],
+            label: Some("render misc"),
+        });
+
         let mut pipeline_layout1 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &dim_uniform.bind_group_layout,
-                &shader_prog.buffers.pos_buffers.bind_group_layout,
-                &shader_prog.buffers.mov_buffers.bind_group_layout,
-                &shader_prog.buffers.contact_buffers.bind_group_layout,
-                &ren_set_uniform.bind_group_layout,
-                &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selection_buffers.bind_group_layout,
-                &shader_prog.buffers.click_buffer.bind_group_layout,
+                &render_misc_layout,
+                &shader_prog.buffers.pos_buffers.render_bind_group_layout,
+                &shader_prog.buffers.mov_buffers.render_bind_group_layout,
+                &shader_prog.buffers.contact_buffers.render_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -125,14 +163,10 @@ impl WGPUProg {
         let mut pipeline_layout2 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &dim_uniform.bind_group_layout,
-                &shader_prog.buffers.pos_buffers.bind_group_layout,
-                &shader_prog.buffers.mov_buffers.bind_group_layout,
-                &shader_prog.buffers.contact_buffers.bind_group_layout,
-                &ren_set_uniform.bind_group_layout,
-                &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selection_buffers.bind_group_layout,
-                &shader_prog.buffers.click_buffer.bind_group_layout,
+                &render_misc_layout,
+                &shader_prog.buffers.pos_buffers.render_bind_group_layout,
+                &shader_prog.buffers.mov_buffers.render_bind_group_layout,
+                &shader_prog.buffers.contact_buffers.render_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -140,14 +174,10 @@ impl WGPUProg {
         let mut pipeline_layout3 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &dim_uniform.bind_group_layout,
-                &shader_prog.buffers.pos_buffers.bind_group_layout,
-                &shader_prog.buffers.mov_buffers.bind_group_layout,
-                &shader_prog.buffers.contact_buffers.bind_group_layout,
-                &ren_set_uniform.bind_group_layout,
-                &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selection_buffers.bind_group_layout,
-                &shader_prog.buffers.click_buffer.bind_group_layout,
+                &render_misc_layout,
+                &shader_prog.buffers.pos_buffers.render_bind_group_layout,
+                &shader_prog.buffers.mov_buffers.render_bind_group_layout,
+                &shader_prog.buffers.contact_buffers.render_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -161,14 +191,10 @@ impl WGPUProg {
         let mut pipeline_layout5 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &dim_uniform.bind_group_layout,
-                &shader_prog.buffers.pos_buffers.bind_group_layout,
-                &shader_prog.buffers.mov_buffers.bind_group_layout,
-                &shader_prog.buffers.contact_buffers.bind_group_layout,
-                &ren_set_uniform.bind_group_layout,
-                &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selection_buffers.bind_group_layout,
-                &shader_prog.buffers.click_buffer.bind_group_layout,
+                &render_misc_layout,
+                &shader_prog.buffers.pos_buffers.render_bind_group_layout,
+                &shader_prog.buffers.mov_buffers.render_bind_group_layout,
+                &shader_prog.buffers.contact_buffers.render_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -176,14 +202,9 @@ impl WGPUProg {
         let mut pipeline_layout6 = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[
-                &dim_uniform.bind_group_layout,
-                &shader_prog.buffers.pos_buffers.bind_group_layout,
-                &shader_prog.buffers.contact_buffers.bind_group_layout,
-                &ren_set_uniform.bind_group_layout,
-                &shader_prog.buffers.material_buffer.bind_group_layout,
-                &shader_prog.buffers.selection_buffers.bind_group_layout,
-                &shader_prog.buffers.click_buffer.bind_group_layout,
-                &shader_prog.buffers.click_input.bind_group_layout,
+                &render_misc_layout,
+                &shader_prog.buffers.pos_buffers.render_bind_group_layout,
+                &shader_prog.buffers.contact_buffers.render_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -498,7 +519,25 @@ impl WGPUProg {
             ],
             render_pipelines: vec![render_pipeline, render_pipeline2, render_pipeline3, render_pipeline4, render_pipeline5, render_pipeline6],
             cam,
+            render_misc_layout,
         }
+    }
+
+    /// Group-0 bind group for the scene render pipelines, built fresh each
+    /// frame (updateUniform replaces the member buffers).
+    pub fn render_misc_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.render_misc_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.render_input.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: self.ren_set_uniform.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: self.shader_prog.buffers.material_buffer.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: self.shader_prog.buffers.selection_buffers.buffers[0].as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 4, resource: self.shader_prog.buffers.click_buffer.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 5, resource: self.shader_prog.buffers.create_input.buffer.as_entire_binding() },
+            ],
+            label: Some("render misc"),
+        })
     }
 
     pub fn resize(&mut self, config: &mut WGPUConfig, dimensions: (u32, u32)) {
@@ -693,6 +732,15 @@ pub struct WGPUComputeProg {
     pub shader_strs: Vec<String>,
     pub pipeline_layouts: Vec<PipelineLayout>,
     pub compute_pipelines: Vec<wgpu::ComputePipeline>,
+    // Shared group-3 layouts (web/Dawn caps maxBindGroups at 4, so the
+    // small per-pipeline resources are merged into one group; the bind
+    // groups are created per dispatch because update paths replace the
+    // underlying buffers).
+    pub misc_layout: wgpu::BindGroupLayout,
+    pub io_layout: wgpu::BindGroupLayout,
+    pub selprop_layout: wgpu::BindGroupLayout,
+    pub mov_sim_layout: wgpu::BindGroupLayout,
+    pub contact_lite_layout: wgpu::BindGroupLayout,
 }
 
 pub fn grid_capacity(settings: &crate::settings::Settings) -> (usize, f32, i32, i32, i32) {
@@ -735,7 +783,15 @@ impl WGPUComputeProg {
             vec![bytemuck::cast_slice(&state.pos), bytemuck::cast_slice(&state.radii)],
             "Position Buffers".to_string(),
         );
-        let mut mov_buffers = BufferGroup::new(
+        // Per-entry visibilities: the web adapter caps storage buffers per
+        // shader stage at 16, so each entry may only count against stages
+        // that statically use it (usage census 2026-06-11).
+        const NONE: wgpu::ShaderStages = wgpu::ShaderStages::NONE;
+        const C: wgpu::ShaderStages = wgpu::ShaderStages::COMPUTE;
+        const V: wgpu::ShaderStages = wgpu::ShaderStages::VERTEX;
+        const F: wgpu::ShaderStages = wgpu::ShaderStages::FRAGMENT;
+        let spec = |compute_vis, render_vis, uniform| BindingSpec { compute_vis, render_vis, uniform };
+        let mut mov_buffers = BufferGroup::new_with_specs(
             &config.device,
             vec![
                 bytemuck::cast_slice(&state.vel),
@@ -750,8 +806,20 @@ impl WGPUComputeProg {
                 bytemuck::cast_slice(&state.del_rot),
             ],
             "Movement Buffer".to_string(),
+            vec![
+                spec(C, V, false),       // b0 velocities
+                spec(C, NONE, false),    // b1 accelerations / velocities_buf
+                spec(C, V, false),       // b2 rot
+                spec(C, V, false),       // b3 rot_vel
+                spec(C, NONE, false),    // b4 rot_acc / rot_vel_buf
+                spec(NONE, NONE, false), // b5 acc: unused by every shader
+                spec(C, F, false),       // b6 fixity
+                spec(C, NONE, false),    // b7 forces
+                spec(C, NONE, false),    // b8 del_pos
+                spec(C, NONE, false),    // b9 del_rot
+            ],
         );
-        let mut contact_buffers = BufferGroup::new(
+        let mut contact_buffers = BufferGroup::new_with_specs(
             &config.device,
             vec![
                 bytemuck::cast_slice(&state.bonds),
@@ -764,6 +832,15 @@ impl WGPUComputeProg {
                 bytemuck::cast_slice(&vec![0 as i32; 4]), //shared mem, for controlling intermittent collision detection
             ],
             "Contact Buffers".to_string(),
+            vec![
+                spec(C, NONE, false),    // b0 bonds (render: declared, never indexed)
+                spec(C, F, false),       // b1 contacts
+                spec(NONE, NONE, false), // b2 contact_pointers: unused by every shader
+                spec(C, V, false),       // b3 material_pointers
+                spec(C, F, false),       // b4 grid
+                spec(C, F, true),        // b5 grid_info: 16 B, read-only -> uniform
+                spec(C, F, false),       // b6 coll_cont
+            ],
         );
         // let contact_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&contacts), "Contact Buffer".to_string(), 0);
         // let bond_buffer = BufferUniform::new(&config.device, bytemuck::cast_slice(&bonds), "Bond Buffer".to_string(), 0);
@@ -848,6 +925,13 @@ impl WGPUComputeProg {
             label: None,
             source: wgpu::ShaderSource::Wgsl(assemble_shader(include_str!("./shaders/physics/2D_Broad_Phase.wgsl"), settings).into()),
         });
+        // Grid insertion split out of LOM (AUTOPSY H8: storageBarrier is not a
+        // cross-workgroup barrier; insertion needs its own dispatch after clear).
+        let grid_insert_shader = include_str!("./shaders/physics/2D_Grid_Insert.wgsl");
+        let grid_insert_compute_shader = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(assemble_shader(grid_insert_shader, settings).into()),
+        });
         // println!("3");
         let sim_shader = include_str!("./shaders/physics/2D_Simulation.wgsl");
         let mut compute_shader2 = config.device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -895,15 +979,93 @@ impl WGPUComputeProg {
             label: None,
             source: wgpu::ShaderSource::Wgsl(include_str!("./shaders/Set_Group.wgsl").into()),
         });
+        // Shared merged layouts (group 3): Dawn (web) caps maxBindGroups at
+        // 4, so settings/materials/data — and the editor input/click pairs —
+        // each share one group instead of one group apiece.
+        let storage_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+        let uniform_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::COMPUTE,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        };
+        // b0 collision settings (uniform), b1 materials, b2 data.
+        // On wasm32 the data entry is invisible: the $ DIAGNOSTICS shader
+        // blocks are stripped there and the 16-storage-buffer stage cap
+        // needs the slot back.
+        let data_entry = if cfg!(target_arch = "wasm32") {
+            wgpu::BindGroupLayoutEntry { visibility: wgpu::ShaderStages::NONE, ..storage_entry(2) }
+        } else {
+            storage_entry(2)
+        };
+        let misc_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[uniform_entry(0), storage_entry(1), data_entry],
+            label: Some("physics misc"),
+        });
+
+        // Pipeline-specific variants to stay under 16 storage buffers per
+        // compute stage on web:
+        // - the contact kernel (2D_Simulation) doesn't read rot
+        // - LOM / grid-insert / set-properties only touch grid /
+        //   material_pointers / coll_cont (+ grid_info uniform) in the
+        //   contact group
+        let mov_sim_layout = spec_layout(
+            &config.device,
+            &[(C, false), (C, false), (NONE, false), (C, false), (C, false), (NONE, false), (C, false), (C, false), (C, false), (C, false)],
+            false,
+            "Movement Buffer (sim)",
+        );
+        let contact_lite_layout = spec_layout(
+            &config.device,
+            &[(NONE, false), (NONE, false), (NONE, false), (C, false), (C, false), (C, true), (C, false)],
+            false,
+            "Contact Buffers (lite)",
+        );
+        // b0 event input (uniform), b1 click_info
+        let io_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[uniform_entry(0), storage_entry(1)],
+            label: Some("event io"),
+        });
+        // b0 selections, b1 groups, b2 set-properties input (uniform)
+        let selprop_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[storage_entry(0), storage_entry(1), uniform_entry(2)],
+            label: Some("selections+input"),
+        });
+
         ////create pipeline layout
         let compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("LOM compute"),
             bind_group_layouts: &[
                 &buffers.pos_buffers.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
-                &buffers.contact_buffers.bind_group_layout,
-                &buffers.collision_settings.bind_group_layout,
-                &buffers.data_buffer.bind_group_layout,
+                &contact_lite_layout,
+                &misc_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        // identical to the LOM layout; separate object so shader_strs /
+        // pipeline_layouts / compute_pipelines stay index-aligned (H8 split)
+        let grid_insert_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Grid insert compute"),
+            bind_group_layouts: &[
+                &buffers.pos_buffers.bind_group_layout,
+                &buffers.mov_buffers.bind_group_layout,
+                &contact_lite_layout,
+                &misc_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -922,11 +1084,9 @@ impl WGPUComputeProg {
             label: Some("Collision compute"),
             bind_group_layouts: &[
                 &buffers.pos_buffers.bind_group_layout,
-                &buffers.mov_buffers.bind_group_layout,
+                &mov_sim_layout,
                 &buffers.contact_buffers.bind_group_layout,
-                &buffers.collision_settings.bind_group_layout,
-                &buffers.material_buffer.bind_group_layout,
-                &buffers.data_buffer.bind_group_layout,
+                &misc_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -934,11 +1094,10 @@ impl WGPUComputeProg {
         let drag_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Translate compute"),
             bind_group_layouts: &[
-                &buffers.drag_input.bind_group_layout,
+                &io_layout,
                 &buffers.selection_buffers.bind_group_layout,
                 &buffers.pos_buffers.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
-                &buffers.click_buffer.bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -946,10 +1105,9 @@ impl WGPUComputeProg {
         let selectangle_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Selectangle compute"),
             bind_group_layouts: &[
-                &buffers.selectangle_input.bind_group_layout,
+                &io_layout,
                 &buffers.selection_buffers.bind_group_layout,
                 &hit_tex.bind_group_layout,
-                &buffers.click_buffer.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
             ],
             push_constant_ranges: &[],
@@ -958,10 +1116,9 @@ impl WGPUComputeProg {
         let click_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Click compute"),
             bind_group_layouts: &[
-                &buffers.click_input.bind_group_layout,
+                &io_layout,
                 &buffers.selection_buffers.bind_group_layout,
                 &hit_tex.bind_group_layout,
-                &buffers.click_buffer.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
             ],
             push_constant_ranges: &[],
@@ -970,11 +1127,10 @@ impl WGPUComputeProg {
         let release_compute_pipeline_layout = config.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Release compute"),
             bind_group_layouts: &[
-                &buffers.release_input.bind_group_layout,
+                &io_layout,
                 &buffers.selection_buffers.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
-                &buffers.click_buffer.bind_group_layout,
-                &buffers.collision_settings.bind_group_layout,
+                &misc_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -1004,9 +1160,8 @@ impl WGPUComputeProg {
             bind_group_layouts: &[
                 &buffers.pos_buffers.bind_group_layout,
                 &buffers.mov_buffers.bind_group_layout,
-                &buffers.contact_buffers.bind_group_layout,
-                &buffers.selection_buffers.bind_group_layout,
-                &buffers.set_prop_input.bind_group_layout,
+                &contact_lite_layout,
+                &selprop_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -1043,6 +1198,12 @@ impl WGPUComputeProg {
             label: None,
             layout: Some(&compute_pipeline_layout2),
             module: &compute_shader2,
+            entry_point: "main",
+        });
+        let grid_insert_compute_pipeline = config.device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&grid_insert_compute_pipeline_layout),
+            module: &grid_insert_compute_shader,
             entry_point: "main",
         });
         // println!("4");
@@ -1118,10 +1279,69 @@ impl WGPUComputeProg {
             // set_group_compute_pipeline,
             hit_tex,
             grid_info,
-            shader_strs: vec![lom_shader.to_string(), sim_shader.to_string()],
-            pipeline_layouts: vec![compute_pipeline_layout, compute_pipeline_layout2],
-            compute_pipelines: vec![compute_pipeline, compute_pipeline2],
+            shader_strs: vec![lom_shader.to_string(), sim_shader.to_string(), grid_insert_shader.to_string()],
+            pipeline_layouts: vec![compute_pipeline_layout, compute_pipeline_layout2, grid_insert_compute_pipeline_layout],
+            compute_pipelines: vec![compute_pipeline, compute_pipeline2, grid_insert_compute_pipeline],
+            misc_layout,
+            io_layout,
+            selprop_layout,
+            mov_sim_layout,
+            contact_lite_layout,
         }
+    }
+
+    /// Variant bind groups for the physics dispatches (same buffers, the
+    /// pipeline-specific layouts above). Per dispatch like misc_bind_group.
+    pub fn mov_sim_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        let refs: Vec<&wgpu::Buffer> = self.buffers.mov_buffers.buffers.iter().collect();
+        spec_group(device, &self.mov_sim_layout, &refs, "Movement Buffer (sim)")
+    }
+
+    pub fn contact_lite_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        let refs: Vec<&wgpu::Buffer> = self.buffers.contact_buffers.buffers.iter().collect();
+        spec_group(device, &self.contact_lite_layout, &refs, "Contact Buffers (lite)")
+    }
+
+    /// Group-3 "physics misc" bind group: b0 collision settings (uniform),
+    /// b1 materials, b2 data. Created per dispatch because updateUniform
+    /// replaces the underlying buffers.
+    pub fn misc_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.misc_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.buffers.collision_settings.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: self.buffers.material_buffer.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: self.buffers.data_buffer.buffer.as_entire_binding() },
+            ],
+            label: Some("physics misc"),
+        })
+    }
+
+    /// Group-0 "event io" bind group: b0 the event's input uniform,
+    /// b1 click_info.
+    pub fn io_bind_group(&self, device: &wgpu::Device, input: &Uniform) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.io_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: input.buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: self.buffers.click_buffer.buffer.as_entire_binding() },
+            ],
+            label: Some("event io"),
+        })
+    }
+
+    /// Group-3 bind group for Set_Properties: b0 selections, b1 groups,
+    /// b2 the set-properties input uniform.
+    pub fn selprop_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.selprop_layout,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.buffers.selection_buffers.buffers[0].as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: self.buffers.selection_buffers.buffers[1].as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: self.buffers.set_prop_input.buffer.as_entire_binding() },
+            ],
+            label: Some("selections+input"),
+        })
     }
 
     pub fn rebuild_pipeline(&mut self, config: &mut WGPUConfig, settings: &Settings, i: usize) {
@@ -1268,6 +1488,7 @@ impl WGPUComputeProg {
     // }
 
     pub fn click(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+        let io_bg = self.io_bind_group(&config.device, &self.buffers.click_input);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1277,11 +1498,10 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.click_compute_pipeline);
 
-            compute_pass.set_bind_group(0, &self.buffers.click_input.bind_group, &[]);
+            compute_pass.set_bind_group(0, &io_bg, &[]);
             compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);
             compute_pass.set_bind_group(2, &self.hit_tex.diffuse_bind_group, &[]);
-            compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);
-            compute_pass.set_bind_group(4, &self.buffers.mov_buffers.bind_group, &[]);
+            compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
         }
@@ -1290,6 +1510,7 @@ impl WGPUComputeProg {
     }
 
     pub fn selectangle(&mut self, config: &WGPUConfig, dimensions: (u32, u32)) {
+        let io_bg = self.io_bind_group(&config.device, &self.buffers.selectangle_input);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1299,11 +1520,10 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.selectangle_compute_pipeline);
 
-            compute_pass.set_bind_group(0, &self.buffers.selectangle_input.bind_group, &[]);
+            compute_pass.set_bind_group(0, &io_bg, &[]);
             compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);
             compute_pass.set_bind_group(2, &self.hit_tex.diffuse_bind_group, &[]);
-            compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);
-            compute_pass.set_bind_group(4, &self.buffers.mov_buffers.bind_group, &[]);
+            compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);
 
             compute_pass.dispatch_workgroups(((dimensions.0 * dimensions.1) as f32 / 256.0).ceil() as u32, 1, 1);
         }
@@ -1312,6 +1532,8 @@ impl WGPUComputeProg {
     }
 
     pub fn release(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+        let io_bg = self.io_bind_group(&config.device, &self.buffers.release_input);
+        let misc_bg = self.misc_bind_group(&config.device);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1321,11 +1543,10 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.release_compute_pipeline);
 
-            compute_pass.set_bind_group(0, &self.buffers.release_input.bind_group, &[]);
+            compute_pass.set_bind_group(0, &io_bg, &[]);
             compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);
             compute_pass.set_bind_group(2, &self.buffers.mov_buffers.bind_group, &[]);
-            compute_pass.set_bind_group(3, &self.buffers.click_buffer.bind_group, &[]);
-            compute_pass.set_bind_group(4, &self.buffers.collision_settings.bind_group, &[]);
+            compute_pass.set_bind_group(3, &misc_bg, &[]);
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
         }
@@ -1334,6 +1555,7 @@ impl WGPUComputeProg {
     }
 
     pub fn drag(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+        let io_bg = self.io_bind_group(&config.device, &self.buffers.drag_input);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1343,11 +1565,10 @@ impl WGPUComputeProg {
 
             compute_pass.set_pipeline(&self.drag_compute_pipeline);
 
-            compute_pass.set_bind_group(0, &self.buffers.drag_input.bind_group, &[]);
+            compute_pass.set_bind_group(0, &io_bg, &[]);
             compute_pass.set_bind_group(1, &self.buffers.selection_buffers.bind_group, &[]);
             compute_pass.set_bind_group(2, &self.buffers.pos_buffers.bind_group, &[]);
             compute_pass.set_bind_group(3, &self.buffers.mov_buffers.bind_group, &[]);
-            compute_pass.set_bind_group(4, &self.buffers.click_buffer.bind_group, &[]);
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
         }
@@ -1396,6 +1617,8 @@ impl WGPUComputeProg {
     }
 
     pub fn set_properties(&mut self, config: &WGPUConfig, settings: &Settings) {
+        let selprop_bg = self.selprop_bind_group(&config.device);
+        let contact_lite_bg = self.contact_lite_bind_group(&config.device);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1407,9 +1630,8 @@ impl WGPUComputeProg {
 
             compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
             compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
-            compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);
-            compute_pass.set_bind_group(3, &self.buffers.selection_buffers.bind_group, &[]);
-            compute_pass.set_bind_group(4, &self.buffers.set_prop_input.bind_group, &[]);
+            compute_pass.set_bind_group(2, &contact_lite_bg, &[]);
+            compute_pass.set_bind_group(3, &selprop_bg, &[]);
 
             compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
         }
@@ -1418,6 +1640,12 @@ impl WGPUComputeProg {
     }
 
     pub fn compute(&mut self, config: &mut WGPUConfig, settings: &Settings) {
+        // Merged/variant bind groups for the physics dispatches this
+        // submission (see misc_bind_group; created per call because update
+        // paths replace the underlying buffers).
+        let misc_bg = self.misc_bind_group(&config.device);
+        let mov_sim_bg = self.mov_sim_bind_group(&config.device);
+        let contact_lite_bg = self.contact_lite_bind_group(&config.device);
         let mut encoder = config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let mut compute_pass_descriptor = wgpu::ComputePassDescriptor::default();
@@ -1431,9 +1659,23 @@ impl WGPUComputeProg {
 
                 compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
                 compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);
-                compute_pass.set_bind_group(4, &self.buffers.data_buffer.bind_group, &[]);
+                compute_pass.set_bind_group(2, &contact_lite_bg, &[]);
+                compute_pass.set_bind_group(3, &misc_bg, &[]);
+
+                compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
+            }
+
+            // GRID INSERT (H8): own dispatch so the LOM grid clear is fully
+            // complete (implicit inter-dispatch barrier) before insertion.
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&compute_pass_descriptor);
+
+                compute_pass.set_pipeline(&self.compute_pipelines[2]);
+
+                compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(2, &contact_lite_bg, &[]);
+                compute_pass.set_bind_group(3, &misc_bg, &[]);
 
                 compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             }
@@ -1459,11 +1701,9 @@ impl WGPUComputeProg {
                 compute_pass.set_pipeline(&self.compute_pipelines[1]);
 
                 compute_pass.set_bind_group(0, &self.buffers.pos_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(1, &self.buffers.mov_buffers.bind_group, &[]);
+                compute_pass.set_bind_group(1, &mov_sim_bg, &[]);
                 compute_pass.set_bind_group(2, &self.buffers.contact_buffers.bind_group, &[]);
-                compute_pass.set_bind_group(3, &self.buffers.collision_settings.bind_group, &[]);
-                compute_pass.set_bind_group(4, &self.buffers.material_buffer.bind_group, &[]);
-                compute_pass.set_bind_group(5, &self.buffers.data_buffer.bind_group, &[]);
+                compute_pass.set_bind_group(3, &misc_bg, &[]);
 
                 compute_pass.dispatch_workgroups(settings.setup.workgroups as u32, 1, 1);
             }

@@ -1,4 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 use crate::audio_controller;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::audio_controller::*;
 use crate::scripts;
 use crate::scripts::ScriptManager;
@@ -36,6 +38,7 @@ use egui_wgpu_backend::{RenderPass, ScreenDescriptor};
 use egui_winit_platform::{Platform, PlatformDescriptor};
 
 use chrono::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use copypasta::*;
 
 pub struct Client {
@@ -83,6 +86,7 @@ pub struct Client {
     data_length_backup: usize,
     available_rect: Rect,
     boot_time: i64,
+    #[cfg(not(target_arch = "wasm32"))]
     clipboard: ClipboardContext,
 }
 
@@ -112,9 +116,17 @@ impl Client {
         let available_rect = platform.context().available_rect();
         platform.context().set_pixels_per_point(2.0);
         let mut egui_rpass = RenderPass::new(&wgpu_config.device, wgpu_config.surface_format, 1);
-        let max_framerate = canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        // current_monitor() is None on the web backend — the old .unwrap()
+        // was a statically-known panic there, and LLVM dead-stripped the
+        // entire UI behind it. 60 Hz fallback; native behavior unchanged.
+        let max_framerate = canvas
+            .window
+            .current_monitor()
+            .and_then(|m| m.refresh_rate_millihertz())
+            .map(|mhz| mhz as f32 / 1000.0)
+            .unwrap_or(60.0);
 
-        audio_controller::main();
+        // audio_controller::main(); // disabled: Anthony's startup test tone (440->880 Hz beep)
 
         let mut client = Client {
             canvas,
@@ -162,6 +174,7 @@ impl Client {
             available_rect: available_rect,
             boot_time: Local::now().timestamp_millis(), // max_framerate:  max_framerate,
             // prev_framerate: max_framerate
+            #[cfg(not(target_arch = "wasm32"))]
             clipboard: ClipboardContext::new().unwrap(),
         };
         client.resize(client.canvas.size);
@@ -685,6 +698,7 @@ impl Client {
                             });
                             if selected_text.len() > 0 {
                                 println!("selected text: {}", selected_text);
+                                #[cfg(not(target_arch = "wasm32"))]
                                 self.clipboard.set_contents(selected_text).unwrap();
                             }
                             println!("selected text");
@@ -696,6 +710,7 @@ impl Client {
                             modifiers: ModifiersState::CTRL,
                             ..
                         } => {
+                            #[cfg(not(target_arch = "wasm32"))]
                             if let Ok(paste_text) = self.clipboard.get_contents() {
                                 println!("Paste: {}", paste_text);
                                 self.platform.raw_input_mut().events.push(egui::Event::Text(paste_text));
@@ -724,6 +739,55 @@ impl Client {
         self.prev_gen = 0;
         self.start_time = Local::now();
         self.settings.data = Data::new();
+    }
+
+    /// Load a validation-suite preset (Stage 5): apply the scenario to
+    /// settings, rebuild the compute program (same path as reset), then
+    /// overwrite the generated scene with the scenario's exact initial state
+    /// — the same loader the headless harness uses, so the UI runs exactly
+    /// what was validated. Starts paused; framing fits the scenario bounds.
+    fn load_preset(&mut self, idx: usize) {
+        let Some(preset) = crate::presets::PRESETS.get(idx) else {
+            return;
+        };
+        let sc = match crate::scenario::Scenario::parse(preset.json) {
+            Ok(sc) => sc,
+            Err(e) => {
+                println!("Err: preset '{}' failed to parse: {}", preset.name, e);
+                return;
+            }
+        };
+        sc.apply_to_settings(&mut self.settings);
+        self.reset();
+        sc.install_state(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings);
+        // ~Real-time playback at 60 fps (apply_to_settings sets 1 for the
+        // headless one-step-per-compute contract; interactive wants dt-paced).
+        self.settings.simulation.gen_per_frame =
+            ((1.0 / (60.0 * sc.timestep)).round() as i32).clamp(1, self.settings.simulation.max_gen_per_frame as i32);
+        // Frame the scenario on the initial particle AABB, not the world
+        // bounds — quasi-static scenarios park a small scene inside huge
+        // walls (e.g. T6: a 38-unit chain in a 280-unit world). Shader maps
+        // clip = scale*(pos + off), x divided by aspect, clip span = 2; the
+        // span floor keeps 1-2 body scenes from being microscopic, the world
+        // bounds cap keeps the view inside the walls.
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        let mut min_y = f32::INFINITY;
+        let mut max_y = f32::NEG_INFINITY;
+        let mut max_r = 0.0f32;
+        for p in &sc.particles {
+            min_x = min_x.min(p.x - p.r);
+            max_x = max_x.max(p.x + p.r);
+            min_y = min_y.min(p.y - p.r);
+            max_y = max_y.max(p.y + p.r);
+            max_r = max_r.max(p.r);
+        }
+        let aspect = self.canvas.size.width as f32 / self.canvas.size.height as f32;
+        let span_x = (max_x - min_x).max(30.0 * max_r).min(sc.hor_bound) * 1.2;
+        let span_y = (max_y - min_y).max(30.0 * max_r).min(sc.vert_bound) * 1.2;
+        self.x_off = -0.5 * (min_x + max_x);
+        self.y_off = -0.5 * (min_y + max_y);
+        self.settings.view.scale = (2.0 / span_y).min(2.0 * aspect / span_x);
     }
 
     fn backup(&mut self) {
@@ -1111,7 +1175,15 @@ impl Client {
         }
         self.handle_events();
         self.script_manager.execute(&mut self.wgpu_prog, &mut self.wgpu_config, &mut self.settings, &self.canvas);
-        let max_framerate = self.canvas.window.current_monitor().unwrap().refresh_rate_millihertz().unwrap() as f32 / 1000.0;
+        // See Client::new — None on web; .unwrap() here killed the whole UI
+        // via dead-code elimination on wasm.
+        let max_framerate = self
+            .canvas
+            .window
+            .current_monitor()
+            .and_then(|m| m.refresh_rate_millihertz())
+            .map(|mhz| mhz as f32 / 1000.0)
+            .unwrap_or(60.0);
         if !self.minimized {
             settings!().simulation.max_gen_per_frame = ((1.0 / settings!().simulation.timestep) / max_framerate).round() as i32;
             if settings!().simulation.max_gen_per_frame < settings!().simulation.gen_per_frame {
@@ -1185,6 +1257,9 @@ impl Client {
             if needs_reset {
                 self.reset();
             }
+            if let Some(idx) = self.settings.pending_preset.take() {
+                self.load_preset(idx);
+            }
 
             if settings!().materials_changed {
                 self.wgpu_prog
@@ -1207,6 +1282,10 @@ impl Client {
             self.wgpu_prog
                 .ren_set_uniform
                 .updateUniform(&self.wgpu_config.device, bytemuck::cast_slice(&settings!().render_settings()));
+
+            // Shared group-0 bind group for the scene render pipelines; must
+            // be built AFTER the uniform updates above (they replace buffers).
+            let render_misc = self.wgpu_prog.render_misc_bind_group(&self.wgpu_config.device);
 
             let mut encoder = self.wgpu_config.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("encoder") });
             if settings!().view.rendering {
@@ -1232,15 +1311,10 @@ impl Client {
                     });
 
                     render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
-                    render_pass2.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                    // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                    render_pass2.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass2.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass2.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass2.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass2.set_bind_group(0, &render_misc, &[]);
+                    render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
+                    render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass2.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass2.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass2.draw_indexed(0..6 as u32, 0, 0..1);
@@ -1268,14 +1342,10 @@ impl Client {
                     });
 
                     render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
-                    render_pass3.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass3.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass3.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass3.set_bind_group(0, &render_misc, &[]);
+                    render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
+                    render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass3.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass3.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
@@ -1304,15 +1374,10 @@ impl Client {
                     });
 
                     render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0 + settings!().view.show_hit_tex as usize * 4]);
-                    render_pass.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                    // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                    render_pass.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass.set_bind_group(0, &render_misc, &[]);
+                    render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
+                    render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
@@ -1320,6 +1385,9 @@ impl Client {
 
                 if settings!().create.create_mode {
                     self.update_create_input();
+                    // update_create_input replaces the create_input buffer, so
+                    // this pass needs a fresh misc bind group.
+                    let render_misc6 = self.wgpu_prog.render_misc_bind_group(&self.wgpu_config.device);
 
                     let mut render_pass6 = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         label: Some("Render Pass"),
@@ -1342,15 +1410,9 @@ impl Client {
                     });
 
                     render_pass6.set_pipeline(&self.wgpu_prog.render_pipelines[5]);
-                    render_pass6.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass6.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                    // render_pass6.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass6.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
-                    render_pass6.set_bind_group(3, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass6.set_bind_group(4, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass6.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass6.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
-                    render_pass6.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.create_input.bind_group, &[]);
+                    render_pass6.set_bind_group(0, &render_misc6, &[]);
+                    render_pass6.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
+                    render_pass6.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass6.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass6.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass6.draw_indexed(0..6 as u32, 0, 0..settings!().create.quantity);

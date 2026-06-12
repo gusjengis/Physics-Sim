@@ -1,0 +1,54 @@
+{
+ "name": "t4_oblique",
+ "steps": 4584,
+ "dump_every": 20,
+ "timestep": 1e-05,
+ "gravity": false,
+ "gravity_acceleration": 0.0,
+ "planet_mode": false,
+ "hor_bound": 20.0,
+ "vert_bound": 20.0,
+ "collisions": true,
+ "friction_coefficient": 0.3,
+ "contact_damping": 0.0,
+ "local_damping": false,
+ "local_damping_alpha": 0.0,
+ "materials": [
+  1.0,
+  1.0,
+  1.0,
+  1000.0,
+  80000000.0,
+  26666666.666666668,
+  1.0,
+  1.0,
+  1.0,
+  1000.0,
+  80000000.0,
+  26666666.666666668
+ ],
+ "particles": [
+  [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.5,
+   0.0,
+   0.0,
+   0,
+   true
+  ],
+  [
+   0.0180080808859568,
+   1.02,
+   -0.6691306063588582,
+   -0.7431448254773942,
+   0.5,
+   0.0,
+   0.0,
+   0,
+   false
+  ]
+ ]
+}

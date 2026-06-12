@@ -90,6 +90,14 @@ fn evaluate_tokens(tokens: Vec<String>, settings: &Settings) -> bool {
             "3D" => {
                 res |= settings.simulation.d3;
             }
+            // Diagnostic data[] accumulation (per-particle fn/fs/moment for
+            // the harness/UI). Stripped on wasm32: the web adapter caps
+            // storage buffers per compute stage at 16 and the data binding
+            // is the one observer-only buffer that can go. Pure writes —
+            // physics arithmetic is identical with or without it.
+            "DIAGNOSTICS" => {
+                res |= !cfg!(target_arch = "wasm32");
+            }
             _ => {}
         }
     }

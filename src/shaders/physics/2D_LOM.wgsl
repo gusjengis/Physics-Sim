@@ -68,10 +68,12 @@ struct Settings {
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<atomic<i32>>;
-@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
-@group(4) @binding(0) var<storage, read_write> data: array<f32>; 
+$ DIAGNOSTICS {
+@group(3) @binding(2) var<storage, read_write> data: array<f32>;
+} 
 
 
 const PI = 3.141592653589793238;
@@ -89,9 +91,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if fixity[id].y_vel == 0 { int_vel.y += accelerations[id].y * settings.dT * 0.5; }
     if fixity[id].rot_vel == 0 { int_rot_vel += rot_acc      [id] * settings.dT * 0.5; }
 
+    $ DIAGNOSTICS {
     data[id * DATA_SIZE + 4u] = int_vel.x;
     data[id * DATA_SIZE + 5u] = int_vel.y;
     data[id * DATA_SIZE + 6u] = int_rot_vel;
+    }
 
     if coll_cont[3] == 0 {
         del_pos[id] = int_vel * settings.dT;
@@ -186,16 +190,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             }
         }
 
-        storageBarrier();
-
-        for (var cell_y = min_cell_y; cell_y <= max_cell_y; cell_y++) {
-            for (var cell_x = min_cell_x; cell_x <= max_cell_x; cell_x++) {
-                let base_index = (cell_y * grid_info.w + cell_x) * grid_info.cell_cap;
-                let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
-                if p_count < grid_info.cell_cap - 1 {
-                    grid[base_index + 1 + p_count] = i32(id);
-                }
-            }
-        }
+        // Insertion moved to 2D_Grid_Insert.wgsl (own dispatch). storageBarrier()
+        // here only synced within a workgroup (AUTOPSY H8): with >1 workgroup the
+        // clear above could race another workgroup's insertions and wipe them.
     }
 }

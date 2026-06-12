@@ -35,9 +35,11 @@ impl Canvas {
             use winit::dpi::PhysicalSize;
             let w = web_sys::window().unwrap().inner_width().unwrap().as_f64().unwrap();
             let h = web_sys::window().unwrap().inner_height().unwrap().as_f64().unwrap();
-            self.window.set_inner_size(PhysicalSize::new(w, h));
+            // was `self.window...` — no self in a constructor; wasm-only code,
+            // so it never compiled until the wasm build was stood back up
+            window.set_inner_size(PhysicalSize::new(w, h));
         }
-    
+
         let size = window.inner_size();
 
         Self{

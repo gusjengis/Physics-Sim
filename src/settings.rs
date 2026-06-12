@@ -18,6 +18,7 @@ use std::*;
 use std::{fmt::Debug, io::Read};
 use wgpu::{Device, Queue};
 
+#[cfg(not(target_arch = "wasm32"))]
 use native_dialog::{FileDialog, MessageDialog, MessageType};
 
 use crate::{state::State, wgpu_structs::Uniform, window_init::Canvas};
@@ -191,6 +192,7 @@ pub struct PhysicsSettings {
     pub moment_contribution_factor: f32,
     pub local_damping: bool,
     pub local_damping_alpha: f32,
+    pub dashpot_beta: f32,
 }
 
 pub struct CreateSettings {
@@ -249,6 +251,9 @@ pub struct Settings {
     pub world_pos: (f32, f32),
     pub curr_shader: usize,
     pub json_scripts: bool,
+    /// Index into presets::PRESETS, set by the Presets menu; the client
+    /// consumes it (loads the scenario + resets) and clears it each frame.
+    pub pending_preset: Option<usize>,
     // pub groups: i32,
     // pub set_group: i32, // pub paths: ReadDir,
 }
@@ -354,6 +359,7 @@ impl Settings {
                 moment_contribution_factor: 1.0,
                 local_damping: false,
                 local_damping_alpha: 0.1,
+                dashpot_beta: 0.0,
             },
             create: CreateSettings {
                 create_mode: false,
@@ -433,6 +439,7 @@ impl Settings {
             world_pos: (0.0, 0.0),
             curr_shader: 0,
             json_scripts: false,
+            pending_preset: None,
         };
         settings.load_memory();
         return settings;
@@ -469,6 +476,7 @@ impl Settings {
                 egui::menu::bar(ui, |ui| {
                     ui.horizontal_centered(|ui| {
                         self.file_menu(ui);
+                        self.presets_menu(ui);
                         // self.edit_menu(ctx, ui);
                         self.view_menu(ui);
                         self.state_menu(ui);
@@ -502,6 +510,22 @@ impl Settings {
         }
 
         return reset;
+    }
+
+    /// Validation-suite scenarios embedded as runnable preset experiments
+    /// (Stage 5). Selecting one sets pending_preset; the client loads the
+    /// exact scenario the harness validated and resets the sim (paused).
+    fn presets_menu(&mut self, ui: &mut Ui) {
+        ui.menu_button("Presets", |ui| {
+            ui.style_mut().wrap = Some(false);
+            ui.label("Validation tests (configs of record)");
+            for (i, p) in crate::presets::PRESETS.iter().enumerate() {
+                if ui.button(p.name).on_hover_text(p.blurb).clicked() {
+                    self.pending_preset = Some(i);
+                    ui.close_menu();
+                }
+            }
+        });
     }
 
     fn file_menu(&mut self, ui: &mut Ui) {
@@ -542,6 +566,7 @@ impl Settings {
                     }
                 }
 
+                #[cfg(not(target_arch = "wasm32"))]
                 if ui.button("Select Folder").clicked() {
                     match FileDialog::new()
                         //.set_location(&self.current_dir)
@@ -1169,6 +1194,8 @@ impl Settings {
             ui.add_enabled_ui(self.physics.local_damping, |ui| {
                 self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.local_damping_alpha, 0.0..=1.0)).changed();
             });
+            ui.label("Contact Dashpot Beta");
+            self.changed_collision_settings |= ui.add(egui::Slider::new(&mut self.physics.dashpot_beta, 0.0..=1.0)).changed();
             ui.separator();
             let mut changed_bonds = false;
 
@@ -1985,37 +2012,46 @@ impl Settings {
     }
 
     pub fn load(&mut self) {
-        let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().set_location("").add_filter("Binary File", &["bin"]).show_open_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                self.load = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    self.load = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save(&mut self) {
-        let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = FileDialog::new().add_filter("Binary File", &["bin"]).show_save_single_file().unwrap();
 
-        match path {
-            Some(path) => {
-                self.current_file = path.clone();
-                // let mut ancestors = path.ancestors();
-                // println!("{}", ancestors.next().unwrap().to_str().unwrap());
-                // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
-                self.save = true;
-            }
-            None => {}
-        };
+            match path {
+                Some(path) => {
+                    self.current_file = path.clone();
+                    // let mut ancestors = path.ancestors();
+                    // println!("{}", ancestors.next().unwrap().to_str().unwrap());
+                    // self.current_dir = std::path::PathBuf::from_str(ancestors.next().unwrap().to_str().unwrap()).unwrap();
+                    self.save = true;
+                }
+                None => {}
+            };
+        }
     }
 
     pub fn save_data(&mut self, path_param: Option<PathBuf>) {
+        #[cfg(not(target_arch = "wasm32"))]
         let path = match path_param {
             Some(p) => Some(p),
             None => FileDialog::new().set_location("~").add_filter("CSV File", &["csv"]).show_save_single_file().unwrap(),
         };
+        #[cfg(target_arch = "wasm32")]
+        let path = path_param;
 
         if let Some(path) = path {
             let file_path = Path::new(&path);
@@ -2115,6 +2151,7 @@ impl Settings {
             bytemuck::cast(self.physics.local_damping as i32),
             self.physics.local_damping_alpha,
             bytemuck::cast(self.setup.particles as i32),
+            self.physics.dashpot_beta,
         ];
     }
 
