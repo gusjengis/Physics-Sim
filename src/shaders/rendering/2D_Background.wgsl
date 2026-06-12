@@ -40,8 +40,8 @@ struct VertexOutput {
     @location(0) position: vec4<f32>,
     @location(1) rot: f32,
     @location(2) rot_vel: f32,
-    @location(3) id: u32,
-    @location(4) w_h: vec2<i32>,
+    @location(3) @interpolate(flat) id: u32,
+    @location(4) @interpolate(flat) w_h: vec2<i32>,
     @location(5) pixel: vec2<f32>,
 };
 
@@ -94,19 +94,19 @@ struct GridInfo {
 }
 
 @group(0) @binding(0) var<uniform> input: Input;
-@group(1) @binding(0) var<storage, read_write> pos_buf: array<vec2<f32>>;
-@group(1) @binding(1) var<storage, read_write> radii_buf: array<f32>;
-@group(2) @binding(2) var<storage, read_write> rot_buf: array<f32>;
-@group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(3) @binding(4) var<storage, read_write> grid: array<i32>;
-@group(3) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
-@group(3) @binding(6) var<storage, read_write> coll_cont: array<i32>;
-@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(1) @binding(0) var<storage, read> pos_buf: array<vec2<f32>>;
+@group(1) @binding(1) var<storage, read> radii_buf: array<f32>;
+@group(2) @binding(2) var<storage, read> rot_buf: array<f32>;
+@group(2) @binding(3) var<storage, read> rot_vel: array<f32>;
+@group(3) @binding(0) var<storage, read> bonds: array<Bond>;
+@group(3) @binding(4) var<storage, read> grid: array<i32>;
+@group(3) @binding(5) var<storage, read> grid_info_buffer: array<GridInfo>;
+@group(3) @binding(6) var<storage, read> coll_cont: array<i32>;
+@group(3) @binding(3) var<storage, read> material_pointers: array<i32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
-@group(5) @binding(0) var<storage, read_write> materials: array<Material>;
-@group(6) @binding(0) var<storage, read_write> selections: array<i32>;
-@group(7) @binding(0) var<storage, read_write> click_info: array<i32>;
+@group(5) @binding(0) var<storage, read> materials: array<Material>;
+@group(6) @binding(0) var<storage, read> selections: array<i32>;
+@group(7) @binding(0) var<storage, read> click_info: array<i32>;
 
 @vertex
 fn vs_main(

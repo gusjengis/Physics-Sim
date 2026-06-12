@@ -1308,14 +1308,14 @@ impl Client {
 
                     render_pass2.set_pipeline(&self.wgpu_prog.render_pipelines[1]);
                     render_pass2.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    render_pass2.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
                     // render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass2.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass2.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass2.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass2.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass2.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass2.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass2.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.render_bind_group, &[]);
+                    render_pass2.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.render_bind_group, &[]);
+                    render_pass2.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.render_bind_group, &[]);
                     render_pass2.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass2.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass2.draw_indexed(0..6 as u32, 0, 0..1);
@@ -1344,13 +1344,13 @@ impl Client {
 
                     render_pass3.set_pipeline(&self.wgpu_prog.render_pipelines[2]);
                     render_pass3.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass3.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
+                    render_pass3.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass3.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass3.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass3.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass3.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass3.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass3.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.render_bind_group, &[]);
+                    render_pass3.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.render_bind_group, &[]);
+                    render_pass3.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.render_bind_group, &[]);
                     render_pass3.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass3.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
@@ -1380,14 +1380,14 @@ impl Client {
 
                     render_pass.set_pipeline(&self.wgpu_prog.render_pipelines[0 + settings!().view.show_hit_tex as usize * 4]);
                     render_pass.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    render_pass.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
                     // render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.bind_group, &[]);
-                    render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.mov_buffers.render_bind_group, &[]);
+                    render_pass.set_bind_group(3, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass.set_bind_group(4, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.material_buffer.render_bind_group, &[]);
+                    render_pass.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.selection_buffers.render_bind_group, &[]);
+                    render_pass.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.click_buffer.render_bind_group, &[]);
                     render_pass.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     render_pass.draw_indexed(0..6 as u32, 0, 0..settings!().setup.particles as u32);
@@ -1418,13 +1418,13 @@ impl Client {
 
                     render_pass6.set_pipeline(&self.wgpu_prog.render_pipelines[5]);
                     render_pass6.set_bind_group(0, &self.wgpu_prog.render_input.bind_group, &[]);
-                    render_pass6.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.bind_group, &[]);
+                    render_pass6.set_bind_group(1, &self.wgpu_prog.shader_prog.buffers.pos_buffers.render_bind_group, &[]);
                     // render_pass6.set_bind_group(3, &self.wgpu_prog.shader_prog.color_buffer.bind_group, &[]);
-                    render_pass6.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.contact_buffers.bind_group, &[]);
+                    render_pass6.set_bind_group(2, &self.wgpu_prog.shader_prog.buffers.contact_buffers.render_bind_group, &[]);
                     render_pass6.set_bind_group(3, &self.wgpu_prog.ren_set_uniform.bind_group, &[]);
-                    render_pass6.set_bind_group(4, &self.wgpu_prog.shader_prog.buffers.material_buffer.bind_group, &[]);
-                    render_pass6.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.selection_buffers.bind_group, &[]);
-                    render_pass6.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.click_buffer.bind_group, &[]);
+                    render_pass6.set_bind_group(4, &self.wgpu_prog.shader_prog.buffers.material_buffer.render_bind_group, &[]);
+                    render_pass6.set_bind_group(5, &self.wgpu_prog.shader_prog.buffers.selection_buffers.render_bind_group, &[]);
+                    render_pass6.set_bind_group(6, &self.wgpu_prog.shader_prog.buffers.click_buffer.render_bind_group, &[]);
                     render_pass6.set_bind_group(7, &self.wgpu_prog.shader_prog.buffers.create_input.bind_group, &[]);
                     render_pass6.set_vertex_buffer(0, self.wgpu_prog.vertex_buffer.slice(..));
                     render_pass6.set_index_buffer(self.wgpu_prog.index_buffer.slice(..), wgpu::IndexFormat::Uint16);

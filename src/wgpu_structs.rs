@@ -444,23 +444,21 @@ pub struct BufferUniform{
     pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    // Read-only VERTEX_FRAGMENT variants for render pipelines: WebGPU
+    // forbids read-write storage bindings with VERTEX visibility (native
+    // wgpu 0.16 tolerated it; the browser rejects the layout outright).
+    pub render_bind_group_layout: wgpu::BindGroupLayout,
+    pub render_bind_group: wgpu::BindGroup,
     binding: u32
 }
 
 impl BufferUniform {
-    pub fn new(device: &wgpu::Device, contents: &[u8], label: String, binding: u32) -> Self {
-        let buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some(&label),
-                contents: contents,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM |wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-            }
-        );
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    fn make_layouts(device: &wgpu::Device, label: &str, binding: u32) -> (wgpu::BindGroupLayout, wgpu::BindGroupLayout) {
+        let compute = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: binding,
-                    visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage {read_only: false},
                         has_dynamic_offset: false,
@@ -469,24 +467,58 @@ impl BufferUniform {
                     count: None,
                 }
             ],
-            label: Some(&label),
+            label: Some(label),
         });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
+        let render = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: binding,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage {read_only: true},
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+            label: Some(label),
+        });
+        (compute, render)
+    }
+
+    fn make_group(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, buffer: &wgpu::Buffer, label: &str, binding: u32) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: binding,
                     resource: buffer.as_entire_binding(),
                 }
             ],
-            label: Some(&label),
-        });
+            label: Some(label),
+        })
+    }
 
-        Self { 
+    pub fn new(device: &wgpu::Device, contents: &[u8], label: String, binding: u32) -> Self {
+        let buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some(&label),
+                contents: contents,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM |wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+            }
+        );
+        let (bind_group_layout, render_bind_group_layout) = Self::make_layouts(device, &label, binding);
+        let bind_group = Self::make_group(device, &bind_group_layout, &buffer, &label, binding);
+        let render_bind_group = Self::make_group(device, &render_bind_group_layout, &buffer, &label, binding);
+
+        Self {
             label: label,
-            buffer: buffer, 
-            bind_group_layout: bind_group_layout, 
+            buffer: buffer,
+            bind_group_layout: bind_group_layout,
             bind_group: bind_group,
+            render_bind_group_layout: render_bind_group_layout,
+            render_bind_group: render_bind_group,
             binding: binding
         }
     }
@@ -499,27 +531,24 @@ impl BufferUniform {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM |wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             }
         );
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: self.binding,
-                    resource: buffer.as_entire_binding(),
-                }
-            ],
-            label: Some(&self.label),
-        });
-    
+        let bind_group = Self::make_group(device, &self.bind_group_layout, &buffer, &self.label, self.binding);
+        let render_bind_group = Self::make_group(device, &self.render_bind_group_layout, &buffer, &self.label, self.binding);
+
         self.buffer = buffer;
         self.bind_group = bind_group;
+        self.render_bind_group = render_bind_group;
     }
 
     pub fn setBinding(&mut self, config: &WGPUConfig, binding: u32, storage: bool){
         let mut visibility = wgpu::ShaderStages::COMPUTE;
         let mut ty = wgpu::BufferBindingType::Storage {read_only: false};
+        let mut render_visibility = wgpu::ShaderStages::VERTEX_FRAGMENT;
+        let mut render_ty = wgpu::BufferBindingType::Storage {read_only: true};
         if(!storage){
-            visibility = wgpu::ShaderStages::VERTEX_FRAGMENT | wgpu::ShaderStages::COMPUTE;;
-            ty = wgpu::BufferBindingType::Uniform
+            visibility = wgpu::ShaderStages::VERTEX_FRAGMENT | wgpu::ShaderStages::COMPUTE;
+            ty = wgpu::BufferBindingType::Uniform;
+            render_visibility = visibility;
+            render_ty = wgpu::BufferBindingType::Uniform;
         }
         let bind_group_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
@@ -546,8 +575,35 @@ impl BufferUniform {
             ],
             label: Some(&self.label),
         });
+        let render_bind_group_layout = config.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: binding,
+                    visibility: render_visibility,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: render_ty,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }
+            ],
+            label: Some(&self.label),
+        });
+        let render_bind_group = config.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &render_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: binding,
+                    resource: self.buffer.as_entire_binding(),
+                }
+            ],
+            label: Some(&self.label),
+        });
         self.bind_group_layout = bind_group_layout;
         self.bind_group = bind_group;
+        self.render_bind_group_layout = render_bind_group_layout;
+        self.render_bind_group = render_bind_group;
         self.binding = binding;
     }
         
@@ -560,28 +616,33 @@ pub struct BufferGroup{
     pub buffers: Vec<Buffer>,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
+    // Read-only VERTEX_FRAGMENT variants for render pipelines (WebGPU
+    // forbids read-write storage with VERTEX visibility; see BufferUniform).
+    pub render_bind_group_layout: wgpu::BindGroupLayout,
+    pub render_bind_group: wgpu::BindGroup,
 }
 
 impl BufferGroup {
-    pub fn new(device: &wgpu::Device, contents: Vec<&[u8]>, label: String,) -> Self {
-        let mut buffers = vec![];
-        for i in 0..contents.len() {
-            buffers.push(device.create_buffer_init(
-                &wgpu::util::BufferInitDescriptor {
-                    label: Some(&label),
-                    contents: contents[i],
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
-                }
-            ));
-        }
+    fn build_groups(device: &wgpu::Device, buffers: &Vec<Buffer>, label: &str) -> (Vec<BindGroupLayoutEntry>, wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::BindGroupLayout, wgpu::BindGroup) {
         let mut layout_entries = vec![];
+        let mut render_layout_entries = vec![];
         let mut entries = vec![];
-        for i in 0..contents.len() {
+        for i in 0..buffers.len() {
             layout_entries.push(wgpu::BindGroupLayoutEntry {
                 binding: i as u32,
-                visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::VERTEX_FRAGMENT,
+                visibility: wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage {read_only: false},
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            });
+            render_layout_entries.push(wgpu::BindGroupLayoutEntry {
+                binding: i as u32,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage {read_only: true},
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },
@@ -594,20 +655,47 @@ impl BufferGroup {
         }
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &layout_entries,
-            label: Some(&label),
+            label: Some(label),
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &entries,
-            label: Some(&label),
+            label: Some(label),
         });
+        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &render_layout_entries,
+            label: Some(label),
+        });
+        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &render_bind_group_layout,
+            entries: &entries,
+            label: Some(label),
+        });
+        (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group)
+    }
+
+    pub fn new(device: &wgpu::Device, contents: Vec<&[u8]>, label: String,) -> Self {
+        let mut buffers = vec![];
+        for i in 0..contents.len() {
+            buffers.push(device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some(&label),
+                    contents: contents[i],
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
+                }
+            ));
+        }
+        let (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
+            Self::build_groups(device, &buffers, &label);
 
         Self {
             label,
             layout_entries,
             buffers,
-            bind_group_layout, 
+            bind_group_layout,
             bind_group,
+            render_bind_group_layout,
+            render_bind_group,
         }
     }
 
@@ -620,35 +708,13 @@ impl BufferGroup {
             }
         );
         // println!("{}: {}", self.label, self.buffers[index].size());
-        let mut layout_entries = vec![];
-        let mut entries = vec![];
-        for i in 0..self.buffers.len() {
-            layout_entries.push(wgpu::BindGroupLayoutEntry {
-                binding: i as u32,
-                visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage {read_only: false},
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            entries.push(wgpu::BindGroupEntry {
-                binding: i as u32,
-                resource: self.buffers[i].as_entire_binding(),
-            });
-        }
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &layout_entries,
-            label: Some(&self.label),
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &entries,
-            label: Some(&self.label),
-        });
+        let (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
+            Self::build_groups(device, &self.buffers, &self.label);
+        self.layout_entries = layout_entries;
         self.bind_group_layout = bind_group_layout;
         self.bind_group = bind_group;
+        self.render_bind_group_layout = render_bind_group_layout;
+        self.render_bind_group = render_bind_group;
     }
 
     pub fn write_data(&mut self, config: &mut WGPUConfig, offset: usize, contents: &[u8], index: usize){

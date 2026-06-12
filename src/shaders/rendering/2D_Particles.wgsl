@@ -59,9 +59,9 @@ struct VertexOutput {
     @location(1) color: vec3<f32>,
     @location(2) rot: f32,
     @location(3) rot_vel: f32,
-    @location(4) id: u32,
-    @location(5) selected: i32,
-    @location(6) w_h: vec2<i32>,
+    @location(4) @interpolate(flat) id: u32,
+    @location(5) @interpolate(flat) selected: i32,
+    @location(6) @interpolate(flat) w_h: vec2<i32>,
     @location(7) pixel: vec2<f32>,
     @location(8) vel: vec2<f32>,
     @location(9) scale: f32,
@@ -110,18 +110,18 @@ struct Bond {
 };
 
 @group(0) @binding(0) var<uniform> input: Input;
-@group(1) @binding(0) var<storage, read_write> pos: array<vec2<f32>>;
-@group(1) @binding(1) var<storage, read_write> radii: array<f32>;
-@group(2) @binding(0) var<storage, read_write> vel: array<vec2<f32>>;
-@group(2) @binding(2) var<storage, read_write> rot: array<f32>;
-@group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(2) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
-@group(3) @binding(1) var<storage, read_write> contacts: array<Contact>;
-@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(1) @binding(0) var<storage, read> pos: array<vec2<f32>>;
+@group(1) @binding(1) var<storage, read> radii: array<f32>;
+@group(2) @binding(0) var<storage, read> vel: array<vec2<f32>>;
+@group(2) @binding(2) var<storage, read> rot: array<f32>;
+@group(2) @binding(3) var<storage, read> rot_vel: array<f32>;
+@group(2) @binding(6) var<storage, read> fixity: array<Particle_Settings>;
+@group(3) @binding(1) var<storage, read> contacts: array<Contact>;
+@group(3) @binding(3) var<storage, read> material_pointers: array<i32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
-@group(5) @binding(0) var<storage, read_write> materials: array<Material>;
-@group(6) @binding(0) var<storage, read_write> selections: array<i32>;
-@group(7) @binding(0) var<storage, read_write> click_info: array<i32>;
+@group(5) @binding(0) var<storage, read> materials: array<Material>;
+@group(6) @binding(0) var<storage, read> selections: array<i32>;
+@group(7) @binding(0) var<storage, read> click_info: array<i32>;
 
 const PI = 3.141592653589793238;
 

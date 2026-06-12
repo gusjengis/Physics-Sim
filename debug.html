@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>wasm debug harness</title>
+  </head>
+  <body>
+    <pre id="logs" style="position:absolute;top:0;left:0;z-index:99;background:#fff;max-height:100vh;overflow:hidden;font-size:10px"></pre>
+    <script>
+      window.__logs = {};
+      function logLine(s) {
+        s = String(s).slice(0, 400);
+        window.__logs[s] = (window.__logs[s] || 0) + 1;
+      }
+      function flush() {
+        const el = document.getElementById("logs");
+        el.textContent = Object.entries(window.__logs)
+          .map(([k, v]) => `x${v}: ${k}`)
+          .join("\n");
+      }
+      setInterval(flush, 1000);
+      for (const m of ["warn", "error", "info"]) {
+        const orig = console[m].bind(console);
+        console[m] = (...a) => { logLine(m + ": " + a.join(" ")); orig(...a); };
+      }
+      window.addEventListener("error", (e) => logLine("window.onerror: " + e.message));
+      window.addEventListener("unhandledrejection", (e) => logLine("unhandledrejection: " + e.reason));
+      // Dawn/WebGPU validation errors arrive on the device, not the JS console.
+      if (navigator.gpu) {
+        const origReq = GPUAdapter.prototype.requestDevice;
+        GPUAdapter.prototype.requestDevice = async function (...a) {
+          logLine("requestDevice called: " + JSON.stringify(a[0] && a[0].requiredLimits || {}));
+          try {
+            const dev = await origReq.apply(this, a);
+            dev.addEventListener("uncapturederror", (ev) =>
+              logLine("UNCAPTURED GPU ERROR: " + (ev.error && ev.error.message)));
+            logLine("requestDevice OK");
+            return dev;
+          } catch (err) {
+            logLine("requestDevice FAILED: " + err);
+            throw err;
+          }
+        };
+      } else {
+        logLine("navigator.gpu MISSING");
+      }
+    </script>
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>

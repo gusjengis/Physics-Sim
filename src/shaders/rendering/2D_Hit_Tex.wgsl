@@ -50,7 +50,7 @@ struct VertexOutput {
     // @location(1) color: vec3<f32>,
     @location(1) rot: f32,
     @location(2) rot_vel: f32,
-    @location(3) id: u32
+    @location(3) @interpolate(flat) id: u32
 };
 
 struct Settings {
@@ -94,17 +94,17 @@ struct Bond {
 };
 
 @group(0) @binding(0) var<uniform> input: Input;
-@group(1) @binding(0) var<storage, read_write> pos: array<vec2<f32>>;
-@group(1) @binding(1) var<storage, read_write> radii: array<f32>;
-@group(2) @binding(2) var<storage, read_write> rot: array<f32>;
-@group(2) @binding(3) var<storage, read_write> rot_vel: array<f32>;
-@group(3) @binding(0) var<storage, read_write> bonds: array<Bond>;
-@group(3) @binding(1) var<storage, read_write> contacts: array<Contact>;
-@group(3) @binding(3) var<storage, read_write> material_pointers: array<i32>;
+@group(1) @binding(0) var<storage, read> pos: array<vec2<f32>>;
+@group(1) @binding(1) var<storage, read> radii: array<f32>;
+@group(2) @binding(2) var<storage, read> rot: array<f32>;
+@group(2) @binding(3) var<storage, read> rot_vel: array<f32>;
+@group(3) @binding(0) var<storage, read> bonds: array<Bond>;
+@group(3) @binding(1) var<storage, read> contacts: array<Contact>;
+@group(3) @binding(3) var<storage, read> material_pointers: array<i32>;
 @group(4) @binding(0) var<uniform> settings: Settings;
-@group(5) @binding(0) var<storage, read_write> materials: array<Material>;
-@group(6) @binding(0) var<storage, read_write> selections: array<i32>;
-@group(7) @binding(0) var<storage, read_write> click_info: array<i32>;
+@group(5) @binding(0) var<storage, read> materials: array<Material>;
+@group(6) @binding(0) var<storage, read> selections: array<i32>;
+@group(7) @binding(0) var<storage, read> click_info: array<i32>;
 
 @vertex
 fn vs_main(
