@@ -120,11 +120,11 @@ struct Create_Input {
 @group(1) @binding(1) var<storage, read> radii: array<f32>;
 @group(2) @binding(1) var<storage, read> contacts: array<Contact>;
 @group(2) @binding(3) var<storage, read> material_pointers: array<i32>;
-@group(3) @binding(0) var<uniform> settings: Settings;
-@group(4) @binding(0) var<storage, read> materials: array<Material>;
-@group(5) @binding(0) var<storage, read> selections: array<i32>;
-@group(6) @binding(0) var<storage, read> click_info: array<i32>;
-@group(7) @binding(0) var<uniform> c_input: Create_Input;
+@group(0) @binding(1) var<uniform> settings: Settings;
+@group(0) @binding(2) var<storage, read> materials: array<Material>;
+@group(0) @binding(3) var<storage, read> selections: array<i32>;
+@group(0) @binding(4) var<storage, read> click_info: array<i32>;
+@group(0) @binding(5) var<uniform> c_input: Create_Input;
 
 const PI = 3.141592653589793238;
 
@@ -324,7 +324,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     $ ROUND-PARTICLES {
         // add border/outline
         if settings.render_outline == 1 || in.selected != 0 {
-            if len > 0.5 - border_width && len < 0.5 || border_pixel {
+            if (len > 0.5 - border_width && len < 0.5) || border_pixel {
                 if in.selected != 0 {
                     color = vec4(1.0, 0.8, 0.0, 1.0);
                     // if fixity[in.id].x_vel_2 != 0 || fixity[in.id].y_vel_2 != 0 || fixity[in.id].rot_vel_2 != 0 {

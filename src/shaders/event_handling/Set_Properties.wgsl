@@ -63,7 +63,7 @@ struct Forces {
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<storage, read_write> selections: array<i32>;
 @group(3) @binding(1) var<storage, read_write> groups: array<i32>;
-@group(4) @binding(0) var<uniform> input: Input;
+@group(3) @binding(2) var<uniform> input: Input;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

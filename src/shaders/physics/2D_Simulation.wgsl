@@ -97,11 +97,13 @@ struct GridInfo {
 @group(2) @binding(2) var<storage, read_write> contact_pointers: array<i32>;
 @group(2) @binding(3) var<storage, read_write> material_pointers: array<i32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<i32>;
-@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
-@group(4) @binding(0) var<storage, read_write> materials: array<Material>; 
-@group(5) @binding(0) var<storage, read_write> data: array<f32>; 
+@group(3) @binding(1) var<storage, read_write> materials: array<Material>; 
+$ DIAGNOSTICS {
+@group(3) @binding(2) var<storage, read_write> data: array<f32>;
+} 
 
 const PI = 3.141592653589793238;
 const DATA_SIZE = 7u;
@@ -111,9 +113,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let id: u32 = global_id.x;
     let grid_info = grid_info_buffer[0];
 
+    $ DIAGNOSTICS {
     data[id * DATA_SIZE   ] = 0.0;
     data[id * DATA_SIZE + 1u] = 0.0;
     data[id * DATA_SIZE + 2u] = 0.0;
+    }
     // data[id*DATA_SIZE+3u] = velocities[id].x;
 
     if radii[id] == 0.0 || id >= u32(settings.particles) { return; }
@@ -272,15 +276,16 @@ fn distance(a: i32, b: i32) -> f32 {
 }
 
 fn distance2(a: i32, b: i32, bonded: i32) -> f32 {
-    var length = radii[a] + radii[b];
+    // (renamed from `length`: Tint rejects shadowing a builtin then calling it)
+    var ref_length = radii[a] + radii[b];
     if bonded >= 0 {
-        length = bonds[bonded].length;
+        ref_length = bonds[bonded].length;
     }
     $ F64 {
-        return f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - f64(length));
+        return f32(length(vec2(f64(positions[a].x) - f64(positions[b].x), f64(positions[a].y) - f64(positions[b].y))) - f64(ref_length));
     }
     $ F32 {
-        return length(positions[a] - positions[b]) - length;
+        return length(positions[a] - positions[b]) - ref_length;
     }
 }
 
@@ -329,9 +334,11 @@ fn linear_parallel_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //u
         force = vec2(0.0, 0.0);
         moment = 0.0;
     }
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] += -normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].bond_tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
+    }
 
     return  vec3(force, moment) + linear_model(a, b, i, bonded); 
 }
@@ -384,9 +391,11 @@ fn linear_model(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //unbonded
 
     var moment = -(radii[a]) * contacts[i].tangent_force;
     let force = (normal * normal_force + tangent * contacts[i].tangent_force);
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] += normal_force;
     data[u32(a) * DATA_SIZE + 1u] += contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] += moment;
+    }
     // data[u32(a) * DATA_SIZE + 3u] = normal.;
 
 
@@ -430,9 +439,11 @@ fn linear_contact_bonds(a: i32, b: i32, i: u32, bonded: i32) -> vec3<f32> { //un
         moment = 0.0;
     }
 
+    $ DIAGNOSTICS {
     data[u32(a) * DATA_SIZE   ] = -normal_force;
     data[u32(a) * DATA_SIZE + 1u] = contacts[i].tangent_force;
     data[u32(a) * DATA_SIZE + 2u] = moment;
+    }
 
     return vec3(force, moment);
 }

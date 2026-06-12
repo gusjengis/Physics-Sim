@@ -37,7 +37,7 @@ struct Forces {
 @group(3) @binding(5) var<storage, read_write> acc: array<vec3<f32>>;
 @group(3) @binding(6) var<storage, read_write> fixity: array<Particle_Settings>;
 @group(3) @binding(7) var<storage, read_write> forces: array<Forces>;
-@group(4) @binding(0) var<storage, read_write> click_info: array<i32>;
+@group(0) @binding(1) var<storage, read_write> click_info: array<i32>;
 
 @compute @workgroup_size(256)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

@@ -68,7 +68,7 @@ struct Settings {
 @group(1) @binding(8) var<storage, read_write> del_pos: array<vec2<f32>>;
 @group(1) @binding(9) var<storage, read_write> del_rot: array<f32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<atomic<i32>>;
-@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
 
@@ -100,9 +100,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             if atomicExchange(&grid[base_index + 1], coll_cont[2]) != coll_cont[2] { // store tick number in cell so we know when it was last updated and if we need to reset it
                 atomicStore(&grid[base_index + 0], 0);
             }
-            storageBarrier();
+            // storageBarrier() calls removed: Tint rejects them in non-uniform
+            // control flow, and this kernel is dead code (binning moved to
+            // 2D_Grid_Insert.wgsl; the dispatch is commented out upstream).
             let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
-            storageBarrier();
             if p_count < grid_info.cell_cap - 1 {
                 atomicStore(&grid[base_index + 1 + p_count], i32(id));
             }

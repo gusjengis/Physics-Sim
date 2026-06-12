@@ -99,8 +99,8 @@ struct GridInfo {
 @group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
-@group(4) @binding(0) var<storage, read_write> materials: array<Material>; 
-@group(5) @binding(0) var<storage, read_write> data: array<f32>; 
+@group(3) @binding(1) var<storage, read_write> materials: array<Material>; 
+@group(3) @binding(2) var<storage, read_write> data: array<f32>; 
 
 const PI = 3.141592653589793238;
 

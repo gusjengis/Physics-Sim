@@ -47,7 +47,7 @@ struct Settings {
 @group(0) @binding(0) var<storage, read_write> positions: array<vec2<f32>>;
 @group(0) @binding(1) var<storage, read_write> radii: array<f32>;
 @group(2) @binding(4) var<storage, read_write> grid: array<atomic<i32>>;
-@group(2) @binding(5) var<storage, read_write> grid_info_buffer: array<GridInfo>;
+@group(2) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(2) @binding(6) var<storage, read_write> coll_cont: array<i32>;
 @group(3) @binding(0) var<uniform> settings: Settings;
 
@@ -76,7 +76,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
             let base_index = (cell_y * grid_info.w + cell_x) * grid_info.cell_cap;
             let p_count = atomicAdd(&grid[base_index + 0], 1) + 1;
             if p_count < grid_info.cell_cap - 1 {
-                grid[base_index + 1 + p_count] = i32(id);
+                atomicStore(&grid[base_index + 1 + p_count], i32(id)); // plain assignment to atomic<i32> rejected by Tint
             }
         }
     }

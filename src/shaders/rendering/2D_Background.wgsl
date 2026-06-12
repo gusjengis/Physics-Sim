@@ -100,13 +100,13 @@ struct GridInfo {
 @group(2) @binding(3) var<storage, read> rot_vel: array<f32>;
 @group(3) @binding(0) var<storage, read> bonds: array<Bond>;
 @group(3) @binding(4) var<storage, read> grid: array<i32>;
-@group(3) @binding(5) var<storage, read> grid_info_buffer: array<GridInfo>;
+@group(3) @binding(5) var<uniform> grid_info_buffer: array<GridInfo, 1>;
 @group(3) @binding(6) var<storage, read> coll_cont: array<i32>;
 @group(3) @binding(3) var<storage, read> material_pointers: array<i32>;
-@group(4) @binding(0) var<uniform> settings: Settings;
-@group(5) @binding(0) var<storage, read> materials: array<Material>;
-@group(6) @binding(0) var<storage, read> selections: array<i32>;
-@group(7) @binding(0) var<storage, read> click_info: array<i32>;
+@group(0) @binding(1) var<uniform> settings: Settings;
+@group(0) @binding(2) var<storage, read> materials: array<Material>;
+@group(0) @binding(3) var<storage, read> selections: array<i32>;
+@group(0) @binding(4) var<storage, read> click_info: array<i32>;
 
 @vertex
 fn vs_main(

@@ -52,7 +52,7 @@ impl Vertex {
 
 pub struct Uniform{
     label: String,
-    buffer: wgpu::Buffer,
+    pub buffer: wgpu::Buffer,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
     binding: u32
@@ -609,10 +609,63 @@ impl BufferUniform {
         
 }
 
+/// Per-buffer binding spec for a BufferGroup: which stages see it in the
+/// compute and render layouts, and whether it binds as a uniform.
+/// Needed because the web adapter caps storage buffers per stage at 16 —
+/// every entry must count only against stages that actually use it.
+#[derive(Clone, Copy)]
+pub struct BindingSpec {
+    pub compute_vis: wgpu::ShaderStages,
+    pub render_vis: wgpu::ShaderStages,
+    pub uniform: bool,
+}
+
+impl BindingSpec {
+    pub const DEFAULT: BindingSpec = BindingSpec {
+        compute_vis: wgpu::ShaderStages::COMPUTE,
+        render_vis: wgpu::ShaderStages::VERTEX_FRAGMENT,
+        uniform: false,
+    };
+}
+
+/// Build a bind group layout from per-entry (visibility, uniform) specs.
+/// `compute` picks storage read_only=false (compute side) vs read_only=true
+/// (render side) for non-uniform entries.
+pub fn spec_layout(device: &wgpu::Device, specs: &[(wgpu::ShaderStages, bool)], read_only: bool, label: &str) -> wgpu::BindGroupLayout {
+    let entries: Vec<BindGroupLayoutEntry> = specs
+        .iter()
+        .enumerate()
+        .map(|(i, &(vis, uniform))| wgpu::BindGroupLayoutEntry {
+            binding: i as u32,
+            visibility: vis,
+            ty: wgpu::BindingType::Buffer {
+                ty: if uniform {
+                    wgpu::BufferBindingType::Uniform
+                } else {
+                    wgpu::BufferBindingType::Storage { read_only }
+                },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        })
+        .collect();
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { entries: &entries, label: Some(label) })
+}
+
+/// Bind all of `buffers` (0..n) against `layout`.
+pub fn spec_group(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, buffers: &[&Buffer], label: &str) -> wgpu::BindGroup {
+    let entries: Vec<wgpu::BindGroupEntry> = buffers
+        .iter()
+        .enumerate()
+        .map(|(i, b)| wgpu::BindGroupEntry { binding: i as u32, resource: b.as_entire_binding() })
+        .collect();
+    device.create_bind_group(&wgpu::BindGroupDescriptor { layout, entries: &entries, label: Some(label) })
+}
+
 pub struct BufferGroup{
     label: String,
-    layout_entries: Vec<BindGroupLayoutEntry>,
-    // entries: Vec<BindGroupEntry>,
+    specs: Vec<BindingSpec>,
     pub buffers: Vec<Buffer>,
     pub bind_group_layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -623,58 +676,18 @@ pub struct BufferGroup{
 }
 
 impl BufferGroup {
-    fn build_groups(device: &wgpu::Device, buffers: &Vec<Buffer>, label: &str) -> (Vec<BindGroupLayoutEntry>, wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let mut layout_entries = vec![];
-        let mut render_layout_entries = vec![];
-        let mut entries = vec![];
-        for i in 0..buffers.len() {
-            layout_entries.push(wgpu::BindGroupLayoutEntry {
-                binding: i as u32,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage {read_only: false},
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            render_layout_entries.push(wgpu::BindGroupLayoutEntry {
-                binding: i as u32,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage {read_only: true},
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            });
-            entries.push(wgpu::BindGroupEntry {
-                binding: i as u32,
-                resource: buffers[i].as_entire_binding(),
-            });
-        }
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &layout_entries,
-            label: Some(label),
-        });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &entries,
-            label: Some(label),
-        });
-        let render_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &render_layout_entries,
-            label: Some(label),
-        });
-        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &render_bind_group_layout,
-            entries: &entries,
-            label: Some(label),
-        });
-        (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group)
+    fn build_groups(device: &wgpu::Device, buffers: &Vec<Buffer>, specs: &[BindingSpec], label: &str) -> (wgpu::BindGroupLayout, wgpu::BindGroup, wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let compute_specs: Vec<(wgpu::ShaderStages, bool)> = specs.iter().map(|s| (s.compute_vis, s.uniform)).collect();
+        let render_specs: Vec<(wgpu::ShaderStages, bool)> = specs.iter().map(|s| (s.render_vis, s.uniform)).collect();
+        let buffer_refs: Vec<&Buffer> = buffers.iter().collect();
+        let bind_group_layout = spec_layout(device, &compute_specs, false, label);
+        let bind_group = spec_group(device, &bind_group_layout, &buffer_refs, label);
+        let render_bind_group_layout = spec_layout(device, &render_specs, true, label);
+        let render_bind_group = spec_group(device, &render_bind_group_layout, &buffer_refs, label);
+        (bind_group_layout, bind_group, render_bind_group_layout, render_bind_group)
     }
 
-    pub fn new(device: &wgpu::Device, contents: Vec<&[u8]>, label: String,) -> Self {
+    pub fn new_with_specs(device: &wgpu::Device, contents: Vec<&[u8]>, label: String, specs: Vec<BindingSpec>) -> Self {
         let mut buffers = vec![];
         for i in 0..contents.len() {
             buffers.push(device.create_buffer_init(
@@ -685,18 +698,23 @@ impl BufferGroup {
                 }
             ));
         }
-        let (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
-            Self::build_groups(device, &buffers, &label);
+        let (bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
+            Self::build_groups(device, &buffers, &specs, &label);
 
         Self {
             label,
-            layout_entries,
+            specs,
             buffers,
             bind_group_layout,
             bind_group,
             render_bind_group_layout,
             render_bind_group,
         }
+    }
+
+    pub fn new(device: &wgpu::Device, contents: Vec<&[u8]>, label: String,) -> Self {
+        let n = contents.len();
+        Self::new_with_specs(device, contents, label, vec![BindingSpec::DEFAULT; n])
     }
 
     pub fn updateBuffer(&mut self, device: &wgpu::Device, contents: &[u8], index: usize){
@@ -708,9 +726,8 @@ impl BufferGroup {
             }
         );
         // println!("{}: {}", self.label, self.buffers[index].size());
-        let (layout_entries, bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
-            Self::build_groups(device, &self.buffers, &self.label);
-        self.layout_entries = layout_entries;
+        let (bind_group_layout, bind_group, render_bind_group_layout, render_bind_group) =
+            Self::build_groups(device, &self.buffers, &self.specs, &self.label);
         self.bind_group_layout = bind_group_layout;
         self.bind_group = bind_group;
         self.render_bind_group_layout = render_bind_group_layout;
