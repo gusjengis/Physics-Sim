@@ -1,4 +1,5 @@
 Cargo.lock
 /target
+/.direnv
 memory.json
 # flatc.exe
