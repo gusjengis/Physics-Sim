@@ -1,9 +1,13 @@
 {
-  description = "Dev environment for toy RNN visualization (wgpu + winit on Wayland/X11)";
+  description = "Dev environment for Particle-Physics-Sim";
 
   inputs = {
     nixpkgs.url = "nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -11,6 +15,7 @@
       self,
       nixpkgs,
       flake-utils,
+      fenix,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
@@ -22,7 +27,7 @@
         devShells = {
           default = pkgs.mkShell {
             packages = with pkgs; [
-              rustup
+              fenix.packages.${system}.stable.toolchain
 
               wayland
               libxkbcommon
